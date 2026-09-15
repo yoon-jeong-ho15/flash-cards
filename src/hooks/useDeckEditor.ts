@@ -1,0 +1,220 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useFlashcardStore } from '../store/useFlashcardStore';
+import { CardFormItem } from '../components/deck/DeckCardEditorItem';
+
+interface UseDeckEditorOptions {
+  deckId?: string;
+  initialFolderId?: string;
+  onSaved: (savedDeckId: string) => void;
+}
+
+export interface DeckEditorErrors {
+  title?: string;
+  general?: string;
+}
+
+const createEmptyCardItem = (): CardFormItem => ({
+  id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  termRichText: '',
+  definitionRichText: '',
+});
+
+export const useDeckEditor = ({
+  deckId,
+  initialFolderId,
+  onSaved,
+}: UseDeckEditorOptions) => {
+  const { decks, cards, folders, saveDeckWithCards } = useFlashcardStore();
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(initialFolderId || null);
+  const [cardItems, setCardItems] = useState<CardFormItem[]>([
+    createEmptyCardItem(),
+    createEmptyCardItem(),
+  ]);
+  const [newlyAddedCardId, setNewlyAddedCardId] = useState<string | null>(null);
+  const [errors, setErrors] = useState<DeckEditorErrors>({});
+
+  // 기존 덱 수정 시 데이터 로드
+  useEffect(() => {
+    if (deckId) {
+      const existingDeck = decks.find((d) => d.id === deckId);
+      if (existingDeck) {
+        setTitle(existingDeck.title);
+        setDescription(existingDeck.description || '');
+        setSelectedFolderId(existingDeck.folderId || null);
+
+        const existingCards = cards.filter((c) => c.deckId === deckId);
+        if (existingCards.length > 0) {
+          setCardItems(
+            existingCards.map((c) => ({
+              id: c.id,
+              termRichText: c.termRichText,
+              definitionRichText: c.definitionRichText,
+              imageUrl: c.imageUrl,
+              learned: c.learned,
+            }))
+          );
+        }
+      }
+    } else if (initialFolderId) {
+      setSelectedFolderId(initialFolderId);
+    }
+  }, [deckId, initialFolderId, decks, cards]);
+
+  // 카드 추가
+  const handleAddCard = useCallback(() => {
+    const newCard = createEmptyCardItem();
+    setNewlyAddedCardId(newCard.id || null);
+    setCardItems((prev) => [
+      ...prev,
+      newCard,
+    ]);
+  }, []);
+
+  // 카드 삭제
+  const handleRemoveCard = useCallback((index: number) => {
+    setCardItems((prev) => {
+      if (prev.length <= 1) {
+        alert('덱에는 최소 1개의 카드가 필요합니다.');
+        return prev;
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  // 카드 복제
+  const handleDuplicateCard = useCallback((index: number) => {
+    setCardItems((prev) => {
+      const target = prev[index];
+      if (!target) return prev;
+      const newCard: CardFormItem = {
+        id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        termRichText: target.termRichText,
+        definitionRichText: target.definitionRichText,
+        imageUrl: target.imageUrl,
+      };
+      setNewlyAddedCardId(newCard.id || null);
+      const updated = [...prev];
+      updated.splice(index + 1, 0, newCard);
+      return updated;
+    });
+  }, []);
+
+  // 순서 변경 (위로)
+  const handleMoveUp = useCallback((index: number) => {
+    if (index === 0) return;
+    setCardItems((prev) => {
+      const copy = [...prev];
+      const temp = copy[index - 1];
+      copy[index - 1] = copy[index];
+      copy[index] = temp;
+      return copy;
+    });
+  }, []);
+
+  // 순서 변경 (아래로)
+  const handleMoveDown = useCallback((index: number) => {
+    setCardItems((prev) => {
+      if (index === prev.length - 1) return prev;
+      const copy = [...prev];
+      const temp = copy[index + 1];
+      copy[index + 1] = copy[index];
+      copy[index] = temp;
+      return copy;
+    });
+  }, []);
+
+  // 카드 순서 전체 재배치 (드래그 앤 드롭용)
+  const handleReorderCards = useCallback((newCards: CardFormItem[]) => {
+    setCardItems(newCards);
+  }, []);
+
+  // 개별 카드 업데이트
+  const handleUpdateCard = useCallback((index: number, field: keyof CardFormItem, value: any) => {
+    setCardItems((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
+    );
+  }, []);
+
+  // 저장 처리
+  const handleSave = useCallback(() => {
+    const trimmedTitle = title.trim();
+    const newErrors: DeckEditorErrors = {};
+
+    if (!trimmedTitle) {
+      newErrors.title = '덱 제목을 입력해 주세요.';
+    }
+
+    // 최소 1장 이상의 카드에 앞면 혹은 뒷면 내용이 있어야 함
+    const validCards = cardItems.filter(
+      (c) =>
+        c.termRichText.replace(/<[^>]*>/g, '').trim() ||
+        c.definitionRichText.replace(/<[^>]*>/g, '').trim() ||
+        c.imageUrl
+    );
+
+    if (validCards.length === 0) {
+      newErrors.general = '최소 1개 이상의 카드에 단어(앞면) 또는 설명(뒷면)을 입력해야 합니다.';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    try {
+      const savedDeckId = saveDeckWithCards(
+        deckId || null,
+        {
+          title: trimmedTitle,
+          description: description.trim(),
+          folderId: selectedFolderId,
+        },
+        cardItems.map((c) => ({
+          id: c.id && c.id.startsWith('temp-') ? undefined : c.id,
+          termRichText: c.termRichText || '<p></p>',
+          definitionRichText: c.definitionRichText || '<p></p>',
+          imageUrl: c.imageUrl,
+          learned: c.learned ?? false,
+        }))
+      );
+
+      onSaved(savedDeckId);
+    } catch (err: any) {
+      console.error('덱 저장 중 오류:', err);
+      setErrors({ general: '덱을 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.' });
+    }
+  }, [
+    title,
+    cardItems,
+    description,
+    selectedFolderId,
+    deckId,
+    saveDeckWithCards,
+    onSaved,
+  ]);
+
+  return {
+    folders,
+    title,
+    setTitle,
+    description,
+    setDescription,
+    selectedFolderId,
+    setSelectedFolderId,
+    cardItems,
+    newlyAddedCardId,
+    errors,
+    setErrors,
+    handleAddCard,
+    handleRemoveCard,
+    handleDuplicateCard,
+    handleMoveUp,
+    handleMoveDown,
+    handleReorderCards,
+    handleUpdateCard,
+    handleSave,
+  };
+};
