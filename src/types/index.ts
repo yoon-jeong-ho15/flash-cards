@@ -45,6 +45,9 @@ export type ViewMode =
   | { type: 'edit-deck'; deckId?: string; folderId?: string } // deckId가 없으면 신규 생성
   | { type: 'study'; deckId: string; onlyDifficult?: boolean };
 
+// 덱 정렬 옵션
+export type DeckSortOption = 'name-asc' | 'name-desc' | 'date-desc' | 'date-asc';
+
 // 학습 통계 결과 모델
 export interface StudyResultStats {
   deckTitle: string;
