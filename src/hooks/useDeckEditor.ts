@@ -52,7 +52,9 @@ export const useDeckEditor = ({
               id: c.id,
               termRichText: c.termRichText,
               definitionRichText: c.definitionRichText,
-              imageUrl: c.imageUrl,
+              frontImageUrl: c.frontImageUrl,
+              backImageUrl: c.backImageUrl || c.imageUrl,
+              imageUrl: c.imageUrl || c.backImageUrl,
               learned: c.learned,
             }))
           );
@@ -93,6 +95,8 @@ export const useDeckEditor = ({
         id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         termRichText: target.termRichText,
         definitionRichText: target.definitionRichText,
+        frontImageUrl: target.frontImageUrl,
+        backImageUrl: target.backImageUrl,
         imageUrl: target.imageUrl,
       };
       setNewlyAddedCardId(newCard.id || null);
@@ -147,11 +151,13 @@ export const useDeckEditor = ({
       newErrors.title = '덱 제목을 입력해 주세요.';
     }
 
-    // 최소 1장 이상의 카드에 앞면 혹은 뒷면 내용이 있어야 함
+    // 최소 1장 이상의 카드에 앞면 혹은 뒷면 내용 또는 이미지가 있어야 함
     const validCards = cardItems.filter(
       (c) =>
         c.termRichText.replace(/<[^>]*>/g, '').trim() ||
         c.definitionRichText.replace(/<[^>]*>/g, '').trim() ||
+        c.frontImageUrl ||
+        c.backImageUrl ||
         c.imageUrl
     );
 
@@ -176,7 +182,9 @@ export const useDeckEditor = ({
           id: c.id && c.id.startsWith('temp-') ? undefined : c.id,
           termRichText: c.termRichText || '<p></p>',
           definitionRichText: c.definitionRichText || '<p></p>',
-          imageUrl: c.imageUrl,
+          frontImageUrl: c.frontImageUrl,
+          backImageUrl: c.backImageUrl || c.imageUrl,
+          imageUrl: c.imageUrl || c.backImageUrl,
           learned: c.learned ?? false,
         }))
       );

@@ -78,7 +78,9 @@ export const flashcardService = {
           deckId: data.deckId || '',
           termRichText: data.termRichText || '',
           definitionRichText: data.definitionRichText || '',
-          imageUrl: data.imageUrl || undefined,
+          frontImageUrl: data.frontImageUrl || undefined,
+          backImageUrl: data.backImageUrl || data.imageUrl || undefined,
+          imageUrl: data.imageUrl || data.backImageUrl || undefined,
           learned: Boolean(data.learned),
         };
       });
@@ -228,7 +230,9 @@ export const flashcardService = {
         deckId: card.deckId,
         termRichText: card.termRichText,
         definitionRichText: card.definitionRichText,
-        imageUrl: card.imageUrl || null,
+        frontImageUrl: card.frontImageUrl || null,
+        backImageUrl: card.backImageUrl || card.imageUrl || null,
+        imageUrl: card.imageUrl || card.backImageUrl || null,
         learned: card.learned,
       },
       { merge: true }
@@ -250,7 +254,9 @@ export const flashcardService = {
           deckId: c.deckId,
           termRichText: c.termRichText,
           definitionRichText: c.definitionRichText,
-          imageUrl: c.imageUrl || null,
+          frontImageUrl: c.frontImageUrl || null,
+          backImageUrl: c.backImageUrl || c.imageUrl || null,
+          imageUrl: c.imageUrl || c.backImageUrl || null,
           learned: c.learned,
         },
         { merge: true }
@@ -292,7 +298,9 @@ export const flashcardService = {
               deckId: deckId,
               termRichText: c.termRichText,
               definitionRichText: c.definitionRichText,
-              imageUrl: c.imageUrl || null,
+              frontImageUrl: c.frontImageUrl || null,
+              backImageUrl: c.backImageUrl || c.imageUrl || null,
+              imageUrl: c.imageUrl || c.backImageUrl || null,
               learned: c.learned,
             },
             { merge: true }

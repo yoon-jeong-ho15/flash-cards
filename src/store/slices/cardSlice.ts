@@ -129,7 +129,9 @@ export const createCardSlice: StateCreator<
       userId: user?.uid,
       termRichText: item.termRichText,
       definitionRichText: item.definitionRichText,
-      imageUrl: item.imageUrl,
+      frontImageUrl: item.frontImageUrl,
+      backImageUrl: item.backImageUrl || item.imageUrl,
+      imageUrl: item.imageUrl || item.backImageUrl,
       learned: item.learned ?? false,
     }));
 

@@ -15,7 +15,10 @@ import {
   ArrowLeft,
   Layers,
   Calendar,
+  ArrowUpDown,
+  ChevronDown,
 } from 'lucide-react';
+import { DeckSortOption } from '../../types';
 
 interface FolderDetailViewProps {
   folderId: string;
@@ -38,6 +41,63 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
 
   const folder = useMemo(() => folders.find((f) => f.id === folderId), [folders, folderId]);
   const folderDecks = useMemo(() => decks.filter((d) => d.folderId === folderId), [decks, folderId]);
+
+  const [sortBy, setSortBy] = useState<DeckSortOption>(() => {
+    try {
+      const saved = localStorage.getItem('flashcard_folder_deck_sort') as DeckSortOption;
+      if (saved && ['name-asc', 'name-desc', 'date-desc', 'date-asc'].includes(saved)) {
+        return saved;
+      }
+    } catch {
+      // ignore storage error
+    }
+    return 'date-desc';
+  });
+
+  const handleSortChange = (newSort: DeckSortOption) => {
+    setSortBy(newSort);
+    try {
+      localStorage.setItem('flashcard_folder_deck_sort', newSort);
+    } catch {
+      // ignore storage error
+    }
+  };
+
+  const sortedDecks = useMemo(() => {
+    const list = [...folderDecks];
+    switch (sortBy) {
+      case 'name-asc':
+        return list.sort((a, b) => {
+          const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
+          return diff !== 0
+            ? diff
+            : (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+        });
+      case 'name-desc':
+        return list.sort((a, b) => {
+          const diff = b.title.localeCompare(a.title, 'ko', { numeric: true });
+          return diff !== 0
+            ? diff
+            : (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+        });
+      case 'date-desc':
+        return list.sort((a, b) => {
+          const timeA = a.updatedAt || a.createdAt || 0;
+          const timeB = b.updatedAt || b.createdAt || 0;
+          if (timeB !== timeA) return timeB - timeA;
+          return a.title.localeCompare(b.title, 'ko', { numeric: true });
+        });
+      case 'date-asc':
+        return list.sort((a, b) => {
+          const timeA = a.updatedAt || a.createdAt || 0;
+          const timeB = b.updatedAt || b.createdAt || 0;
+          if (timeA !== timeB) return timeA - timeB;
+          return a.title.localeCompare(b.title, 'ko', { numeric: true });
+        });
+      default:
+        return list;
+    }
+  }, [folderDecks, sortBy]);
 
   if (!folder) {
     return (
@@ -127,7 +187,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
       </Card>
 
       {/* 소속 덱 목록 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-foreground tracking-tight">소속 카드 덱</h2>
           <Badge variant="secondary" className="font-mono text-xs">
@@ -135,14 +195,34 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
           </Badge>
         </div>
 
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => onCreateDeckInFolder(folder.id)}
-          leftIcon={<Plus className="w-4 h-4" />}
-        >
-          이 폴더에 새 덱 추가
-        </Button>
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+          {folderDecks.length > 0 && (
+            <div className="relative inline-flex items-center">
+              <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <select
+                value={sortBy}
+                onChange={(e) => handleSortChange(e.target.value as DeckSortOption)}
+                className="h-8 pl-8 pr-7 rounded-lg border border-input bg-background text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer appearance-none"
+                aria-label="카드 덱 정렬 방식"
+              >
+                <option value="name-asc">이름순</option>
+                <option value="name-desc">이름역순</option>
+                <option value="date-desc">날짜 최신순</option>
+                <option value="date-asc">날짜 최신역순</option>
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+          )}
+
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => onCreateDeckInFolder(folder.id)}
+            leftIcon={<Plus className="w-4 h-4" />}
+          >
+            이 폴더에 새 덱 추가
+          </Button>
+        </div>
       </div>
 
       {folderDecks.length === 0 ? (
@@ -162,7 +242,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {folderDecks.map((deck) => {
+          {sortedDecks.map((deck) => {
             const deckCards = cards.filter((c) => c.deckId === deck.id);
             const learned = deckCards.filter((c) => c.learned).length;
 
