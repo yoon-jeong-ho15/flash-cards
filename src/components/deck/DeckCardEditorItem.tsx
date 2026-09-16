@@ -10,6 +10,8 @@ export interface CardFormItem {
   id?: string;
   termRichText: string;
   definitionRichText: string;
+  frontImageUrl?: string;
+  backImageUrl?: string;
   imageUrl?: string;
   learned?: boolean;
 }
@@ -65,33 +67,29 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
         zIndex: 50,
       }}
       transition={{ duration: 0.2 }}
-      className="relative bg-card rounded-xl border border-border shadow-xs p-4 sm:p-6 transition-colors hover:border-border/80"
+      className="bg-card rounded-xl border border-border p-4 shadow-xs space-y-3 focus-within:border-primary/50 transition-colors"
     >
-      {/* 카드 헤더 (번호 및 조작 버튼) */}
-      <div className="flex items-center justify-between pb-3 mb-4 border-b border-border">
+      {/* 카드 번호 및 액션 툴바 */}
+      <div className="flex items-center justify-between pb-2 border-b border-border/60">
         <div className="flex items-center gap-2">
-          {/* 드래그 핸들 버튼 (잡아서 순서 이동) */}
+          {/* 드래그 핸들 */}
           <button
             type="button"
-            className="p-1 -ml-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md cursor-grab active:cursor-grabbing touch-none transition-colors"
+            className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground hover:text-foreground rounded transition-colors touch-none"
             onPointerDown={(e) => dragControls.start(e)}
             title="드래그하여 순서 변경"
-            tabIndex={-1}
           >
             <GripVertical className="w-4 h-4" />
           </button>
-
-          <span className="w-6 h-6 rounded-md bg-muted text-foreground flex items-center justify-center text-xs font-mono font-bold border border-border">
-            {index + 1}
+          <span className="font-mono text-xs font-semibold text-muted-foreground">
+            #{index + 1}
           </span>
-          <span className="text-xs font-semibold text-muted-foreground">Card {index + 1}</span>
         </div>
 
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onMoveUp(index)}
             disabled={index === 0}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -103,7 +101,6 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onMoveDown(index)}
             disabled={index === totalCards - 1}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -115,7 +112,6 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onDuplicate(index)}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
             title="카드 복제"
@@ -126,23 +122,23 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onRemove(index)}
-            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            title="카드 삭제"
+            disabled={totalCards <= 1}
+            className="h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"
+            title={totalCards <= 1 ? '최소 1장의 카드가 필요합니다' : '카드 삭제'}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* 카드 입력부: 앞면(단어) & 뒷면(정의) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 앞면 에디터 */}
+      {/* 에디터 필드 (2열 반응형 그리드) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* 앞면 에디터 & 이미지 첨부 */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-            <span>앞면 (단어 / 질문)</span>
-            <Badge variant="secondary" className="text-[10px] font-medium py-0">개념</Badge>
+            <span>앞면 (개념 / 키워드)</span>
+            <Badge variant="secondary" className="text-[10px] font-medium py-0">단어</Badge>
           </div>
           <RichTextEditor
             value={card.termRichText}
@@ -151,6 +147,15 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             minHeight="100px"
             autoFocus={autoFocusFront}
           />
+
+          {/* 앞면 이미지 업로더 */}
+          <div className="pt-2">
+            <ImageUploader
+              imageUrl={card.frontImageUrl}
+              onImageChange={(url) => onUpdate(index, 'frontImageUrl', url)}
+              compact
+            />
+          </div>
         </div>
 
         {/* 뒷면 에디터 & 이미지 첨부 */}
@@ -166,11 +171,11 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             minHeight="100px"
           />
 
-          {/* 이미지 업로더 */}
+          {/* 뒷면 이미지 업로더 */}
           <div className="pt-2">
             <ImageUploader
-              imageUrl={card.imageUrl}
-              onImageChange={(url) => onUpdate(index, 'imageUrl', url)}
+              imageUrl={card.backImageUrl || card.imageUrl}
+              onImageChange={(url) => onUpdate(index, 'backImageUrl', url)}
               compact
             />
           </div>

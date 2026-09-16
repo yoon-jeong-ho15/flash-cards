@@ -16,15 +16,32 @@ export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(({
   index,
   onToggleLearned,
 }) => {
+  const backImage = card.backImageUrl || card.imageUrl;
+
   return (
     <Card className="p-4 sm:p-5 hover:border-border/80 transition-all flex flex-col md:flex-row md:items-start justify-between gap-4">
-      {/* 좌측: 번호 & 앞면 단어 */}
+      {/* 좌측: 번호 & 앞면 단어 및 이미지 */}
       <div className="md:w-1/3 flex items-start gap-3">
         <span className="w-6 h-6 rounded-md bg-muted text-muted-foreground flex items-center justify-center text-xs font-mono font-semibold shrink-0 mt-0.5 border border-border">
           {index + 1}
         </span>
-        <div className="flex-1 font-semibold text-foreground text-sm sm:text-base tracking-tight">
-          <RichTextViewer html={card.termRichText} textSize="base" />
+        <div className="flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
+          <div className="flex-1 font-semibold text-foreground text-sm sm:text-base tracking-tight">
+            <RichTextViewer html={card.termRichText} textSize="base" />
+          </div>
+          {card.frontImageUrl && (
+            <div
+              className="shrink-0 w-14 h-14 rounded-lg border border-border overflow-hidden bg-muted/40 flex items-center justify-center p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => window.open(card.frontImageUrl, '_blank')}
+              title="앞면 이미지 크게 보기"
+            >
+              <img
+                src={card.frontImageUrl}
+                alt="앞면 첨부 이미지"
+                className="w-full h-full object-contain rounded"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -36,15 +53,15 @@ export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(({
           <RichTextViewer html={card.definitionRichText} textSize="sm" />
         </div>
 
-        {card.imageUrl && (
+        {backImage && (
           <div
             className="shrink-0 w-16 h-16 rounded-lg border border-border overflow-hidden bg-muted/40 flex items-center justify-center p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => window.open(card.imageUrl, '_blank')}
-            title="이미지 크게 보기"
+            onClick={() => window.open(backImage, '_blank')}
+            title="뒷면 이미지 크게 보기"
           >
             <img
-              src={card.imageUrl}
-              alt="첨부 이미지"
+              src={backImage}
+              alt="뒷면 첨부 이미지"
               className="w-full h-full object-contain rounded"
             />
           </div>

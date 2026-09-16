@@ -52,7 +52,13 @@ export interface DeckSlice {
   decks: Deck[];
   addDeck: (
     deckData: { title: string; description?: string; folderId?: string | null },
-    initialCards?: Array<{ termRichText: string; definitionRichText: string; imageUrl?: string }>
+    initialCards?: Array<{
+      termRichText: string;
+      definitionRichText: string;
+      frontImageUrl?: string;
+      backImageUrl?: string;
+      imageUrl?: string;
+    }>
   ) => string;
   updateDeck: (id: string, updates: Partial<Pick<Deck, 'title' | 'description' | 'folderId'>>) => void;
   deleteDeck: (id: string) => void;
@@ -67,7 +73,15 @@ export interface CardSlice {
   saveDeckWithCards: (
     deckId: string | null,
     deckData: { title: string; description?: string; folderId?: string | null },
-    cardsData: Array<{ id?: string; termRichText: string; definitionRichText: string; imageUrl?: string; learned?: boolean }>
+    cardsData: Array<{
+      id?: string;
+      termRichText: string;
+      definitionRichText: string;
+      frontImageUrl?: string;
+      backImageUrl?: string;
+      imageUrl?: string;
+      learned?: boolean;
+    }>
   ) => string;
   setCardLearned: (id: string, learned: boolean) => void;
   resetDeckProgress: (deckId: string) => void;

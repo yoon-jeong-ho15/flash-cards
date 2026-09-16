@@ -32,7 +32,9 @@ export const createDeckSlice: StateCreator<
       userId: user?.uid,
       termRichText: c.termRichText,
       definitionRichText: c.definitionRichText,
-      imageUrl: c.imageUrl,
+      frontImageUrl: c.frontImageUrl,
+      backImageUrl: c.backImageUrl || c.imageUrl,
+      imageUrl: c.imageUrl || c.backImageUrl,
       learned: false,
     }));
 
