@@ -75,6 +75,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           {/* 드래그 핸들 */}
           <button
             type="button"
+            tabIndex={-1}
             className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground hover:text-foreground rounded transition-colors touch-none"
             onPointerDown={(e) => dragControls.start(e)}
             title="드래그하여 순서 변경"
@@ -90,6 +91,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onMoveUp(index)}
             disabled={index === 0}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -101,6 +103,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onMoveDown(index)}
             disabled={index === totalCards - 1}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -112,6 +115,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onDuplicate(index)}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
             title="카드 복제"
@@ -122,6 +126,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onRemove(index)}
             disabled={totalCards <= 1}
             className="h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"
@@ -144,7 +149,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             value={card.termRichText}
             onChange={(html) => onUpdate(index, 'termRichText', html)}
             placeholder="단어, 질문 또는 핵심 키워드를 입력하세요..."
-            minHeight="100px"
+            height="120px"
             autoFocus={autoFocusFront}
           />
 
@@ -168,7 +173,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             value={card.definitionRichText}
             onChange={(html) => onUpdate(index, 'definitionRichText', html)}
             placeholder="상세 설명, 해설, 예시 코드를 입력하세요..."
-            minHeight="100px"
+            height="120px"
           />
 
           {/* 뒷면 이미지 업로더 */}

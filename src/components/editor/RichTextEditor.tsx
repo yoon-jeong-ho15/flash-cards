@@ -20,6 +20,7 @@ interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  height?: string;
   minHeight?: string;
   className?: string;
   autoFocus?: boolean;
@@ -38,12 +39,14 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   value,
   onChange,
   placeholder = '내용을 입력하세요...',
-  minHeight = '90px',
+  height = '120px',
+  minHeight,
   className = '',
   autoFocus = false,
 }) => {
   const lastEmittedValueRef = useRef<string>(value);
   const hasFocusedRef = useRef(false);
+  const editorHeight = height || minHeight || '120px';
 
   const extensions = useMemo(
     () => [
@@ -78,8 +81,8 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
     editorProps: {
       attributes: {
-        class: `prose prose-sm max-w-none focus:outline-none p-3 text-foreground text-sm leading-relaxed`,
-        style: `min-height: ${minHeight};`,
+        class: `prose prose-sm max-w-none focus:outline-none p-3 text-foreground text-sm leading-relaxed overflow-y-auto`,
+        style: `min-height: 0; height: ${editorHeight}; max-height: ${editorHeight};`,
       },
     },
   });
