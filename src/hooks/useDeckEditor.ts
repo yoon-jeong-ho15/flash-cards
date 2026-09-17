@@ -75,6 +75,17 @@ export const useDeckEditor = ({
     ]);
   }, []);
 
+  // 특정 위치에 카드 삽입
+  const handleInsertCard = useCallback((index: number) => {
+    const newCard = createEmptyCardItem();
+    setNewlyAddedCardId(newCard.id || null);
+    setCardItems((prev) => {
+      const copy = [...prev];
+      copy.splice(index, 0, newCard);
+      return copy;
+    });
+  }, []);
+
   // 카드 삭제
   const handleRemoveCard = useCallback((index: number) => {
     setCardItems((prev) => {
@@ -217,6 +228,7 @@ export const useDeckEditor = ({
     errors,
     setErrors,
     handleAddCard,
+    handleInsertCard,
     handleRemoveCard,
     handleDuplicateCard,
     handleMoveUp,
