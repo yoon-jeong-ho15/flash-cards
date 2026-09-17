@@ -42,6 +42,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     errors,
     setErrors,
     handleAddCard,
+    handleInsertCard,
     handleRemoveCard,
     handleDuplicateCard,
     handleMoveUp,
@@ -175,7 +176,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
           axis="y"
           values={cardItems}
           onReorder={handleReorderCards}
-          className="space-y-4"
+          className="space-y-0"
         >
           <AnimatePresence initial={false}>
             {cardItems.map((card, index) => (
@@ -190,6 +191,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                 onMoveDown={handleMoveDown}
                 onDuplicate={handleDuplicateCard}
                 onRemove={handleRemoveCard}
+                onInsertAfter={(idx) => handleInsertCard(idx + 1)}
               />
             ))}
           </AnimatePresence>
