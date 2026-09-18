@@ -168,10 +168,10 @@ export const useStudySession = ({
       if (e.code === 'Space') {
         e.preventDefault();
         handleFlip();
-      } else if (e.key === '1' || e.key === 'ArrowLeft') {
+      } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         handleUnknown();
-      } else if (e.key === '2' || e.key === 'ArrowRight') {
+      } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleKnow();
       } else if (e.key === 'Escape') {

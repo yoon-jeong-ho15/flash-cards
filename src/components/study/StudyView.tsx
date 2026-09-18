@@ -215,7 +215,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             <div className="text-left">
               <div className="text-sm font-bold flex items-center gap-1.5 text-amber-950">
                 몰라요
-                <kbd className="pointer-events-none inline-flex h-4 select-none items-center rounded border border-amber-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-amber-900">1</kbd>
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-amber-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-amber-900">←</kbd>
               </div>
               <div className="text-xs text-amber-800/80 font-normal">큐의 뒤로 보내 재학습</div>
             </div>
@@ -244,7 +244,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             <div className="text-left">
               <div className="text-sm font-bold flex items-center gap-1.5 text-emerald-950">
                 알아요
-                <kbd className="pointer-events-none inline-flex h-4 select-none items-center rounded border border-emerald-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-emerald-900">2</kbd>
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-emerald-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-emerald-900">→</kbd>
               </div>
               <div className="text-xs text-emerald-800/80 font-normal">마스터 완료로 이동</div>
             </div>
@@ -301,8 +301,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
           </div>
         </div>
 
-        {/* 키보드 단축키 안내 */}
-        <div className="mt-6">
+        {/* 키보드 단축키 안내 (데스크탑 전용) */}
+        <div className="mt-6 hidden md:block">
           <ShortcutBadge />
         </div>
       </div>
