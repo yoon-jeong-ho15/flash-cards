@@ -3,12 +3,14 @@ import { CheckCircle2, Clock, Layers } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 interface StudyProgressBarProps {
   totalUniqueCards: number;
   masteredCount: number;
   remainingQueueCount: number;
   round: number;
+  className?: string;
 }
 
 export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({
@@ -16,13 +18,14 @@ export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({
   masteredCount,
   remainingQueueCount,
   round,
+  className,
 }) => {
   const percentage = totalUniqueCards > 0
     ? Math.round((masteredCount / totalUniqueCards) * 100)
     : 0;
 
   return (
-    <Card className="w-full max-w-2xl mx-auto mb-6 p-4">
+    <Card className={cn('w-full max-w-2xl mx-auto p-4', className)}>
       {/* 상단 통계 수치 및 라운드 표시 */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm font-medium mb-3">
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
