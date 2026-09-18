@@ -92,7 +92,14 @@ export const Flashcard: React.FC<FlashcardProps> = ({
               )}
             </span>
             <span>
-              클릭하거나 <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">Space</kbd>를 눌러 정답 확인
+              <span className="md:hidden">터치하여 정답 확인</span>
+              <span className="hidden md:inline">
+                클릭하거나{' '}
+                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                  Space
+                </kbd>
+                를 눌러 정답 확인
+              </span>
             </span>
           </div>
         </div>
