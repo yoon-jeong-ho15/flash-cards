@@ -24,7 +24,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
       onClick={onFlip}
     >
       <div
-        className={`relative w-full h-full duration-500 transform-style-3d transition-transform ${
+        className={`relative w-full h-full duration-300 ease-out transform-style-3d transition-transform ${
           isFlipped ? 'rotate-y-180' : ''
         }`}
       >

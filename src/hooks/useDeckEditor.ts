@@ -5,6 +5,7 @@ import { CardFormItem } from '../components/deck/DeckCardEditorItem';
 interface UseDeckEditorOptions {
   deckId?: string;
   initialFolderId?: string;
+  focusCardId?: string;
   onSaved: (savedDeckId: string) => void;
 }
 
@@ -22,21 +23,53 @@ const createEmptyCardItem = (): CardFormItem => ({
 export const useDeckEditor = ({
   deckId,
   initialFolderId,
+  focusCardId,
   onSaved,
 }: UseDeckEditorOptions) => {
   const { decks, cards, folders, saveDeckWithCards } = useFlashcardStore();
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(initialFolderId || null);
-  const [cardItems, setCardItems] = useState<CardFormItem[]>([
-    createEmptyCardItem(),
-    createEmptyCardItem(),
-  ]);
+  const [title, setTitle] = useState(() => {
+    if (deckId) {
+      const existingDeck = decks.find((d) => d.id === deckId);
+      if (existingDeck) return existingDeck.title;
+    }
+    return '';
+  });
+  const [description, setDescription] = useState(() => {
+    if (deckId) {
+      const existingDeck = decks.find((d) => d.id === deckId);
+      if (existingDeck) return existingDeck.description || '';
+    }
+    return '';
+  });
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
+    if (deckId) {
+      const existingDeck = decks.find((d) => d.id === deckId);
+      if (existingDeck) return existingDeck.folderId || null;
+    }
+    return initialFolderId || null;
+  });
+  const [cardItems, setCardItems] = useState<CardFormItem[]>(() => {
+    if (deckId) {
+      const existingCards = cards.filter((c) => c.deckId === deckId);
+      if (existingCards.length > 0) {
+        return existingCards.map((c) => ({
+          id: c.id,
+          termRichText: c.termRichText,
+          definitionRichText: c.definitionRichText,
+          frontImageUrl: c.frontImageUrl,
+          backImageUrl: c.backImageUrl || c.imageUrl,
+          imageUrl: c.imageUrl || c.backImageUrl,
+          learned: c.learned,
+        }));
+      }
+    }
+    return [createEmptyCardItem(), createEmptyCardItem()];
+  });
   const [newlyAddedCardId, setNewlyAddedCardId] = useState<string | null>(null);
   const [errors, setErrors] = useState<DeckEditorErrors>({});
 
-  // 기존 덱 수정 시 데이터 로드
+  // 기존 덱 수정 시 데이터 로드 (외부 상태 변경 동기화용)
   useEffect(() => {
     if (deckId) {
       const existingDeck = decks.find((d) => d.id === deckId);

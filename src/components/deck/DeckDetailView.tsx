@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
-import { MoveDeckModal } from './MoveDeckModal';
 import { DeckCardPreviewItem } from './DeckCardPreviewItem';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,13 +7,12 @@ import { Card } from '@/components/ui/card';
 import { ProgressBar } from '../common/ProgressBar';
 import { EmptyState } from '../common/EmptyState';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { StickyActionBar } from '../common/StickyActionBar';
 import {
   Play,
   Edit3,
   Trash2,
   Folder as FolderIcon,
-  ArrowLeft,
-  FolderInput,
   RotateCcw,
   CheckCircle2,
   Clock,
@@ -24,7 +22,7 @@ import {
 interface DeckDetailViewProps {
   deckId: string;
   onStartStudy: (deckId: string) => void;
-  onEditDeck: (deckId: string) => void;
+  onEditDeck: (deckId: string, focusCardId?: string) => void;
   onNavigateFolder: (folderId: string) => void;
   onBack: () => void;
 }
@@ -36,10 +34,9 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
   onNavigateFolder,
   onBack,
 }) => {
-  const { decks, cards, folders, deleteDeck, resetDeckProgress, setCardLearned } =
+  const { decks, cards, folders, deleteDeck, resetDeckProgress } =
     useFlashcardStore();
 
-  const [showMoveModal, setShowMoveModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -65,10 +62,18 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
   const progressPercent =
     deckCards.length > 0 ? Math.round((learnedCount / deckCards.length) * 100) : 0;
 
+  const handleBack = () => {
+    if (deck.folderId) {
+      onNavigateFolder(deck.folderId);
+    } else {
+      onBack();
+    }
+  };
+
   const handleDelete = () => {
     deleteDeck(deck.id);
     setShowDeleteConfirm(false);
-    onBack();
+    handleBack();
   };
 
   const handleResetProgress = () => {
@@ -76,66 +81,58 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
     setShowResetConfirm(false);
   };
 
-  const handleToggleLearned = useCallback(
-    (cardId: string, currentLearned: boolean) => {
-      setCardLearned(cardId, !currentLearned);
-    },
-    [setCardLearned]
-  );
-
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
-      {/* 상단 네비게이션 & 액션 버튼 바 */}
-      <div className="flex items-center justify-between gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          leftIcon={<ArrowLeft className="w-4 h-4" />}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <span>뒤로 가기</span>
-        </Button>
+    <div className="relative">
+      {/* 상단 Sticky 메뉴바 */}
+      <StickyActionBar
+        onBack={handleBack}
+        right={
+          <>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onStartStudy(deck.id)}
+              disabled={deckCards.length === 0}
+              leftIcon={<Play className="w-3.5 h-3.5 fill-current" />}
+              className="font-semibold shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all px-2.5 sm:px-3"
+              title="학습 시작"
+            >
+              <span className="hidden sm:inline">학습 시작</span>
+            </Button>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowMoveModal(true)}
-            leftIcon={<FolderInput className="w-3.5 h-3.5" />}
-          >
-            <span className="hidden sm:inline">폴더 이동</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onEditDeck(deck.id)}
+              leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+            >
+              <span className="hidden sm:inline">편집</span>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEditDeck(deck.id)}
-            leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-          >
-            <span className="hidden sm:inline">편집</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowResetConfirm(true)}
+              leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+            >
+              <span className="hidden sm:inline">진행도 초기화</span>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowResetConfirm(true)}
-            leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-          >
-            <span className="hidden sm:inline">진행도 초기화</span>
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              leftIcon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <span className="hidden sm:inline">삭제</span>
+            </Button>
+          </>
+        }
+      />
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowDeleteConfirm(true)}
-            leftIcon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <span className="hidden sm:inline">삭제</span>
-          </Button>
-        </div>
-      </div>
+      {/* 본문 콘텐츠 컨테이너 */}
+      <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
 
       {/* 덱 메인 정보 헤더 Card */}
       <Card className="p-6 sm:p-8 space-y-6">
@@ -214,16 +211,13 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
 
       {/* 카드 프리뷰 목록 */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-foreground tracking-tight">
-              이 덱의 카드
-            </h2>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {deckCards.length}
-            </Badge>
-          </div>
-          <span className="text-xs text-muted-foreground">클릭하여 개별 완료 상태 전환</span>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-foreground tracking-tight">
+            이 덱의 카드
+          </h2>
+          <Badge variant="secondary" className="font-mono text-xs">
+            {deckCards.length}
+          </Badge>
         </div>
 
         {deckCards.length === 0 ? (
@@ -244,21 +238,12 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                 key={card.id}
                 card={card}
                 index={index}
-                onToggleLearned={handleToggleLearned}
+                onEdit={(cardId) => onEditDeck(deck.id, cardId)}
               />
             ))}
           </div>
         )}
       </div>
-
-      {/* 폴더 이동 모달 */}
-      {showMoveModal && (
-        <MoveDeckModal
-          deckId={deck.id}
-          currentFolderId={deck.folderId}
-          onClose={() => setShowMoveModal(false)}
-        />
-      )}
 
       {/* 덱 삭제 확인 모달 */}
       <ConfirmModal
@@ -282,5 +267,6 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
         isDanger={false}
       />
     </div>
-  );
+  </div>
+);
 };

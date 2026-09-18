@@ -7,12 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { StickyActionBar } from '../common/StickyActionBar';
 import {
   Folder,
   Plus,
   Edit3,
   Trash2,
-  ArrowLeft,
   Layers,
   Calendar,
   ArrowUpDown,
@@ -117,40 +117,47 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
-      {/* 상단 액션 바 */}
-      <div className="flex items-center justify-between gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          leftIcon={<ArrowLeft className="w-4 h-4" />}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <span>대시보드로 돌아가기</span>
-        </Button>
+    <div className="relative">
+      {/* 상단 Sticky 메뉴바 */}
+      <StickyActionBar
+        onBack={onBack}
+        right={
+          <>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => onCreateDeckInFolder(folder.id)}
+              leftIcon={<Plus className="w-3.5 h-3.5" />}
+              className="font-semibold shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all px-2.5 sm:px-3"
+              title="새 덱 만들기"
+            >
+              <span className="hidden sm:inline">덱 추가</span>
+            </Button>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowEditModal(true)}
-            leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-          >
-            <span className="hidden sm:inline">폴더 수정</span>
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEditModal(true)}
+              leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+            >
+              <span className="hidden sm:inline">폴더 수정</span>
+            </Button>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowDeleteConfirm(true)}
-            leftIcon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <span className="hidden sm:inline">폴더 삭제</span>
-          </Button>
-        </div>
-      </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDeleteConfirm(true)}
+              leftIcon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <span className="hidden sm:inline">폴더 삭제</span>
+            </Button>
+          </>
+        }
+      />
+
+      {/* 본문 콘텐츠 컨테이너 */}
+      <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
 
       {/* 폴더 메인 헤더 Card */}
       <Card className="p-6 sm:p-8">
@@ -280,5 +287,6 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
         isDanger={true}
       />
     </div>
-  );
+  </div>
+);
 };
