@@ -66,8 +66,8 @@ export const App: React.FC = () => {
   const navigateHome = () => setCurrentView({ type: 'dashboard' });
   const navigateFolder = (folderId: string) => setCurrentView({ type: 'folder', folderId });
   const navigateDeck = (deckId: string) => setCurrentView({ type: 'deck', deckId });
-  const navigateEditDeck = (deckId?: string, folderId?: string) =>
-    setCurrentView({ type: 'edit-deck', deckId, folderId });
+  const navigateEditDeck = (deckId?: string, folderId?: string, focusCardId?: string) =>
+    setCurrentView({ type: 'edit-deck', deckId, folderId, focusCardId });
   const navigateStudy = (deckId: string, onlyDifficult = false) =>
     setCurrentView({ type: 'study', deckId, onlyDifficult });
 
@@ -110,7 +110,7 @@ export const App: React.FC = () => {
           <DeckDetailView
             deckId={currentView.deckId}
             onStartStudy={(deckId) => navigateStudy(deckId)}
-            onEditDeck={(deckId) => navigateEditDeck(deckId)}
+            onEditDeck={(deckId, focusCardId) => navigateEditDeck(deckId, undefined, focusCardId)}
             onNavigateFolder={navigateFolder}
             onBack={navigateHome}
           />
@@ -120,6 +120,7 @@ export const App: React.FC = () => {
           <DeckEditor
             deckId={currentView.deckId}
             initialFolderId={currentView.folderId}
+            focusCardId={currentView.focusCardId}
             onClose={() => {
               if (currentView.deckId) {
                 navigateDeck(currentView.deckId);

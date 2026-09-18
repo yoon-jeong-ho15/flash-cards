@@ -4,11 +4,11 @@ import { useDeckEditor } from '../../hooks/useDeckEditor';
 import {
   Plus,
   Save,
-  ArrowLeft,
   Folder as FolderIcon,
   HelpCircle,
   AlertCircle,
 } from 'lucide-react';
+import { StickyActionBar } from '../common/StickyActionBar';
 import { Reorder, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 interface DeckEditorProps {
   deckId?: string;
   initialFolderId?: string;
+  focusCardId?: string;
   onClose: () => void;
   onSaved: (savedDeckId: string) => void;
 }
@@ -26,6 +27,7 @@ interface DeckEditorProps {
 export const DeckEditor: React.FC<DeckEditorProps> = ({
   deckId,
   initialFolderId,
+  focusCardId,
   onClose,
   onSaved,
 }) => {
@@ -50,50 +52,41 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     handleReorderCards,
     handleUpdateCard,
     handleSave,
-  } = useDeckEditor({ deckId, initialFolderId, onSaved });
+  } = useDeckEditor({ deckId, initialFolderId, focusCardId, onSaved });
 
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
-      {/* 상단 액션 바 */}
-      <div className="flex items-center justify-between pb-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-            title="취소하고 뒤로 가기"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-              {deckId ? '덱 수정하기' : '새 플래시카드 덱 만들기'}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              앞면에는 핵심 키워드/단어, 뒷면에는 상세 설명과 이미지를 등록하세요.
-            </p>
-          </div>
-        </div>
+    <div className="relative">
+      {/* 상단 Sticky 메뉴바 */}
+      <StickyActionBar
+        onBack={onClose}
+        iconOnlyBack
+        backTitle="취소하고 뒤로 가기"
+        title={deckId ? '덱 수정하기' : '새 플래시카드 덱 만들기'}
+        description="앞면에는 핵심 키워드/단어, 뒷면에는 상세 설명과 이미지를 등록하세요."
+        right={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+            >
+              취소
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSave}
+              leftIcon={<Save className="w-4 h-4" />}
+              className="font-semibold shadow-xs"
+            >
+              <span>저장하기</span>
+            </Button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-          >
-            취소
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleSave}
-            leftIcon={<Save className="w-4 h-4" />}
-          >
-            <span>저장하기</span>
-          </Button>
-        </div>
-      </div>
+      {/* 본문 콘텐츠 컨테이너 */}
+      <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
 
       {errors.general && (
         <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive flex items-center gap-2 text-sm font-medium">
@@ -114,7 +107,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             }}
             placeholder='예: "수능 한국사 빈출 개념", "생명과학 I 핵심 요약", "수능 필수 영단어"'
             error={errors.title}
-            autoFocus
+            autoFocus={!focusCardId && !deckId}
           />
           {errors.title && (
             <p className="mt-1 text-xs text-destructive font-medium">{errors.title}</p>
@@ -185,7 +178,8 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                 index={index}
                 card={card}
                 totalCards={cardItems.length}
-                autoFocusFront={card.id === newlyAddedCardId}
+                autoFocusFront={card.id === focusCardId || card.id === newlyAddedCardId}
+                isTargetFocus={card.id === focusCardId}
                 onUpdate={handleUpdateCard}
                 onMoveUp={handleMoveUp}
                 onMoveDown={handleMoveDown}
@@ -238,5 +232,6 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };

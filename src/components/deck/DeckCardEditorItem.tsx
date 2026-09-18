@@ -22,6 +22,7 @@ interface DeckCardEditorItemProps {
   card: CardFormItem;
   totalCards: number;
   autoFocusFront?: boolean;
+  isTargetFocus?: boolean;
   onUpdate: (index: number, field: keyof CardFormItem, value: any) => void;
   onMoveUp: (index: number) => void;
   onMoveDown: (index: number) => void;
@@ -35,6 +36,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
   card,
   totalCards,
   autoFocusFront,
+  isTargetFocus,
   onUpdate,
   onMoveUp,
   onMoveDown,
@@ -45,15 +47,30 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
   const dragControls = useDragControls();
   const itemRef = useRef<HTMLLIElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isHighlighted, setIsHighlighted] = useState(false);
 
   useEffect(() => {
     if (autoFocusFront && itemRef.current) {
-      const timer = setTimeout(() => {
-        itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 50);
-      return () => clearTimeout(timer);
+      if (isTargetFocus) {
+        setIsHighlighted(true);
+        const highlightTimer = setTimeout(() => {
+          setIsHighlighted(false);
+        }, 2200);
+        const scrollTimer = setTimeout(() => {
+          itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 80);
+        return () => {
+          clearTimeout(highlightTimer);
+          clearTimeout(scrollTimer);
+        };
+      } else {
+        const timer = setTimeout(() => {
+          itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [autoFocusFront]);
+  }, [autoFocusFront, isTargetFocus]);
 
   return (
     <Reorder.Item
@@ -76,8 +93,9 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
     >
       <div
         className={cn(
-          "bg-card rounded-xl border border-border p-4 shadow-xs space-y-3 focus-within:border-primary/50 transition-colors",
-          isDragging && "shadow-xl border-primary/40 ring-1 ring-primary/20"
+          "bg-card rounded-xl border border-border p-4 shadow-xs space-y-3 focus-within:border-primary/50 transition-all duration-300",
+          isDragging && "shadow-xl border-primary/40 ring-1 ring-primary/20",
+          isHighlighted && "ring-2 ring-primary/80 border-primary shadow-md bg-primary/[0.02]"
         )}
       >
       {/* 카드 번호 및 액션 툴바 */}

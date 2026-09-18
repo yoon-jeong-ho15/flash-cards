@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence, type Variants } from 'motion/react';
 import { Flashcard } from './Flashcard';
 import { StudyProgressBar } from './StudyProgressBar';
 import { StudyComplete } from './StudyComplete';
@@ -7,6 +8,52 @@ import { useStudySession } from '../../hooks/useStudySession';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '../common/EmptyState';
 import { ArrowLeft, X, ThumbsUp, RotateCw, PlusCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+// 미니멀 푸시 & 컬러 플래시 전환 애니메이션 (옵션 3)
+const cardVariants: Variants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? -20 : direction < 0 ? 20 : 0,
+    opacity: 0,
+    scale: 0.98,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+    scale: 1,
+    boxShadow: '0 0 0 0px transparent',
+    transition: {
+      duration: 0.2,
+      ease: 'easeOut',
+    },
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? 24 : -24,
+    opacity: 0,
+    scale: 0.98,
+    boxShadow:
+      direction > 0
+        ? '0 0 16px rgba(16, 185, 129, 0.15)'
+        : '0 0 16px rgba(245, 158, 11, 0.15)',
+    transition: {
+      duration: 0.18,
+      ease: 'easeOut',
+    },
+  }),
+  shake: {
+    x: [0, -10, 10, -8, 8, -4, 4, 0],
+    boxShadow: [
+      '0 0 0 0px transparent',
+      '0 0 16px rgba(245, 158, 11, 0.2)',
+      '0 0 16px rgba(245, 158, 11, 0.2)',
+      '0 0 0 0px transparent',
+    ],
+    transition: {
+      duration: 0.45,
+      ease: 'easeInOut',
+    },
+  },
+};
 
 interface StudyViewProps {
   deckId: string;
@@ -33,6 +80,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
     round,
     isShake,
     isCompleted,
+    actionFeedback,
+    direction,
+    stepCount,
     handleFlip,
     handleUnknown,
     handleKnow,
@@ -93,7 +143,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-4 px-4 sm:px-6">
+    <div className="max-w-4xl mx-auto py-4 px-4 sm:px-6 overflow-x-clip">
       {/* 상단 컨트롤 바 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -133,15 +183,54 @@ export const StudyView: React.FC<StudyViewProps> = ({
         round={round}
       />
 
-      {/* 플래시카드 본체 */}
-      <div className={`transition-transform ${isShake ? 'animate-bounce' : ''}`}>
-        {currentCard && (
-          <Flashcard
-            card={currentCard}
-            isFlipped={isFlipped}
-            onFlip={handleFlip}
-          />
+      {/* 플래시카드 본체 영역 */}
+      <div className="relative w-full max-w-2xl mx-auto">
+        {/* 1장만 남았을 때 복습 힌트 배지 */}
+        {isShake && (
+          <div className="absolute -top-9 left-1/2 -translate-x-1/2 pointer-events-none z-30 transition-all">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white shadow-md animate-pulse">
+              마지막 남은 카드 복습 중
+            </span>
+          </div>
         )}
+
+        {/* 카드 전환 시 화면 좌우 오버플로우 방지 래퍼 */}
+        <div className="relative w-full h-[420px] sm:h-[460px] overflow-x-clip">
+          <AnimatePresence mode="popLayout" custom={direction} initial={false}>
+          {currentCard && (
+            <motion.div
+              key={`${currentCard.id}-${stepCount}`}
+              custom={direction}
+              variants={cardVariants}
+              initial="enter"
+              animate={isShake ? 'shake' : 'center'}
+              exit="exit"
+              className="w-full h-full rounded-2xl relative"
+            >
+              <Flashcard
+                card={currentCard}
+                isFlipped={isFlipped}
+                onFlip={handleFlip}
+              />
+
+              {/* 전환 시 찰나의 은은한 컬러 틴트 오버레이 */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                exit={{ opacity: 1 }}
+                transition={{ duration: 0.15 }}
+                className={cn(
+                  'pointer-events-none absolute inset-0 rounded-2xl z-10 transition-colors',
+                  direction > 0
+                    ? 'bg-emerald-500/[0.03] ring-1 ring-emerald-500/20'
+                    : direction < 0
+                    ? 'bg-amber-500/[0.03] ring-1 ring-amber-500/20'
+                    : ''
+                )}
+              />
+            </motion.div>
+          )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* 하단 학습 평가 버튼 액션 바 */}
@@ -149,9 +238,21 @@ export const StudyView: React.FC<StudyViewProps> = ({
         <button
           type="button"
           onClick={handleUnknown}
-          className="group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 hover:border-amber-300 active:scale-[0.98] transition-all text-amber-950 font-semibold shadow-2xs cursor-pointer"
+          className={cn(
+            'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
+            actionFeedback === 'unknown'
+              ? 'border-amber-400 bg-amber-100/90 ring-2 ring-amber-400/50 scale-[0.98] text-amber-950'
+              : 'border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 hover:border-amber-300 active:scale-[0.98] text-amber-950'
+          )}
         >
-          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-800 group-hover:rotate-180 transition-transform duration-300">
+          <div
+            className={cn(
+              'w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300',
+              actionFeedback === 'unknown'
+                ? 'bg-amber-200 text-amber-900 rotate-180'
+                : 'bg-amber-100 text-amber-800 group-hover:rotate-180'
+            )}
+          >
             <RotateCw className="w-4 h-4" />
           </div>
           <div className="text-left">
@@ -166,9 +267,21 @@ export const StudyView: React.FC<StudyViewProps> = ({
         <button
           type="button"
           onClick={handleKnow}
-          className="group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-300 active:scale-[0.98] transition-all text-emerald-950 font-semibold shadow-2xs cursor-pointer"
+          className={cn(
+            'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
+            actionFeedback === 'know'
+              ? 'border-emerald-400 bg-emerald-100/90 ring-2 ring-emerald-400/50 scale-[0.98] text-emerald-950'
+              : 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-300 active:scale-[0.98] text-emerald-950'
+          )}
         >
-          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-800 group-hover:scale-110 transition-transform">
+          <div
+            className={cn(
+              'w-8 h-8 rounded-lg flex items-center justify-center transition-transform',
+              actionFeedback === 'know'
+                ? 'bg-emerald-200 text-emerald-900 scale-110'
+                : 'bg-emerald-100 text-emerald-800 group-hover:scale-110'
+            )}
+          >
             <ThumbsUp className="w-4 h-4" />
           </div>
           <div className="text-left">

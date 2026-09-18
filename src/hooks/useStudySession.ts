@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, Deck } from '../types';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 
@@ -7,6 +7,8 @@ interface UseStudySessionOptions {
   onlyDifficult?: boolean;
   onExit: () => void;
 }
+
+export type StudyActionType = 'unknown' | 'know' | null;
 
 export interface StudySessionState {
   deck: Deck | undefined;
@@ -20,6 +22,9 @@ export interface StudySessionState {
   round: number;
   isShake: boolean;
   isCompleted: boolean;
+  actionFeedback: StudyActionType;
+  direction: number;
+  stepCount: number;
   handleFlip: () => void;
   handleUnknown: () => void;
   handleKnow: () => void;
@@ -44,6 +49,29 @@ export const useStudySession = ({
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [round, setRound] = useState<number>(1);
   const [isShake, setIsShake] = useState<boolean>(false);
+  const [actionFeedback, setActionFeedback] = useState<StudyActionType>(null);
+  const [direction, setDirection] = useState<number>(0);
+  const [stepCount, setStepCount] = useState<number>(0);
+
+  const shakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerFeedback = useCallback((type: StudyActionType) => {
+    setActionFeedback(type);
+    if (feedbackTimeoutRef.current) {
+      clearTimeout(feedbackTimeoutRef.current);
+    }
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setActionFeedback(null);
+    }, 200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    };
+  }, []);
 
   // 세션 초기화
   const initSession = useCallback(
@@ -58,6 +86,9 @@ export const useStudySession = ({
       setTotalInitialCount(targetCards.length);
       setIsFlipped(false);
       setRound(1);
+      setDirection(0);
+      setActionFeedback(null);
+      setStepCount(0);
     },
     [deckCards, difficultCardIds]
   );
@@ -80,11 +111,17 @@ export const useStudySession = ({
 
     // 오답 세트에 추가
     setDifficultCardIds((prev) => new Set(prev).add(currentCard.id));
+    setDirection(-1);
+    triggerFeedback('unknown');
+    setStepCount((c) => c + 1);
 
     if (rest.length === 0) {
       // 남은 카드가 1장뿐인 경우 살짝 흔들림 피드백 후 앞면으로 리셋
       setIsShake(true);
-      setTimeout(() => setIsShake(false), 500);
+      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+      shakeTimeoutRef.current = setTimeout(() => {
+        setIsShake(false);
+      }, 500);
       setIsFlipped(false);
       return;
     }
@@ -92,7 +129,7 @@ export const useStudySession = ({
     // 현재 카드를 큐의 맨 뒤로 보냄
     setQueue([...rest, currentCard]);
     setIsFlipped(false);
-  }, [queue]);
+  }, [queue, triggerFeedback]);
 
   // "알아요 (완료)" - 마스터 목록으로 이동
   const handleKnow = useCallback(() => {
@@ -103,6 +140,9 @@ export const useStudySession = ({
 
     // 스토어 학습 상태 업데이트
     setCardLearned(currentCard.id, true);
+    setDirection(1);
+    triggerFeedback('know');
+    setStepCount((c) => c + 1);
 
     setMasteredCards((prev) => [...prev, currentCard]);
     setQueue(rest);
@@ -112,7 +152,7 @@ export const useStudySession = ({
     if (rest.length > 0 && rest.length % Math.max(1, totalInitialCount) === 0) {
       setRound((r) => r + 1);
     }
-  }, [queue, totalInitialCount, setCardLearned]);
+  }, [queue, totalInitialCount, setCardLearned, triggerFeedback]);
 
   // 키보드 단축키 이벤트 핸들러
   useEffect(() => {
@@ -159,6 +199,9 @@ export const useStudySession = ({
     round,
     isShake,
     isCompleted,
+    actionFeedback,
+    direction,
+    stepCount,
     handleFlip,
     handleUnknown,
     handleKnow,
