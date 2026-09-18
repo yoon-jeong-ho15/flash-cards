@@ -42,6 +42,8 @@ export interface Folder {
 // UI 뷰 모드
 export type ViewMode =
   | { type: 'dashboard' }
+  | { type: 'all-folders' }
+  | { type: 'all-decks' }
   | { type: 'folder'; folderId: string }
   | { type: 'deck'; deckId: string }
   | { type: 'edit-deck'; deckId?: string; folderId?: string; focusCardId?: string } // deckId가 없으면 신규 생성

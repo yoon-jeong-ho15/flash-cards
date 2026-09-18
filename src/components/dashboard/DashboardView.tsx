@@ -17,11 +17,14 @@ import {
   CheckCircle2,
   Layers,
   TrendingUp,
+  ChevronRight,
 } from 'lucide-react';
 
 interface DashboardViewProps {
   onNavigateFolder: (folderId: string) => void;
   onNavigateDeck: (deckId: string) => void;
+  onNavigateAllFolders: () => void;
+  onNavigateAllDecks: () => void;
   onStartStudy: (deckId: string) => void;
   onCreateDeck: () => void;
   onCreateFolder: () => void;
@@ -30,6 +33,8 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateFolder,
   onNavigateDeck,
+  onNavigateAllFolders,
+  onNavigateAllDecks,
   onStartStudy,
   onCreateDeck,
   onCreateFolder,
@@ -212,14 +217,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </Badge>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCreateFolder}
-            className="text-xs text-primary hover:text-primary h-8"
-          >
-            + 폴더 추가
-          </Button>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {folders.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onNavigateAllFolders}
+                className="text-xs text-muted-foreground hover:text-foreground h-8 gap-0.5 px-2"
+                title="모든 폴더 보기"
+              >
+                <span>더보기</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCreateFolder}
+              className="text-xs text-primary hover:text-primary h-8"
+            >
+              + 폴더 추가
+            </Button>
+          </div>
         </div>
 
         {folders.length === 0 ? (
@@ -227,18 +247,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             폴더를 생성하여 관련된 카드 덱을 체계적으로 묶어보세요.
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {folders.map((f) => {
-              const count = decks.filter((d) => d.folderId === f.id).length;
-              return (
-                <FolderCard
-                  key={f.id}
-                  folder={f}
-                  decksCount={count}
-                  onClick={() => onNavigateFolder(f.id)}
-                />
-              );
-            })}
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {folders.slice(0, 6).map((f) => {
+                const count = decks.filter((d) => d.folderId === f.id).length;
+                return (
+                  <FolderCard
+                    key={f.id}
+                    folder={f}
+                    decksCount={count}
+                    onClick={() => onNavigateFolder(f.id)}
+                  />
+                );
+              })}
+            </div>
+
+            {folders.length > 6 && (
+              <div className="text-center pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onNavigateAllFolders}
+                  className="text-xs h-8 text-muted-foreground hover:text-foreground"
+                >
+                  <span>전체 폴더 {folders.length}개 모두 보기</span>
+                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -268,14 +304,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </Tabs>
           </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onCreateDeck}
-            className="text-xs text-primary hover:text-primary h-8 self-end sm:self-auto"
-          >
-            + 새 덱 추가
-          </Button>
+          <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
+            {decks.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onNavigateAllDecks}
+                className="text-xs text-muted-foreground hover:text-foreground h-8 gap-0.5 px-2"
+                title="모든 덱 보기"
+              >
+                <span>더보기</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCreateDeck}
+              className="text-xs text-primary hover:text-primary h-8"
+            >
+              + 새 덱 추가
+            </Button>
+          </div>
         </div>
 
         {filteredDecks.length === 0 ? (
@@ -290,26 +341,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             }
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredDecks.map((deck) => {
-              const deckCards = cards.filter((c) => c.deckId === deck.id);
-              const learned = deckCards.filter((c) => c.learned).length;
-              const parentFolder = deck.folderId
-                ? folders.find((f) => f.id === deck.folderId)
-                : null;
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredDecks.slice(0, 6).map((deck) => {
+                const deckCards = cards.filter((c) => c.deckId === deck.id);
+                const learned = deckCards.filter((c) => c.learned).length;
+                const parentFolder = deck.folderId
+                  ? folders.find((f) => f.id === deck.folderId)
+                  : null;
 
-              return (
-                <DeckCard
-                  key={deck.id}
-                  deck={deck}
-                  cardsCount={deckCards.length}
-                  learnedCount={learned}
-                  parentFolderTitle={parentFolder?.title}
-                  onNavigateDeck={onNavigateDeck}
-                  onStartStudy={onStartStudy}
-                />
-              );
-            })}
+                return (
+                  <DeckCard
+                    key={deck.id}
+                    deck={deck}
+                    cardsCount={deckCards.length}
+                    learnedCount={learned}
+                    parentFolderTitle={parentFolder?.title}
+                    onNavigateDeck={onNavigateDeck}
+                    onStartStudy={onStartStudy}
+                  />
+                );
+              })}
+            </div>
+
+            {filteredDecks.length > 6 && (
+              <div className="text-center pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onNavigateAllDecks}
+                  className="text-xs h-8 text-muted-foreground hover:text-foreground"
+                >
+                  <span>전체 덱 {filteredDecks.length}개 모두 보기</span>
+                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

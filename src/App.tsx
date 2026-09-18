@@ -10,6 +10,8 @@ import { FolderModal } from './components/folder/FolderModal';
 import { DeckDetailView } from './components/deck/DeckDetailView';
 import { DeckEditor } from './components/deck/DeckEditor';
 import { StudyView } from './components/study/StudyView';
+import { AllFoldersView } from './components/folder/AllFoldersView';
+import { AllDecksView } from './components/deck/AllDecksView';
 
 export const App: React.FC = () => {
   const { initCloudSync, setSyncStatus, setUser, user } = useFlashcardStore();
@@ -64,6 +66,8 @@ export const App: React.FC = () => {
 
   // 네비게이션 헬퍼
   const navigateHome = () => setCurrentView({ type: 'dashboard' });
+  const navigateAllFolders = () => setCurrentView({ type: 'all-folders' });
+  const navigateAllDecks = () => setCurrentView({ type: 'all-decks' });
   const navigateFolder = (folderId: string) => setCurrentView({ type: 'folder', folderId });
   const navigateDeck = (deckId: string) => setCurrentView({ type: 'deck', deckId });
   const navigateEditDeck = (deckId?: string, folderId?: string, focusCardId?: string) =>
@@ -90,9 +94,28 @@ export const App: React.FC = () => {
           <DashboardView
             onNavigateFolder={navigateFolder}
             onNavigateDeck={navigateDeck}
+            onNavigateAllFolders={navigateAllFolders}
+            onNavigateAllDecks={navigateAllDecks}
             onStartStudy={(deckId) => navigateStudy(deckId)}
             onCreateDeck={() => navigateEditDeck()}
             onCreateFolder={openNewFolderModal}
+          />
+        )}
+
+        {currentView.type === 'all-folders' && (
+          <AllFoldersView
+            onNavigateFolder={navigateFolder}
+            onCreateFolder={openNewFolderModal}
+            onBack={navigateHome}
+          />
+        )}
+
+        {currentView.type === 'all-decks' && (
+          <AllDecksView
+            onNavigateDeck={navigateDeck}
+            onStartStudy={(deckId) => navigateStudy(deckId)}
+            onCreateDeck={() => navigateEditDeck()}
+            onBack={navigateHome}
           />
         )}
 

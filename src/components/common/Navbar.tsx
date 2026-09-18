@@ -121,6 +121,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Home className="w-3.5 h-3.5" />
               </button>
 
+              {currentView.type === 'all-folders' && (
+                <>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                  <span className="text-primary bg-primary/10 font-semibold truncate shrink-0 px-2 py-0.5 rounded-md text-xs">
+                    모든 폴더
+                  </span>
+                </>
+              )}
+
+              {currentView.type === 'all-decks' && (
+                <>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />
+                  <span className="text-primary bg-primary/10 font-semibold truncate shrink-0 px-2 py-0.5 rounded-md text-xs">
+                    모든 덱
+                  </span>
+                </>
+              )}
+
               {currentFolder && (
                 <>
                   <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 shrink-0" />

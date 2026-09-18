@@ -190,8 +190,58 @@ export const StudyView: React.FC<StudyViewProps> = ({
       />
 
       <div className="max-w-4xl mx-auto py-4 sm:py-6 px-4 sm:px-6 overflow-x-clip">
-        {/* 상단 학습 평가 버튼 액션 바 */}
-        <div className="max-w-2xl mx-auto mb-6 grid grid-cols-2 gap-4">
+        {/* 플래시카드 본체 영역 */}
+        <div className="relative w-full max-w-2xl mx-auto">
+          {/* 1장만 남았을 때 복습 힌트 배지 */}
+          {isShake && (
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 pointer-events-none z-30 transition-all">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white shadow-md animate-pulse">
+                마지막 남은 카드 복습 중
+              </span>
+            </div>
+          )}
+
+          {/* 카드 전환 시 화면 좌우 오버플로우 방지 래퍼 */}
+          <div className="relative w-full h-[420px] sm:h-[460px] overflow-x-clip">
+            <AnimatePresence mode="popLayout" custom={direction} initial={false}>
+            {currentCard && (
+              <motion.div
+                key={`${currentCard.id}-${stepCount}`}
+                custom={direction}
+                variants={cardVariants}
+                initial="enter"
+                animate={isShake ? 'shake' : 'center'}
+                exit="exit"
+                className="w-full h-full rounded-2xl relative"
+              >
+                <Flashcard
+                  card={currentCard}
+                  isFlipped={isFlipped}
+                  onFlip={handleFlip}
+                />
+
+                {/* 전환 시 찰나의 은은한 컬러 틴트 오버레이 */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  exit={{ opacity: 1 }}
+                  transition={{ duration: 0.15 }}
+                  className={cn(
+                    'pointer-events-none absolute inset-0 rounded-2xl z-10 transition-colors',
+                    direction > 0
+                      ? 'bg-emerald-500/[0.03] ring-1 ring-emerald-500/20'
+                      : direction < 0
+                      ? 'bg-amber-500/[0.03] ring-1 ring-amber-500/20'
+                      : ''
+                  )}
+                />
+              </motion.div>
+            )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* 하단 학습 평가 버튼 액션 바 */}
+        <div className="max-w-2xl mx-auto mt-6 grid grid-cols-2 gap-4">
           <button
             type="button"
             onClick={handleUnknown}
@@ -249,56 +299,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
               <div className="text-xs text-emerald-800/80 font-normal">마스터 완료로 이동</div>
             </div>
           </button>
-        </div>
-
-        {/* 플래시카드 본체 영역 */}
-        <div className="relative w-full max-w-2xl mx-auto">
-          {/* 1장만 남았을 때 복습 힌트 배지 */}
-          {isShake && (
-            <div className="absolute -top-3 left-1/2 -translate-x-1/2 pointer-events-none z-30 transition-all">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500 text-white shadow-md animate-pulse">
-                마지막 남은 카드 복습 중
-              </span>
-            </div>
-          )}
-
-          {/* 카드 전환 시 화면 좌우 오버플로우 방지 래퍼 */}
-          <div className="relative w-full h-[420px] sm:h-[460px] overflow-x-clip">
-            <AnimatePresence mode="popLayout" custom={direction} initial={false}>
-            {currentCard && (
-              <motion.div
-                key={`${currentCard.id}-${stepCount}`}
-                custom={direction}
-                variants={cardVariants}
-                initial="enter"
-                animate={isShake ? 'shake' : 'center'}
-                exit="exit"
-                className="w-full h-full rounded-2xl relative"
-              >
-                <Flashcard
-                  card={currentCard}
-                  isFlipped={isFlipped}
-                  onFlip={handleFlip}
-                />
-
-                {/* 전환 시 찰나의 은은한 컬러 틴트 오버레이 */}
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  exit={{ opacity: 1 }}
-                  transition={{ duration: 0.15 }}
-                  className={cn(
-                    'pointer-events-none absolute inset-0 rounded-2xl z-10 transition-colors',
-                    direction > 0
-                      ? 'bg-emerald-500/[0.03] ring-1 ring-emerald-500/20'
-                      : direction < 0
-                      ? 'bg-amber-500/[0.03] ring-1 ring-amber-500/20'
-                      : ''
-                  )}
-                />
-              </motion.div>
-            )}
-            </AnimatePresence>
-          </div>
         </div>
 
         {/* 키보드 단축키 안내 (데스크탑 전용) */}
