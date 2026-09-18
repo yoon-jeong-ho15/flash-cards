@@ -64,6 +64,15 @@ export const App: React.FC = () => {
     folderId?: string;
   }>({ isOpen: false });
 
+  // 뷰 변경 시 스크롤 최상단 초기화 (모바일 및 SPA 스크롤 위치 유지 방지)
+  useEffect(() => {
+    // 특정 카드에 포커스하여 편집기로 진입하는 경우가 아니라면 항상 최상단으로 스크롤
+    if (currentView.type === 'edit-deck' && currentView.focusCardId) {
+      return;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [currentView]);
+
   // 네비게이션 헬퍼
   const navigateHome = () => setCurrentView({ type: 'dashboard' });
   const navigateAllFolders = () => setCurrentView({ type: 'all-folders' });
