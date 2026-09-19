@@ -3,6 +3,10 @@ import { FlashcardStoreState, CardSlice } from '../types';
 import { Card, Deck } from '../../types';
 import { flashcardService } from '../../services/flashcardService';
 import { isFirebaseConfigured } from '../../lib/firebase';
+import {
+  extractAllFirebaseImageUrlsFromCard,
+  deleteImagesByUrls,
+} from '../../services/storageService';
 
 export const createCardSlice: StateCreator<
   FlashcardStoreState,
@@ -88,11 +92,20 @@ export const createCardSlice: StateCreator<
   },
 
   deleteCard: (id) => {
-    const { user } = get();
+    const { user, cards } = get();
     const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
 
+    const cardToDelete = cards.find((c) => c.id === id);
+    if (cardToDelete) {
+      const urls = extractAllFirebaseImageUrlsFromCard(cardToDelete);
+      if (urls.length > 0) {
+        deleteImagesByUrls(urls).catch((err) =>
+          console.warn('[cardSlice] 삭제된 카드의 이미지 정리 실패:', err)
+        );
+      }
+    }
+
     set((state) => {
-      const cardToDelete = state.cards.find((c) => c.id === id);
       const remainingCards = state.cards.filter((c) => c.id !== id);
       return {
         cards: remainingCards,

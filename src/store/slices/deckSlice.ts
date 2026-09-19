@@ -3,6 +3,10 @@ import { FlashcardStoreState, DeckSlice } from '../types';
 import { Deck, Card } from '../../types';
 import { flashcardService } from '../../services/flashcardService';
 import { isFirebaseConfigured } from '../../lib/firebase';
+import {
+  extractAllFirebaseImageUrlsFromCard,
+  deleteImagesByUrls,
+} from '../../services/storageService';
 
 export const createDeckSlice: StateCreator<
   FlashcardStoreState,
@@ -115,8 +119,20 @@ export const createDeckSlice: StateCreator<
   },
 
   deleteDeck: (id) => {
-    const { user } = get();
+    const { user, cards } = get();
     const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
+
+    // 해당 덱에 속한 모든 카드의 이미지 URL 수집 및 삭제
+    const deckCards = cards.filter((c) => c.deckId === id);
+    const imageUrls: string[] = [];
+    deckCards.forEach((c) => {
+      imageUrls.push(...extractAllFirebaseImageUrlsFromCard(c));
+    });
+    if (imageUrls.length > 0) {
+      deleteImagesByUrls(imageUrls).catch((err) =>
+        console.warn('[deckSlice] 삭제된 덱의 이미지 정리 실패:', err)
+      );
+    }
 
     set((state) => ({
       decks: state.decks.filter((d) => d.id !== id),

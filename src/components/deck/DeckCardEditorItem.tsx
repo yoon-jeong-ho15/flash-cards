@@ -1,6 +1,5 @@
 import React, { memo, useRef, useEffect, useState } from 'react';
 import { RichTextEditor } from '../editor/RichTextEditor';
-import { ImageUploader } from '../editor/ImageUploader';
 import { ChevronUp, ChevronDown, Copy, Trash2, GripVertical, Plus } from 'lucide-react';
 import { Reorder, useDragControls } from 'motion/react';
 import { Button } from '@/components/ui/button';
@@ -168,7 +167,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
 
       {/* 에디터 필드 (2열 반응형 그리드) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 앞면 에디터 & 이미지 첨부 */}
+        {/* 앞면 에디터 */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs font-semibold text-foreground">
             <span>앞면 (개념 / 키워드)</span>
@@ -178,21 +177,12 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             value={card.termRichText}
             onChange={(html) => onUpdate(index, 'termRichText', html)}
             placeholder="단어, 질문 또는 핵심 키워드를 입력하세요..."
-            height="120px"
+            height="135px"
             autoFocus={autoFocusFront}
           />
-
-          {/* 앞면 이미지 업로더 */}
-          <div className="pt-2">
-            <ImageUploader
-              imageUrl={card.frontImageUrl}
-              onImageChange={(url) => onUpdate(index, 'frontImageUrl', url)}
-              compact
-            />
-          </div>
         </div>
 
-        {/* 뒷면 에디터 & 이미지 첨부 */}
+        {/* 뒷면 에디터 */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs font-semibold text-foreground">
             <span>뒷면 (정의 / 해설)</span>
@@ -202,17 +192,8 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             value={card.definitionRichText}
             onChange={(html) => onUpdate(index, 'definitionRichText', html)}
             placeholder="상세 설명, 해설, 예시 코드를 입력하세요..."
-            height="120px"
+            height="135px"
           />
-
-          {/* 뒷면 이미지 업로더 */}
-          <div className="pt-2">
-            <ImageUploader
-              imageUrl={card.backImageUrl || card.imageUrl}
-              onImageChange={(url) => onUpdate(index, 'backImageUrl', url)}
-              compact
-            />
-          </div>
         </div>
       </div>
       </div>
