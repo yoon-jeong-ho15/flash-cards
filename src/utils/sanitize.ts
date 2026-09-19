@@ -9,8 +9,8 @@ export function sanitizeHtml(rawHtml: string): string {
     ALLOWED_TAGS: [
       'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike',
       'mark', 'code', 'pre', 'ul', 'ol', 'li', 'span', 'blockquote',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'sub', 'sup'
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'sub', 'sup', 'img'
     ],
-    ALLOWED_ATTR: ['style', 'class', 'data-*'],
+    ALLOWED_ATTR: ['style', 'class', 'data-*', 'src', 'alt', 'title', 'width', 'height', 'loading'],
   });
 }

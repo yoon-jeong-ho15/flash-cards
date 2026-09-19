@@ -1,6 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { CardFormItem } from '../components/deck/DeckCardEditorItem';
+import {
+  extractAllFirebaseImageUrlsFromCard,
+  deleteImagesByUrls,
+} from '../services/storageService';
 
 interface UseDeckEditorOptions {
   deckId?: string;
@@ -68,6 +72,21 @@ export const useDeckEditor = ({
   });
   const [newlyAddedCardId, setNewlyAddedCardId] = useState<string | null>(null);
   const [errors, setErrors] = useState<DeckEditorErrors>({});
+
+  // 수정 전 덱/카드에 존재하던 이미지 URL들을 기억하여, 저장 시 삭제된 이미지를 정리
+  const initialImageUrlsRef = useRef<Set<string>>(new Set());
+
+  // 초기 렌더링 시 기존 카드들의 이미지 URL 기억
+  useEffect(() => {
+    if (deckId) {
+      const existingCards = cards.filter((c) => c.deckId === deckId);
+      const urls = new Set<string>();
+      existingCards.forEach((c) => {
+        extractAllFirebaseImageUrlsFromCard(c).forEach((u) => urls.add(u));
+      });
+      initialImageUrlsRef.current = urls;
+    }
+  }, [deckId]);
 
   // 기존 덱 수정 시 데이터 로드 (외부 상태 변경 동기화용)
   useEffect(() => {
@@ -200,6 +219,8 @@ export const useDeckEditor = ({
       (c) =>
         c.termRichText.replace(/<[^>]*>/g, '').trim() ||
         c.definitionRichText.replace(/<[^>]*>/g, '').trim() ||
+        c.termRichText.includes('<img') ||
+        c.definitionRichText.includes('<img') ||
         c.frontImageUrl ||
         c.backImageUrl ||
         c.imageUrl
@@ -215,6 +236,25 @@ export const useDeckEditor = ({
     }
 
     try {
+      // 1) 수정 전 이미지 URL 목록 수집
+      const beforeUrls = new Set<string>(initialImageUrlsRef.current);
+      if (deckId) {
+        cards
+          .filter((c) => c.deckId === deckId)
+          .forEach((c) => {
+            extractAllFirebaseImageUrlsFromCard(c).forEach((u) => beforeUrls.add(u));
+          });
+      }
+
+      // 2) 현재 카드들(새로 저장될 데이터)의 이미지 URL 목록 수집
+      const afterUrls = new Set<string>();
+      cardItems.forEach((c) => {
+        extractAllFirebaseImageUrlsFromCard(c).forEach((u) => afterUrls.add(u));
+      });
+
+      // 3) 차집합 계산 (수정 전에는 있었으나 현재 사라진 이미지들)
+      const removedUrls = Array.from(beforeUrls).filter((url) => !afterUrls.has(url));
+
       const savedDeckId = saveDeckWithCards(
         deckId || null,
         {
@@ -233,6 +273,14 @@ export const useDeckEditor = ({
         }))
       );
 
+      // 4) 저장 성공 시 사라진 기존 이미지들을 Firebase Storage에서 안전하게 삭제
+      if (removedUrls.length > 0) {
+        console.log('[DeckEditor] 카드 수정으로 제거된 이미지 삭제 중:', removedUrls);
+        deleteImagesByUrls(removedUrls).catch((err) => {
+          console.warn('[DeckEditor] 이미지 정리 실패:', err);
+        });
+      }
+
       onSaved(savedDeckId);
     } catch (err: any) {
       console.error('덱 저장 중 오류:', err);
@@ -244,6 +292,7 @@ export const useDeckEditor = ({
     description,
     selectedFolderId,
     deckId,
+    cards,
     saveDeckWithCards,
     onSaved,
   ]);

@@ -1,5 +1,3 @@
-import imageCompression from 'browser-image-compression';
-
 export interface CompressImageOptions {
   maxWidth?: number;
   maxSizeMB?: number;
@@ -7,26 +5,8 @@ export interface CompressImageOptions {
 }
 
 /**
- * 이미지 파일의 가로/세로 해상도를 비동기로 가져옵니다.
- */
-function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('이미지 정보를 읽는 도중 오류가 발생했습니다.'));
-    };
-    img.src = url;
-  });
-}
-
-/**
- * 이미지를 가로 최대 1024px로 제한하고 WebP 포맷으로 압축합니다.
+ * 브라우저 네이티브 Canvas를 사용하여 이미지를 안전하고 초고속(수십 ms)으로 WebP 압축합니다.
+ * 외부 라이브러리 Web Worker 지연 및 무한 대기(Hang) 문제를 방지하고 타임아웃 안전장치를 제공합니다.
  */
 export async function compressImage(
   file: File,
@@ -38,48 +18,87 @@ export async function compressImage(
   }
 
   const maxWidth = customOptions?.maxWidth ?? 1024;
-  const maxSizeMB = customOptions?.maxSizeMB ?? 1;
   const quality = customOptions?.quality ?? 0.8;
 
-  let targetMaxWidthOrHeight = maxWidth;
+  return new Promise((resolve) => {
+    // 4초 안전 타임아웃: 어떤 이유로든 지연되면 원본 파일을 즉시 반환하여 멈춤 방지
+    const timeoutId = setTimeout(() => {
+      console.warn('[imageCompressor] 압축 타임아웃 초과, 원본 이미지 사용');
+      resolve(file);
+    }, 4000);
 
-  try {
-    const { width, height } = await getImageDimensions(file);
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
 
-    // 가로가 maxWidth(1024px)보다 큰 경우
-    if (width > maxWidth) {
-      if (width >= height) {
-        // 가로가 더 긴 경우: 긴 축이 maxWidth가 되도록 설정
-        targetMaxWidthOrHeight = maxWidth;
-      } else {
-        // 세로가 더 긴 경우: 가로가 maxWidth가 되도록 비율 계산하여 세로 기준 maxWidthOrHeight 설정
-        targetMaxWidthOrHeight = Math.round((height / width) * maxWidth);
+    img.onload = () => {
+      try {
+        let width = img.naturalWidth;
+        let height = img.naturalHeight;
+
+        if (!width || !height) {
+          clearTimeout(timeoutId);
+          URL.revokeObjectURL(objectUrl);
+          resolve(file);
+          return;
+        }
+
+        // 가로가 maxWidth(기본 1024px)보다 크면 비율 유지 축소
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          clearTimeout(timeoutId);
+          URL.revokeObjectURL(objectUrl);
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            clearTimeout(timeoutId);
+            URL.revokeObjectURL(objectUrl);
+
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+
+            const baseName = file.name.replace(/\.[^/.]+$/, '') || 'image';
+            const compressedFile = new File([blob], `${baseName}.webp`, {
+              type: 'image/webp',
+              lastModified: Date.now(),
+            });
+
+            resolve(compressedFile);
+          },
+          'image/webp',
+          quality
+        );
+      } catch (err) {
+        clearTimeout(timeoutId);
+        URL.revokeObjectURL(objectUrl);
+        console.warn('[imageCompressor] 캔버스 압축 중 예외 발생, 원본 파일 사용:', err);
+        resolve(file);
       }
-    } else {
-      // 가로가 이미 1024px 이하인 경우 세로도 유지 (비율 축소 불필요)
-      targetMaxWidthOrHeight = Math.max(width, height);
-    }
-  } catch (err) {
-    console.warn('이미지 치수 계산 실패, 기본 1024px 제한 적용:', err);
-    targetMaxWidthOrHeight = maxWidth;
-  }
+    };
 
-  const compressionOptions = {
-    maxSizeMB,
-    maxWidthOrHeight: targetMaxWidthOrHeight,
-    useWebWorker: true,
-    fileType: 'image/webp',
-    initialQuality: quality,
-  };
+    img.onerror = (err) => {
+      clearTimeout(timeoutId);
+      URL.revokeObjectURL(objectUrl);
+      console.warn('[imageCompressor] 이미지 로드 실패, 원본 파일 사용:', err);
+      resolve(file);
+    };
 
-  const compressedBlob = await imageCompression(file, compressionOptions);
-
-  // 파일 확장자를 .webp로 변경하여 새 File 객체 생성
-  const baseName = file.name.replace(/\.[^/.]+$/, '') || 'image';
-  const webpFileName = `${baseName}.webp`;
-
-  return new File([compressedBlob], webpFileName, {
-    type: 'image/webp',
-    lastModified: Date.now(),
+    img.src = objectUrl;
   });
 }
+

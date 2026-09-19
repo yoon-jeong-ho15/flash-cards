@@ -28,7 +28,7 @@ export const RichTextViewer: React.FC<RichTextViewerProps> = ({
 
   return (
     <div
-      className={`rich-content prose prose-slate max-w-none text-foreground break-words [word-break:break-word] ${sizeClass} ${className}`}
+      className={`rich-content prose prose-slate max-w-none text-foreground break-words [word-break:break-word] [&_img]:max-h-64 [&_img]:rounded-lg [&_img]:mx-auto [&_img]:object-contain [&_img]:shadow-2xs [&_img]:my-2 ${sizeClass} ${className}`}
       dangerouslySetInnerHTML={{ __html: sanitized }}
     />
   );
