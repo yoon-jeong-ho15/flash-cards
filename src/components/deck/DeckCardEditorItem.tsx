@@ -75,7 +75,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
     <Reorder.Item
       ref={itemRef}
       value={card}
-      id={card.id || `card-${index}`}
+      id={`card-editor-${index}`}
       dragListener={false}
       dragControls={dragControls}
       initial={{ opacity: 0, y: 15 }}

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { DeckCardEditorItem } from './DeckCardEditorItem';
+import { DeckEditorOutline } from './DeckEditorOutline';
 import { useDeckEditor } from '../../hooks/useDeckEditor';
 import {
   Plus,
@@ -54,6 +55,25 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     handleSave,
   } = useDeckEditor({ deckId, initialFolderId, focusCardId, onSaved });
 
+  // 좌측 카드 목차에서 선택된 인덱스 및 하이라이트 상태
+  const [activeOutlineIndex, setActiveOutlineIndex] = useState<number | undefined>();
+  const [highlightCardId, setHighlightCardId] = useState<string | undefined>(focusCardId);
+
+  const handleSelectCardFromOutline = (index: number) => {
+    setActiveOutlineIndex(index);
+    const targetEl = document.getElementById(`card-editor-${index}`);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const targetCard = cardItems[index];
+      if (targetCard?.id) {
+        setHighlightCardId(targetCard.id);
+        setTimeout(() => {
+          setHighlightCardId((prev) => (prev === targetCard.id ? undefined : prev));
+        }, 2000);
+      }
+    }
+  };
+
   return (
     <div className="relative">
       {/* 상단 Sticky 메뉴바 */}
@@ -85,15 +105,28 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         }
       />
 
-      {/* 본문 콘텐츠 컨테이너 */}
-      <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
+      {/* 본문 콘텐츠 컨테이너 (데스크탑: 좌측 목차 + 우측 폼 2열 배치) */}
+      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6">
+        <div className="lg:flex lg:gap-8 lg:items-start">
+          {/* 좌측 카드 목차 패널 (데스크탑 전용) */}
+          <div className="hidden lg:block">
+            <DeckEditorOutline
+              cards={cardItems}
+              activeIndex={activeOutlineIndex}
+              onSelectCard={handleSelectCardFromOutline}
+              onAddCard={handleAddCard}
+              onRemoveCard={handleRemoveCard}
+            />
+          </div>
 
-      {errors.general && (
-        <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive flex items-center gap-2 text-sm font-medium">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{errors.general}</span>
-        </div>
-      )}
+          {/* 우측 메인 에디터 (기존 카드 폼 100% 유지) */}
+          <div className="flex-1 min-w-0 space-y-6">
+            {errors.general && (
+              <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive flex items-center gap-2 text-sm font-medium">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errors.general}</span>
+              </div>
+            )}
 
       {/* 덱 메타데이터 설정 (제목, 설명, 폴더) */}
       <Card className="p-5 sm:p-6 space-y-4">
@@ -179,7 +212,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                 card={card}
                 totalCards={cardItems.length}
                 autoFocusFront={card.id === focusCardId || card.id === newlyAddedCardId}
-                isTargetFocus={card.id === focusCardId}
+                isTargetFocus={card.id === focusCardId || (Boolean(card.id) && card.id === highlightCardId)}
                 onUpdate={handleUpdateCard}
                 onMoveUp={handleMoveUp}
                 onMoveDown={handleMoveDown}
@@ -231,7 +264,9 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
           활용하면 복습 효율이 극대화됩니다.
         </div>
       </div>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
 };
