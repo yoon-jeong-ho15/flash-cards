@@ -4,6 +4,7 @@ import { auth } from './lib/firebase';
 import { ViewMode } from './types';
 import { useFlashcardStore } from './store/useFlashcardStore';
 import { Navbar } from './components/common/Navbar';
+import { Sidebar } from './components/common/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { FolderDetailView } from './components/folder/FolderDetailView';
 import { FolderModal } from './components/folder/FolderModal';
@@ -64,6 +65,28 @@ export const App: React.FC = () => {
     folderId?: string;
   }>({ isOpen: false });
 
+  // 사이드바 상태 (접힘 여부 로컬 스토리지 유지)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('flashcard_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('flashcard_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
   // 뷰 변경 시 스크롤 최상단 초기화 (모바일 및 SPA 스크롤 위치 유지 방지)
   useEffect(() => {
     // 특정 카드에 포커스하여 편집기로 진입하는 경우가 아니라면 항상 최상단으로 스크롤
@@ -87,29 +110,54 @@ export const App: React.FC = () => {
   const openNewFolderModal = () => setFolderModalState({ isOpen: true });
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
 
-  return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
-      {/* 글로벌 상단 헤더 */}
-      <Navbar
-        currentView={currentView}
-        onNavigateHome={navigateHome}
-        onNavigateFolder={navigateFolder}
-        onNavigateDeck={navigateDeck}
-      />
+  // 학습 모드일 때는 화면 전체 몰입을 위해 사이드바 숨김
+  const showSidebar = currentView.type !== 'study';
 
-      {/* 메인 뷰 컨테이너 */}
-      <main className="flex-1 pb-16">
-        {currentView.type === 'dashboard' && (
-          <DashboardView
-            onNavigateFolder={navigateFolder}
-            onNavigateDeck={navigateDeck}
-            onNavigateAllFolders={navigateAllFolders}
-            onNavigateAllDecks={navigateAllDecks}
-            onStartStudy={(deckId) => navigateStudy(deckId)}
-            onCreateDeck={() => navigateEditDeck()}
-            onCreateFolder={openNewFolderModal}
-          />
-        )}
+  return (
+    <div className="min-h-screen bg-background text-foreground flex font-sans">
+      {/* 1. 글로벌 좌측 접이식 사이드바 */}
+      {showSidebar && (
+        <Sidebar
+          currentView={currentView}
+          isCollapsed={isSidebarCollapsed}
+          isMobileOpen={isMobileSidebarOpen}
+          onToggleCollapse={toggleSidebar}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          onNavigateHome={navigateHome}
+          onNavigateAllFolders={navigateAllFolders}
+          onNavigateAllDecks={navigateAllDecks}
+          onNavigateFolder={navigateFolder}
+          onNavigateDeck={navigateDeck}
+          onCreateDeck={() => navigateEditDeck()}
+          onCreateFolder={openNewFolderModal}
+        />
+      )}
+
+      {/* 2. 메인 화면 영역 (Navbar + 콘텐츠) */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <Navbar
+          currentView={currentView}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          onNavigateHome={navigateHome}
+          onNavigateFolder={navigateFolder}
+          onNavigateDeck={navigateDeck}
+        />
+
+        {/* 메인 뷰 컨테이너 */}
+        <main className="flex-1 pb-16">
+          {currentView.type === 'dashboard' && (
+            <DashboardView
+              onNavigateFolder={navigateFolder}
+              onNavigateDeck={navigateDeck}
+              onNavigateAllFolders={navigateAllFolders}
+              onNavigateAllDecks={navigateAllDecks}
+              onStartStudy={(deckId) => navigateStudy(deckId)}
+              onCreateDeck={() => navigateEditDeck()}
+              onCreateFolder={openNewFolderModal}
+            />
+          )}
 
         {currentView.type === 'all-folders' && (
           <AllFoldersView
@@ -187,6 +235,7 @@ export const App: React.FC = () => {
           }}
         />
       )}
+      </div>
     </div>
   );
 };

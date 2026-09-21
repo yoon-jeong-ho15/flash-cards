@@ -4,6 +4,7 @@ import { RichTextViewer } from '../editor/RichTextViewer';
 import { RotateCcw, Image as ImageIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ImageWithSkeleton } from '../common/ImageWithSkeleton';
 
 interface FlashcardProps {
   card: CardType;
@@ -54,20 +55,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           <div className="flex-1 flex flex-col px-4 overflow-y-auto max-h-[300px] w-full">
             <div className="my-auto w-full text-center">
               {card.frontImageUrl && (
-                <div
-                  className="mb-4 max-h-40 inline-block rounded-xl overflow-hidden border border-border bg-muted/40 p-1 cursor-zoom-in hover:opacity-90 transition-opacity mx-auto"
+                <ImageWithSkeleton
+                  src={card.frontImageUrl}
+                  alt="앞면 문제/개념 이미지"
+                  containerClassName="mb-4 max-h-40 min-h-[100px] min-w-[140px] inline-flex items-center justify-center rounded-xl overflow-hidden border border-border bg-muted/40 p-1 cursor-zoom-in hover:opacity-90 transition-opacity mx-auto"
+                  className="max-h-36 object-contain rounded-lg mx-auto"
                   onClick={(e) => {
                     e.stopPropagation();
                     window.open(card.frontImageUrl, '_blank');
                   }}
                   title="클릭하여 원본 이미지 보기"
-                >
-                  <img
-                    src={card.frontImageUrl}
-                    alt="앞면 문제/개념 이미지"
-                    className="max-h-36 object-contain rounded-lg mx-auto"
-                  />
-                </div>
+                />
               )}
 
               <div className="w-full text-center">
@@ -130,20 +128,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           <div className="flex-1 flex flex-col px-4 overflow-y-auto max-h-[300px] w-full">
             <div className="my-auto w-full text-center">
               {backImage && (
-                <div
-                  className="mb-4 max-h-40 inline-block rounded-xl overflow-hidden border border-border bg-muted/40 p-1 cursor-zoom-in hover:opacity-90 transition-opacity mx-auto"
+                <ImageWithSkeleton
+                  src={backImage}
+                  alt="카드 설명 이미지"
+                  containerClassName="mb-4 max-h-40 min-h-[100px] min-w-[140px] inline-flex items-center justify-center rounded-xl overflow-hidden border border-border bg-muted/40 p-1 cursor-zoom-in hover:opacity-90 transition-opacity mx-auto"
+                  className="max-h-36 object-contain rounded-lg mx-auto"
                   onClick={(e) => {
                     e.stopPropagation();
                     window.open(backImage, '_blank');
                   }}
                   title="클릭하여 원본 이미지 보기"
-                >
-                  <img
-                    src={backImage}
-                    alt="카드 설명 이미지"
-                    className="max-h-36 object-contain rounded-lg mx-auto"
-                  />
-                </div>
+                />
               )}
 
               <div className="w-full text-center">
