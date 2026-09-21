@@ -14,7 +14,6 @@ import {
   RefreshCw,
   LogOut,
   Menu,
-  PanelLeft,
 } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from '@/components/ui/button';
@@ -106,7 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3 sm:gap-4">
         {/* 좌측 로고 및 브레드크럼 네비게이션 */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 overflow-hidden">
-          {/* 모바일 햄버거 메뉴 버튼 */}
+          {/* 모바일 햄버거 메뉴 버튼 (모바일 뷰에서만 노출) */}
           {onOpenMobileSidebar && currentView.type !== 'study' && (
             <button
               type="button"
@@ -115,18 +114,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               title="메뉴 열기"
             >
               <Menu className="w-5 h-5" />
-            </button>
-          )}
-
-          {/* 데스크탑 사이드바 토글 버튼 (사이드바가 접혀있을 때) */}
-          {isSidebarCollapsed && onToggleSidebar && currentView.type !== 'study' && (
-            <button
-              type="button"
-              onClick={onToggleSidebar}
-              className="hidden lg:flex p-1.5 -ml-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors cursor-pointer"
-              title="사이드바 펼치기"
-            >
-              <PanelLeft className="w-4 h-4" />
             </button>
           )}
 
@@ -224,8 +211,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* 우측 클라우드 상태 및 계정/버튼 그룹 */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* 우측 클라우드 상태 및 계정/버튼 그룹 (데스크탑에서는 사이드바 하단으로 이동하므로 lg:hidden 처리) */}
+        <div className="flex lg:hidden items-center gap-2 shrink-0">
           {/* 사용자 로그인 상태에 따른 클라우드 동기화 뱃지 */}
           <div className="hidden sm:flex items-center">
             {!user ? (
@@ -248,7 +235,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <Cloud className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Firebase 동기화</span>
+                    <span>동기화</span>
                   </button>
                 )}
 

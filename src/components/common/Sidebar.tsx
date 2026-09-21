@@ -13,11 +13,11 @@ import {
   PanelLeft,
   X,
   FileText,
-  Sparkles,
-  Cloud,
   Check,
   CloudOff,
   RefreshCw,
+  LogOut,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +52,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreateDeck,
   onCreateFolder,
 }) => {
-  const { folders, decks, cards, syncStatus } = useFlashcardStore();
+  const {
+    folders,
+    decks,
+    cards,
+    syncStatus,
+    user,
+    loginWithGoogle,
+    logout,
+    initCloudSync,
+    pendingSync,
+    lastSyncedAt,
+  } = useFlashcardStore();
+
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setIsLoggingIn(true);
+    try {
+      await loginWithGoogle();
+    } catch {
+      // ignore
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const pendingCount =
+    (pendingSync?.folderIds?.length || 0) +
+    (pendingSync?.deckIds?.length || 0) +
+    (pendingSync?.cardIds?.length || 0) +
+    (pendingSync?.deletedFolderIds?.length || 0) +
+    (pendingSync?.deletedDeckIds?.length || 0) +
+    (pendingSync?.deletedCardIds?.length || 0);
 
   // 폴더별 아코디언 펼침/접힘 상태 관리 (기본적으로 모두 펼침)
   const [expandedFolderIds, setExpandedFolderIds] = useState<Record<string, boolean>>(() => {
@@ -84,87 +116,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
     (currentView.type === 'deck' && currentView.deckId === deckId) ||
     (currentView.type === 'edit-deck' && currentView.deckId === deckId);
 
-  // 동기화 상태 텍스트 및 아이콘
-  const renderSyncBadge = () => {
-    switch (syncStatus) {
-      case 'syncing':
-        return (
-          <span className="flex items-center gap-1 text-[11px] text-primary">
-            <RefreshCw className="w-3 h-3 animate-spin" />
-            {!isCollapsed && <span>동기화 중...</span>}
-          </span>
-        );
-      case 'offline':
-        return (
-          <span className="flex items-center gap-1 text-[11px] text-amber-500">
-            <CloudOff className="w-3 h-3" />
-            {!isCollapsed && <span>오프라인</span>}
-          </span>
-        );
-      case 'synced':
-      default:
-        return (
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Check className="w-3 h-3 text-emerald-500" />
-            {!isCollapsed && <span>클라우드 동기화됨</span>}
-          </span>
-        );
-    }
-  };
 
-  const sidebarContent = (
+
+  const renderSidebarContent = (collapsed: boolean) => (
     <div className="h-full flex flex-col justify-between bg-card text-card-foreground select-none">
-      {/* 1. 상단 로고 및 접기 버튼 */}
+      {/* 1. 상단 컨트롤 바 (접기/펼치기 및 닫기) */}
       <div>
         <div
           className={cn(
-            'h-14 sm:h-16 flex items-center border-b border-border/80 px-3',
-            isCollapsed ? 'justify-center' : 'justify-between px-4'
+            'h-14 sm:h-16 flex items-center border-b border-border/80 px-3 transition-all',
+            collapsed ? 'justify-center' : 'justify-end'
           )}
         >
-          {!isCollapsed && (
-            <button
-              type="button"
-              onClick={() => {
-                onNavigateHome();
-                onCloseMobile();
-              }}
-              className="flex items-center gap-2.5 font-bold text-foreground tracking-tight hover:opacity-85 transition-opacity cursor-pointer"
-            >
-              <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
-                <Layers className="w-4 h-4" />
-              </div>
-              <span className="text-base font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">
-                FlashCards
-              </span>
-            </button>
-          )}
-
-          {isCollapsed && (
-            <button
-              type="button"
-              onClick={() => {
-                onNavigateHome();
-                onCloseMobile();
-              }}
-              className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
-              title="홈으로 이동"
-            >
-              <Layers className="w-4 h-4" />
-            </button>
-          )}
-
           {/* 데스크탑 접기/펼치기 토글 버튼 */}
           <button
             type="button"
             onClick={onToggleCollapse}
-            className={cn(
-              'hidden lg:flex p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer',
-              isCollapsed && 'mt-2'
-            )}
-            title={isCollapsed ? '사이드바 펼치기' : '사이드바 접기'}
+            className="hidden lg:flex p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+            title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
           >
-            {isCollapsed ? (
+            {collapsed ? (
               <PanelLeft className="w-4 h-4" />
             ) : (
               <PanelLeftClose className="w-4 h-4" />
@@ -175,7 +146,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={onCloseMobile}
-            className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+            title="사이드바 닫기"
           >
             <X className="w-5 h-5" />
           </button>
@@ -183,7 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 2. 퀵 생성 액션 버튼 */}
         <div className="p-3 border-b border-border/60">
-          {!isCollapsed ? (
+          {!collapsed ? (
             <div className="space-y-1.5">
               <Button
                 variant="default"
@@ -251,12 +223,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               isHomeActive
                 ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              isCollapsed && 'justify-center px-0'
+              collapsed && 'justify-center px-0'
             )}
             title="대시보드"
           >
             <Home className="w-4 h-4 shrink-0" />
-            {!isCollapsed && <span>대시보드</span>}
+            {!collapsed && <span>대시보드</span>}
           </button>
 
           <button
@@ -270,15 +242,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               isAllFoldersActive
                 ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              isCollapsed && 'justify-center px-0'
+              collapsed && 'justify-center px-0'
             )}
             title="모든 폴더"
           >
             <div className="flex items-center gap-2.5">
               <FolderIcon className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span>모든 폴더</span>}
+              {!collapsed && <span>모든 폴더</span>}
             </div>
-            {!isCollapsed && (
+            {!collapsed && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono">
                 {folders.length}
               </Badge>
@@ -296,15 +268,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               isAllDecksActive
                 ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              isCollapsed && 'justify-center px-0'
+              collapsed && 'justify-center px-0'
             )}
             title="모든 덱"
           >
             <div className="flex items-center gap-2.5">
               <Layers className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span>모든 덱</span>}
+              {!collapsed && <span>모든 덱</span>}
             </div>
-            {!isCollapsed && (
+            {!collapsed && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono">
                 {decks.length}
               </Badge>
@@ -315,7 +287,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* 4. 학습 보관함 (폴더 & 덱 계층 구조 스크롤 영역) */}
       <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
-        {!isCollapsed && (
+        {!collapsed && (
           <div>
             <div className="flex items-center justify-between px-2 pb-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -457,7 +429,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {isCollapsed && (
+        {collapsed && (
           <div className="flex flex-col items-center gap-3 pt-2">
             <div className="w-8 h-px bg-border" />
             {folders.slice(0, 5).map((f) => (
@@ -481,11 +453,196 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* 5. 하단 시스템 상태 및 뱃지 */}
-      <div className="p-3 border-t border-border/80 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {renderSyncBadge()}
-        </div>
+      {/* 5. 하단 로그인 & 클라우드 동기화 상태 영역 */}
+      <div className="p-3 border-t border-border/80 space-y-2.5 bg-muted/15">
+        {!collapsed ? (
+          <>
+            {/* 동기화 상태 인디케이터 바 */}
+            <div className="flex items-center justify-between text-xs px-0.5">
+              <span className="text-[11px] text-muted-foreground font-medium">동기화 상태</span>
+              {!user ? (
+                <Badge variant="outline" className="text-[10px] text-muted-foreground font-normal py-0 h-4.5 gap-1">
+                  <CloudOff className="w-3 h-3" />
+                  <span>게스트</span>
+                </Badge>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  {syncStatus === 'synced' && (
+                    <button
+                      type="button"
+                      onClick={() => initCloudSync()}
+                      title={`동기화 완료${lastSyncedAt ? ` (${new Date(lastSyncedAt).toLocaleTimeString()} 갱신)` : ''}`}
+                      className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-medium hover:underline cursor-pointer"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>동기화 완료</span>
+                    </button>
+                  )}
+                  {syncStatus === 'syncing' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-medium">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      <span>동기화 중...</span>
+                    </span>
+                  )}
+                  {syncStatus === 'offline' && (
+                    <button
+                      type="button"
+                      onClick={() => initCloudSync()}
+                      title="클릭 시 동기화 재시도"
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <CloudOff className="w-3 h-3" />
+                      <span>{pendingCount > 0 ? `오프라인 (${pendingCount})` : '오프라인'}</span>
+                    </button>
+                  )}
+                  {syncStatus === 'error' && (
+                    <button
+                      type="button"
+                      onClick={() => initCloudSync()}
+                      title="동기화 재시도"
+                      className="inline-flex items-center gap-1 text-[11px] text-destructive hover:underline cursor-pointer"
+                    >
+                      <AlertCircle className="w-3 h-3" />
+                      <span>재시도</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 계정 프로필 또는 로그인 버튼 */}
+            {!user ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isLoggingIn}
+                onClick={handleGoogleLogin}
+                className="w-full justify-center gap-2 h-8.5 text-xs font-semibold shadow-2xs"
+              >
+                {isLoggingIn ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+                ) : (
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                )}
+                <span>{isLoggingIn ? '로그인 중...' : 'Google 로그인'}</span>
+              </Button>
+            ) : (
+              <div className="flex items-center justify-between p-1.5 rounded-lg bg-background border border-border/80">
+                <div className="flex items-center gap-2 min-w-0 pr-1" title={user.email || ''}>
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName || 'User'}
+                      className="w-7 h-7 rounded-full border border-border object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20 shrink-0">
+                      {(user.displayName || user.email || 'U')[0].toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground truncate leading-tight">
+                      {user.displayName || user.email?.split('@')[0]}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">
+                      {user.email}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => logout()}
+                  className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer shrink-0"
+                  title="로그아웃"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          /* 접혔을 때 컴팩트 아이콘 모드 */
+          <div className="flex flex-col items-center gap-2.5">
+            {!user ? (
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isLoggingIn}
+                className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
+                title="Google 로그인"
+              >
+                {isLoggingIn ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                )}
+              </button>
+            ) : (
+              <div className="relative group">
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName || 'User'}
+                    className="w-8 h-8 rounded-full border border-border object-cover"
+                    title={user.displayName || user.email || ''}
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20"
+                    title={user.displayName || user.email || ''}
+                  >
+                    {(user.displayName || user.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+                {/* 동기화 인디케이터 점 */}
+                <span
+                  className={cn(
+                    'absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card',
+                    syncStatus === 'synced' && 'bg-emerald-500',
+                    syncStatus === 'syncing' && 'bg-amber-500 animate-pulse',
+                    syncStatus === 'offline' && 'bg-slate-400',
+                    syncStatus === 'error' && 'bg-destructive'
+                  )}
+                  title={`동기화 상태: ${syncStatus}`}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -499,10 +656,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           isCollapsed ? 'w-16' : 'w-64 xl:w-72'
         )}
       >
-        {sidebarContent}
+        {renderSidebarContent(isCollapsed)}
       </aside>
 
-      {/* 2. 모바일/태블릿 드로어 (Slide-over Sheet) */}
+      {/* 2. 모바일/태블릿 드로어 (Slide-over Sheet) - 항상 완전히 펼쳐진(collapsed: false) 상태로 렌더링 */}
       {isMobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* 어두운 배경 오버레이 */}
@@ -513,7 +670,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* 슬라이드인 사이드바 패널 */}
           <div className="fixed inset-y-0 left-0 w-4/5 max-w-xs shadow-2xl bg-card border-r border-border animate-in slide-in-from-left duration-300">
-            {sidebarContent}
+            {renderSidebarContent(false)}
           </div>
         </div>
       )}
