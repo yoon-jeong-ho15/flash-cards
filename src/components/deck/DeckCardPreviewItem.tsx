@@ -4,6 +4,7 @@ import { RichTextViewer } from '../editor/RichTextViewer';
 import { Edit3 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ImageWithSkeleton } from '../common/ImageWithSkeleton';
 
 interface DeckCardPreviewItemProps {
   card: CardType;
@@ -32,17 +33,14 @@ export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(({
               <RichTextViewer html={card.termRichText} textSize="base" />
             </div>
             {card.frontImageUrl && (
-              <div
-                className="shrink-0 w-14 h-14 rounded-lg border border-border overflow-hidden bg-muted/40 flex items-center justify-center p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
+              <ImageWithSkeleton
+                src={card.frontImageUrl}
+                alt="앞면 첨부 이미지"
+                containerClassName="shrink-0 w-14 h-14 rounded-lg border border-border bg-muted/40 p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
+                className="w-full h-full object-contain rounded"
                 onClick={() => window.open(card.frontImageUrl, '_blank')}
                 title="앞면 이미지 크게 보기"
-              >
-                <img
-                  src={card.frontImageUrl}
-                  alt="앞면 첨부 이미지"
-                  className="w-full h-full object-contain rounded"
-                />
-              </div>
+              />
             )}
           </div>
         </div>
@@ -56,17 +54,14 @@ export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(({
           </div>
 
           {backImage && (
-            <div
-              className="shrink-0 w-16 h-16 rounded-lg border border-border overflow-hidden bg-muted/40 flex items-center justify-center p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
+            <ImageWithSkeleton
+              src={backImage}
+              alt="뒷면 첨부 이미지"
+              containerClassName="shrink-0 w-16 h-16 rounded-lg border border-border bg-muted/40 p-0.5 cursor-pointer hover:opacity-80 transition-opacity"
+              className="w-full h-full object-contain rounded"
               onClick={() => window.open(backImage, '_blank')}
               title="뒷면 이미지 크게 보기"
-            >
-              <img
-                src={backImage}
-                alt="뒷면 첨부 이미지"
-                className="w-full h-full object-contain rounded"
-              />
-            </div>
+            />
           )}
         </div>
       </div>
