@@ -34,8 +34,8 @@ const cardVariants: Variants = {
     scale: 0.98,
     boxShadow:
       direction > 0
-        ? '0 0 16px rgba(16, 185, 129, 0.15)'
-        : '0 0 16px rgba(245, 158, 11, 0.15)',
+        ? '0 0 16px rgba(245, 158, 11, 0.15)'
+        : '0 0 16px rgba(16, 185, 129, 0.15)',
     transition: {
       duration: 0.18,
       ease: 'easeOut',
@@ -227,9 +227,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   transition={{ duration: 0.15 }}
                   className={cn(
                     'pointer-events-none absolute inset-0 rounded-2xl z-10 transition-colors',
-                    direction > 0
+                    direction < 0
                       ? 'bg-emerald-500/[0.03] ring-1 ring-emerald-500/20'
-                      : direction < 0
+                      : direction > 0
                       ? 'bg-amber-500/[0.03] ring-1 ring-amber-500/20'
                       : ''
                   )}
@@ -242,35 +242,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
 
         {/* 하단 학습 평가 버튼 액션 바 */}
         <div className="max-w-2xl mx-auto mt-6 grid grid-cols-2 gap-4">
-          <button
-            type="button"
-            onClick={handleUnknown}
-            className={cn(
-              'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
-              actionFeedback === 'unknown'
-                ? 'border-amber-400 bg-amber-100/90 ring-2 ring-amber-400/50 scale-[0.98] text-amber-950'
-                : 'border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 hover:border-amber-300 active:scale-[0.98] text-amber-950'
-            )}
-          >
-            <div
-              className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300',
-                actionFeedback === 'unknown'
-                  ? 'bg-amber-200 text-amber-900 rotate-180'
-                  : 'bg-amber-100 text-amber-800 group-hover:rotate-180'
-              )}
-            >
-              <RotateCw className="w-4 h-4" />
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-bold flex items-center gap-1.5 text-amber-950">
-                몰라요
-                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-amber-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-amber-900">←</kbd>
-              </div>
-              <div className="text-xs text-amber-800/80 font-normal">큐의 뒤로 보내 재학습</div>
-            </div>
-          </button>
-
           <button
             type="button"
             onClick={handleKnow}
@@ -294,9 +265,38 @@ export const StudyView: React.FC<StudyViewProps> = ({
             <div className="text-left">
               <div className="text-sm font-bold flex items-center gap-1.5 text-emerald-950">
                 알아요
-                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-emerald-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-emerald-900">→</kbd>
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-emerald-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-emerald-900">←</kbd>
               </div>
               <div className="text-xs text-emerald-800/80 font-normal">마스터 완료로 이동</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleUnknown}
+            className={cn(
+              'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
+              actionFeedback === 'unknown'
+                ? 'border-amber-400 bg-amber-100/90 ring-2 ring-amber-400/50 scale-[0.98] text-amber-950'
+                : 'border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 hover:border-amber-300 active:scale-[0.98] text-amber-950'
+            )}
+          >
+            <div
+              className={cn(
+                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300',
+                actionFeedback === 'unknown'
+                  ? 'bg-amber-200 text-amber-900 rotate-180'
+                  : 'bg-amber-100 text-amber-800 group-hover:rotate-180'
+              )}
+            >
+              <RotateCw className="w-4 h-4" />
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-bold flex items-center gap-1.5 text-amber-950">
+                몰라요
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-amber-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-amber-900">→</kbd>
+              </div>
+              <div className="text-xs text-amber-800/80 font-normal">큐의 뒤로 보내 재학습</div>
             </div>
           </button>
         </div>
