@@ -11,8 +11,8 @@ export interface Card {
   id: string;
   deckId: string;
   userId?: string;
-  termRichText: string;       // 앞면 (Tiptap HTML)
-  definitionRichText: string; // 뒷면 (Tiptap HTML)
+  termRichText: string;       // 앞면 (Tiptap HTML 또는 텍스트)
+  definitionRichText: string; // 뒷면 (Tiptap HTML 또는 텍스트)
   frontImageUrl?: string;     // 앞면 첨부 이미지 (URL 또는 Base64)
   backImageUrl?: string;      // 뒷면 첨부 이미지 (URL 또는 Base64)
   imageUrl?: string;          // 기존 첨부 이미지 (하위 호환용 뒷면 이미지)

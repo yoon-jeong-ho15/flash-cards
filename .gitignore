@@ -24,6 +24,9 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+.turbo/
+.expo/
+web-build/
 
 # Environment variables & secrets
 .env
