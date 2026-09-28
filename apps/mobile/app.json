@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Flashcards",
+    "slug": "flashcards-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.flashcards.app"
+    },
+    "android": {
+      "package": "com.flashcards.app"
+    }
+  }
+}

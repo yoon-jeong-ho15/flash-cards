@@ -111,7 +111,7 @@ export const useStudySession = ({
 
     // 오답 세트에 추가
     setDifficultCardIds((prev) => new Set(prev).add(currentCard.id));
-    setDirection(-1);
+    setDirection(1);
     triggerFeedback('unknown');
     setStepCount((c) => c + 1);
 
@@ -140,7 +140,7 @@ export const useStudySession = ({
 
     // 스토어 학습 상태 업데이트
     setCardLearned(currentCard.id, true);
-    setDirection(1);
+    setDirection(-1);
     triggerFeedback('know');
     setStepCount((c) => c + 1);
 
@@ -170,10 +170,10 @@ export const useStudySession = ({
         handleFlip();
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        handleUnknown();
+        handleKnow();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        handleKnow();
+        handleUnknown();
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onExit();
