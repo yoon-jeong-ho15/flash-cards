@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card as CardType } from '../../types';
 import { RichTextViewer } from '../editor/RichTextViewer';
-import { RotateCcw, Image as ImageIcon } from 'lucide-react';
+import { RotateCcw, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ImageWithSkeleton } from '../common/ImageWithSkeleton';
@@ -10,12 +10,16 @@ interface FlashcardProps {
   card: CardType;
   isFlipped: boolean;
   onFlip: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export const Flashcard: React.FC<FlashcardProps> = ({
   card,
   isFlipped,
   onFlip,
+  onEdit,
+  onDelete,
 }) => {
   const backImage = card.backImageUrl || card.imageUrl;
 
@@ -37,18 +41,52 @@ export const Flashcard: React.FC<FlashcardProps> = ({
               앞면 · 개념 / 질문
             </Badge>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onFlip();
-              }}
-              leftIcon={<RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />}
-              className="h-7 text-xs text-muted-foreground hover:text-foreground"
-            >
-              뒤집기
-            </Button>
+            <div className="flex items-center gap-1">
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  leftIcon={<Pencil className="w-3.5 h-3.5 text-muted-foreground group-hover/btn:text-foreground" />}
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 group/btn"
+                  title="카드 내용 수정 (E)"
+                >
+                  <span className="hidden sm:inline">수정</span>
+                </Button>
+              )}
+
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  leftIcon={<Trash2 className="w-3.5 h-3.5 text-muted-foreground group-hover/del:text-destructive" />}
+                  className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 group/del"
+                  title="카드 삭제"
+                >
+                  <span className="hidden sm:inline">삭제</span>
+                </Button>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFlip();
+                }}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />}
+                className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 sm:px-2.5"
+              >
+                뒤집기
+              </Button>
+            </div>
           </div>
 
           {/* 중앙 내용 (앞면) - my-auto prevents top content clipping when overflowing */}
@@ -110,18 +148,52 @@ export const Flashcard: React.FC<FlashcardProps> = ({
               뒷면 · 정의 / 해설
             </Badge>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onFlip();
-              }}
-              leftIcon={<RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />}
-              className="h-7 text-xs text-muted-foreground hover:text-foreground"
-            >
-              앞면 보기
-            </Button>
+            <div className="flex items-center gap-1">
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  leftIcon={<Pencil className="w-3.5 h-3.5 text-muted-foreground group-hover/btn:text-foreground" />}
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 group/btn"
+                  title="카드 내용 수정 (E)"
+                >
+                  <span className="hidden sm:inline">수정</span>
+                </Button>
+              )}
+
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  leftIcon={<Trash2 className="w-3.5 h-3.5 text-muted-foreground group-hover/del:text-destructive" />}
+                  className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 group/del"
+                  title="카드 삭제"
+                >
+                  <span className="hidden sm:inline">삭제</span>
+                </Button>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onFlip();
+                }}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />}
+                className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 sm:px-2.5"
+              >
+                앞면 보기
+              </Button>
+            </div>
           </div>
 
           {/* 중앙 내용 (뒷면 텍스트 & 이미지) - my-auto prevents top clipping */}

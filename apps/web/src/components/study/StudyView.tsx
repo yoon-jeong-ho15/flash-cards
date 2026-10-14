@@ -5,6 +5,8 @@ import { StudyComplete } from './StudyComplete';
 import { ShortcutBadge } from './ShortcutBadge';
 import { StickyActionBar } from '../common/StickyActionBar';
 import { Modal } from '../common/Modal';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { EditCardModal } from './EditCardModal';
 import { useStudySession } from '../../hooks/useStudySession';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -93,6 +95,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
     isLastCard,
     isFinishModalOpen,
     remainingUnlearnedCount,
+    isEditModalOpen,
+    isDeleteModalOpen,
     handleFlip,
     handlePrevious,
     handleNext,
@@ -101,6 +105,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
     handleRestartUnlearned,
     handleRestartAll,
     closeFinishModal,
+    openEditModal,
+    closeEditModal,
+    openDeleteModal,
+    closeDeleteModal,
+    handleUpdateCurrentCard,
+    handleDeleteCurrentCard,
   } = useStudySession({ deckId, onlyDifficult, shuffle, onExit });
 
   if (!deck) {
@@ -267,6 +277,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   card={currentCard}
                   isFlipped={isFlipped}
                   onFlip={handleFlip}
+                  onEdit={openEditModal}
+                  onDelete={openDeleteModal}
                 />
 
                 {/* 전환 시 찰나의 은은한 컬러 틴트 오버레이 */}
@@ -496,6 +508,27 @@ export const StudyView: React.FC<StudyViewProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* 카드 즉석 내용 수정 모달 */}
+      <EditCardModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditModal}
+        card={currentCard}
+        onSave={handleUpdateCurrentCard}
+        onDelete={openDeleteModal}
+      />
+
+      {/* 카드 즉석 삭제 확인 모달 */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        onConfirm={handleDeleteCurrentCard}
+        title="카드 삭제"
+        message={`현재 학습 중인 카드를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없으며, 덱에서도 완전히 삭제됩니다.`}
+        confirmText="삭제"
+        cancelText="취소"
+        isDanger
+      />
     </div>
   );
 };

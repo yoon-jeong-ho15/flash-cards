@@ -51,6 +51,8 @@ export interface StudySessionState {
   isLastCard: boolean;
   isFinishModalOpen: boolean;
   remainingUnlearnedCount: number;
+  isEditModalOpen: boolean;
+  isDeleteModalOpen: boolean;
   handleFlip: () => void;
   handlePrevious: () => void;
   handleNext: () => void;
@@ -62,6 +64,12 @@ export interface StudySessionState {
   handleRestartAll: () => void;
   closeFinishModal: () => void;
   openFinishModal: () => void;
+  openEditModal: () => void;
+  closeEditModal: () => void;
+  openDeleteModal: () => void;
+  closeDeleteModal: () => void;
+  handleUpdateCurrentCard: (updates: { termRichText: string; definitionRichText: string }) => void;
+  handleDeleteCurrentCard: () => void;
 }
 
 export const useStudySession = ({
@@ -70,7 +78,7 @@ export const useStudySession = ({
   shuffle = false,
   onExit,
 }: UseStudySessionOptions): StudySessionState => {
-  const { decks, cards, setCardLearned } = useFlashcardStore();
+  const { decks, cards, setCardLearned, updateCard, deleteCard } = useFlashcardStore();
 
   const deck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
   const deckCards = useMemo(() => cards.filter((c) => c.deckId === deckId), [cards, deckId]);
@@ -81,6 +89,8 @@ export const useStudySession = ({
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [isFinishModalOpen, setIsFinishModalOpen] = useState<boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const [round, setRound] = useState<number>(1);
   const [actionFeedback, setActionFeedback] = useState<StudyActionType>(null);
   const [direction, setDirection] = useState<number>(0);
@@ -239,6 +249,70 @@ export const useStudySession = ({
     setIsFinishModalOpen(true);
   }, []);
 
+  const openEditModal = useCallback(() => {
+    setIsEditModalOpen(true);
+  }, []);
+
+  const closeEditModal = useCallback(() => {
+    setIsEditModalOpen(false);
+  }, []);
+
+  const openDeleteModal = useCallback(() => {
+    setIsDeleteModalOpen(true);
+  }, []);
+
+  const closeDeleteModal = useCallback(() => {
+    setIsDeleteModalOpen(false);
+  }, []);
+
+  const currentCard =
+    sessionCards.length > 0 && currentIndex < sessionCards.length
+      ? sessionCards[currentIndex]
+      : null;
+
+  // 카드 내용 즉석 수정 핸들러
+  const handleUpdateCurrentCard = useCallback(
+    (updates: { termRichText: string; definitionRichText: string }) => {
+      if (!currentCard) return;
+
+      // 1. 스토어 갱신
+      updateCard(currentCard.id, updates);
+
+      // 2. 현재 세션 내 카드 목록 갱신
+      setSessionCards((prev) =>
+        prev.map((c) => (c.id === currentCard.id ? { ...c, ...updates } : c))
+      );
+
+      closeEditModal();
+    },
+    [currentCard, updateCard, closeEditModal]
+  );
+
+  // 카드 즉석 삭제 핸들러
+  const handleDeleteCurrentCard = useCallback(() => {
+    if (!currentCard) return;
+
+    const cardIdToDelete = currentCard.id;
+
+    // 1. 스토어에서 카드 삭제
+    deleteCard(cardIdToDelete);
+
+    // 2. 세션 카드 목록에서 제거
+    setSessionCards((prev) => prev.filter((c) => c.id !== cardIdToDelete));
+
+    // 3. 인덱스 보정
+    setCurrentIndex((prevIndex) => {
+      const nextLength = sessionCards.length - 1;
+      if (nextLength <= 0) return 0;
+      if (prevIndex >= nextLength) return Math.max(0, nextLength - 1);
+      return prevIndex;
+    });
+
+    setIsFlipped(false);
+    closeDeleteModal();
+    closeEditModal();
+  }, [currentCard, deleteCard, sessionCards.length, closeDeleteModal, closeEditModal]);
+
   // 호환용 별칭
   const handleUnknown = handleNext;
   const handleKnow = handleToggleKnow;
@@ -246,11 +320,27 @@ export const useStudySession = ({
   // 키보드 단축키 이벤트 핸들러
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 모달이 열려있는 동안에는 모달 외 단축키 동작 차단 (Esc는 모달 닫기)
+      // 모달이 열려있는 동안에는 모달 외 단축키 동작 차단 (Esc는 해당 모달 닫기)
       if (isFinishModalOpen) {
         if (e.key === 'Escape') {
           e.preventDefault();
           setIsFinishModalOpen(false);
+        }
+        return;
+      }
+
+      if (isDeleteModalOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setIsDeleteModalOpen(false);
+        }
+        return;
+      }
+
+      if (isEditModalOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setIsEditModalOpen(false);
         }
         return;
       }
@@ -275,6 +365,11 @@ export const useStudySession = ({
       } else if (e.key === 'Enter') {
         e.preventDefault();
         handleToggleKnow();
+      } else if (e.key === 'e' || e.key === 'E') {
+        e.preventDefault();
+        if (currentCard) {
+          setIsEditModalOpen(true);
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onExit();
@@ -283,12 +378,18 @@ export const useStudySession = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFinishModalOpen, handleFlip, handlePrevious, handleNext, handleToggleKnow, onExit]);
+  }, [
+    isFinishModalOpen,
+    isDeleteModalOpen,
+    isEditModalOpen,
+    currentCard,
+    handleFlip,
+    handlePrevious,
+    handleNext,
+    handleToggleKnow,
+    onExit,
+  ]);
 
-  const currentCard =
-    sessionCards.length > 0 && currentIndex < sessionCards.length
-      ? sessionCards[currentIndex]
-      : null;
   const isCurrentCardLearned = Boolean(currentCard?.learned);
   const masteredCount = sessionCards.filter((c) => c.learned).length;
   const totalInitialCount = sessionCards.length;
@@ -321,6 +422,8 @@ export const useStudySession = ({
     isLastCard,
     isFinishModalOpen,
     remainingUnlearnedCount,
+    isEditModalOpen,
+    isDeleteModalOpen,
     handleFlip,
     handlePrevious,
     handleNext,
@@ -332,5 +435,11 @@ export const useStudySession = ({
     handleRestartAll,
     closeFinishModal,
     openFinishModal,
+    openEditModal,
+    closeEditModal,
+    openDeleteModal,
+    closeDeleteModal,
+    handleUpdateCurrentCard,
+    handleDeleteCurrentCard,
   };
 };
