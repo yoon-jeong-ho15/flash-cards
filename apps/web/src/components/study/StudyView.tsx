@@ -8,7 +8,7 @@ import { useStudySession } from '../../hooks/useStudySession';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '../common/EmptyState';
-import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, PlusCircle, Shuffle } from 'lucide-react';
+import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, PlusCircle, Shuffle, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // 미니멀 푸시 & 컬러 플래시 전환 애니메이션 (옵션 3)
@@ -87,7 +87,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
     direction,
     stepCount,
     isShuffle,
+    canGoPrevious,
     handleFlip,
+    handlePrevious,
     handleUnknown,
     handleKnow,
     initSession,
@@ -251,41 +253,45 @@ export const StudyView: React.FC<StudyViewProps> = ({
         </div>
 
         {/* 하단 학습 평가 버튼 액션 바 */}
-        <div className="max-w-2xl mx-auto mt-6 grid grid-cols-2 gap-4">
+        <div className="max-w-2xl mx-auto mt-6 flex items-stretch gap-3 sm:gap-4">
+          {/* 1. 이전 카드 버튼 (왼쪽 화살표) */}
           <button
             type="button"
-            onClick={handleKnow}
+            onClick={handlePrevious}
+            disabled={!canGoPrevious}
             className={cn(
-              'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
-              actionFeedback === 'know'
-                ? 'border-emerald-400 bg-emerald-100/90 ring-2 ring-emerald-400/50 scale-[0.98] text-emerald-950'
-                : 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-300 active:scale-[0.98] text-emerald-950'
+              'group flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2.5 py-3 px-3.5 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs select-none shrink-0 min-w-[76px] sm:min-w-[110px]',
+              canGoPrevious
+                ? 'border-border bg-card hover:bg-muted text-foreground active:scale-[0.98] cursor-pointer'
+                : 'border-border/40 bg-muted/20 text-muted-foreground/40 cursor-not-allowed opacity-50'
             )}
+            title={canGoPrevious ? '이전 카드로 돌아가기 (←)' : '이전 카드가 없습니다'}
           >
             <div
               className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform',
-                actionFeedback === 'know'
-                  ? 'bg-emerald-200 text-emerald-900 scale-110'
-                  : 'bg-emerald-100 text-emerald-800 group-hover:scale-110'
+                'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                canGoPrevious ? 'bg-muted text-foreground group-hover:bg-background' : 'bg-transparent text-muted-foreground/40'
               )}
             >
-              <ThumbsUp className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4" />
             </div>
-            <div className="text-left">
-              <div className="text-sm font-bold flex items-center gap-1.5 text-emerald-950">
-                알아요
-                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-emerald-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-emerald-900">←</kbd>
+            <div className="text-center sm:text-left">
+              <div className="text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1">
+                <span>이전</span>
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-border bg-muted/60 px-1 font-mono text-[10px] font-medium text-muted-foreground">
+                  ←
+                </kbd>
               </div>
-              <div className="text-xs text-emerald-800/80 font-normal">마스터 완료로 이동</div>
+              <div className="hidden sm:block text-[11px] text-muted-foreground font-normal">되돌리기</div>
             </div>
           </button>
 
+          {/* 2. 몰라요 버튼 */}
           <button
             type="button"
             onClick={handleUnknown}
             className={cn(
-              'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
+              'flex-1 group flex items-center justify-center gap-2.5 sm:gap-3 py-3.5 px-3 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
               actionFeedback === 'unknown'
                 ? 'border-amber-400 bg-amber-100/90 ring-2 ring-amber-400/50 scale-[0.98] text-amber-950'
                 : 'border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 hover:border-amber-300 active:scale-[0.98] text-amber-950'
@@ -293,7 +299,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
           >
             <div
               className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300',
+                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300 shrink-0',
                 actionFeedback === 'unknown'
                   ? 'bg-amber-200 text-amber-900 rotate-180'
                   : 'bg-amber-100 text-amber-800 group-hover:rotate-180'
@@ -301,12 +307,42 @@ export const StudyView: React.FC<StudyViewProps> = ({
             >
               <RotateCw className="w-4 h-4" />
             </div>
-            <div className="text-left">
+            <div className="text-left min-w-0">
               <div className="text-sm font-bold flex items-center gap-1.5 text-amber-950">
-                몰라요
+                <span>몰라요</span>
                 <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-amber-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-amber-900">→</kbd>
               </div>
-              <div className="text-xs text-amber-800/80 font-normal">큐의 뒤로 보내 재학습</div>
+              <div className="text-xs text-amber-800/80 font-normal truncate">큐의 뒤로 재학습</div>
+            </div>
+          </button>
+
+          {/* 3. 알아요 버튼 (Enter) */}
+          <button
+            type="button"
+            onClick={handleKnow}
+            className={cn(
+              'flex-1 group flex items-center justify-center gap-2.5 sm:gap-3 py-3.5 px-3 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
+              actionFeedback === 'know'
+                ? 'border-emerald-400 bg-emerald-100/90 ring-2 ring-emerald-400/50 scale-[0.98] text-emerald-950'
+                : 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-300 active:scale-[0.98] text-emerald-950'
+            )}
+          >
+            <div
+              className={cn(
+                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform shrink-0',
+                actionFeedback === 'know'
+                  ? 'bg-emerald-200 text-emerald-900 scale-110'
+                  : 'bg-emerald-100 text-emerald-800 group-hover:scale-110'
+              )}
+            >
+              <ThumbsUp className="w-4 h-4" />
+            </div>
+            <div className="text-left min-w-0">
+              <div className="text-sm font-bold flex items-center gap-1.5 text-emerald-950">
+                <span>알아요</span>
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-emerald-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-emerald-900">↵ Enter</kbd>
+              </div>
+              <div className="text-xs text-emerald-800/80 font-normal truncate">마스터 완료</div>
             </div>
           </button>
         </div>
