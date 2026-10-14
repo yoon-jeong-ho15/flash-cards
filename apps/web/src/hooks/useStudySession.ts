@@ -276,7 +276,7 @@ export const useStudySession = ({
         return;
       }
 
-      if (e.code === 'Space') {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         handleFlip();
       } else if (e.key === 'ArrowLeft') {
