@@ -60,6 +60,50 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const hasFocusedRef = useRef(false);
   const editorHeight = height || minHeight || '120px';
 
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingValueRef = useRef<string | null>(null);
+
+  const flushChange = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (pendingValueRef.current !== null) {
+      const val = pendingValueRef.current;
+      pendingValueRef.current = null;
+      lastEmittedValueRef.current = val;
+      onChangeRef.current(val);
+    }
+  }, []);
+
+  const debouncedOnChange = useCallback((html: string) => {
+    pendingValueRef.current = html;
+    lastEmittedValueRef.current = html;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      if (pendingValueRef.current !== null) {
+        const val = pendingValueRef.current;
+        pendingValueRef.current = null;
+        onChangeRef.current(val);
+      }
+    }, 150);
+  }, []);
+
+  // 언마운트 시 남아있는 변경사항 즉시 flush
+  useEffect(() => {
+    return () => {
+      flushChange();
+    };
+  }, [flushChange]);
+
   const uploadAndInsertImage = useCallback(
     async (file: File) => {
       if (!file.type.startsWith('image/')) {
@@ -98,6 +142,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               .setImage({ src: downloadUrl, alt: '본문 첨부 이미지' })
               .run();
           }
+          flushChange();
         }
       } catch (err: any) {
         console.error('에디터 이미지 업로드 실패:', err);
@@ -106,7 +151,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         setIsUploading(false);
       }
     },
-    [user?.uid]
+    [user?.uid, flushChange]
   );
 
   const extensions = useMemo(
@@ -146,8 +191,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       const cleanHtml = editor.isEmpty ? '' : html;
-      lastEmittedValueRef.current = cleanHtml;
-      onChange(cleanHtml);
+      debouncedOnChange(cleanHtml);
+    },
+    onBlur: () => {
+      flushChange();
     },
     editorProps: {
       attributes: {
