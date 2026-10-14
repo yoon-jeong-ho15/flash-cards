@@ -4,11 +4,14 @@ import { Flashcard } from './Flashcard';
 import { StudyComplete } from './StudyComplete';
 import { ShortcutBadge } from './ShortcutBadge';
 import { StickyActionBar } from '../common/StickyActionBar';
+import { Modal } from '../common/Modal';
+import { ConfirmModal } from '../common/ConfirmModal';
+import { EditCardModal } from './EditCardModal';
 import { useStudySession } from '../../hooks/useStudySession';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '../common/EmptyState';
-import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, PlusCircle, Shuffle } from 'lucide-react';
+import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, RotateCcw, Trophy, PlusCircle, Shuffle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // 미니멀 푸시 & 컬러 플래시 전환 애니메이션 (옵션 3)
@@ -74,11 +77,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
   const {
     deck,
     deckCards,
-    queue,
-    masteredCards,
-    difficultCardIds,
+    sessionCards,
+    currentIndex,
     totalInitialCount,
     currentCard,
+    isCurrentCardLearned,
+    masteredCount,
     isFlipped,
     round,
     isShake,
@@ -87,10 +91,26 @@ export const StudyView: React.FC<StudyViewProps> = ({
     direction,
     stepCount,
     isShuffle,
+    canGoPrevious,
+    isLastCard,
+    isFinishModalOpen,
+    remainingUnlearnedCount,
+    isEditModalOpen,
+    isDeleteModalOpen,
     handleFlip,
-    handleUnknown,
-    handleKnow,
+    handlePrevious,
+    handleNext,
+    handleToggleKnow,
     initSession,
+    handleRestartUnlearned,
+    handleRestartAll,
+    closeFinishModal,
+    openEditModal,
+    closeEditModal,
+    openDeleteModal,
+    closeDeleteModal,
+    handleUpdateCurrentCard,
+    handleDeleteCurrentCard,
   } = useStudySession({ deckId, onlyDifficult, shuffle, onExit });
 
   if (!deck) {
@@ -131,13 +151,42 @@ export const StudyView: React.FC<StudyViewProps> = ({
     );
   }
 
-  // 모든 카드를 마스터한 완료 화면
+  // 덱의 모든 카드가 이미 알아요 상태인 경우
+  if (deckCards.length > 0 && sessionCards.length === 0) {
+    return (
+      <div className="max-w-md mx-auto py-16 px-4">
+        <EmptyState
+          icon={<CheckCircle2 className="w-8 h-8 text-emerald-500" />}
+          title="모든 카드를 이미 마스터했습니다!"
+          description={`'${deck.title}' 덱의 모든 카드(${deckCards.length}개)가 이미 '알아요' 상태입니다.`}
+          action={
+            <div className="flex justify-center gap-2.5">
+              <Button variant="outline" size="sm" onClick={onExit}>
+                돌아가기
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => initSession(false, isShuffle, true)}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+              >
+                전체 카드 다시 학습하기
+              </Button>
+            </div>
+          }
+        />
+      </div>
+    );
+  }
+
+  // 학습 완료 화면
   if (isCompleted) {
+    const unlearnedCount = Math.max(0, totalInitialCount - masteredCount);
     return (
       <StudyComplete
         deck={deck}
         totalCards={totalInitialCount}
-        difficultCardsCount={difficultCardIds.size}
+        difficultCardsCount={unlearnedCount}
         roundCount={round}
         onRestartAll={() => initSession(false, isShuffle)}
         onRestartDifficultOnly={() => initSession(true, isShuffle)}
@@ -147,7 +196,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
   }
 
   const percentage = totalInitialCount > 0
-    ? Math.round((masteredCards.length / totalInitialCount) * 100)
+    ? Math.round((masteredCount / totalInitialCount) * 100)
     : 0;
 
   return (
@@ -162,9 +211,15 @@ export const StudyView: React.FC<StudyViewProps> = ({
             {deck.title}
           </h2>
         }
-        description={isShuffle ? "플래시카드 랜덤 순서 학습" : "플래시카드 반복 학습"}
+        description={isShuffle ? "플래시카드 랜덤 순서 학습" : "플래시카드 순차 학습"}
         right={
           <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {round > 1 && (
+              <Badge variant="outline" className="font-semibold text-xs px-2 py-0.5 sm:py-1 border border-primary/30 text-primary bg-primary/5">
+                {round}라운드
+              </Badge>
+            )}
+
             {isShuffle && (
               <Badge variant="secondary" className="gap-1 font-medium text-xs px-2 py-0.5 sm:py-1 border border-border">
                 <Shuffle className="w-3 h-3 text-primary" />
@@ -172,24 +227,18 @@ export const StudyView: React.FC<StudyViewProps> = ({
               </Badge>
             )}
 
-            {round > 1 && (
-              <Badge variant="secondary" className="gap-1 font-mono text-xs px-2 py-0.5 sm:py-1">
-                <Layers className="w-3 h-3 text-primary" />
-                <span className="hidden sm:inline">Round </span>
-                <span>{round}</span>
-              </Badge>
-            )}
-
-            <Badge variant="warning" className="gap-1 sm:gap-1.5 font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs">
-              <Clock className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">학습 중 </span>
-              <strong className="font-mono">{queue.length}</strong>
+            {/* 카드 순번 배지 */}
+            <Badge variant="outline" className="font-mono text-xs px-2 sm:px-2.5 py-0.5 sm:py-1 border border-border">
+              <span className="text-muted-foreground mr-1">카드</span>
+              <strong className="text-foreground">{currentIndex + 1}</strong>
+              <span className="text-muted-foreground">/{totalInitialCount}</span>
             </Badge>
 
+            {/* 알아요 완료 배지 */}
             <Badge variant="success" className="gap-1 sm:gap-1.5 font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">완료 </span>
-              <strong className="font-mono">{masteredCards.length}/{totalInitialCount}</strong>
+              <span className="hidden sm:inline">알아요 </span>
+              <strong className="font-mono">{masteredCount}/{totalInitialCount}</strong>
             </Badge>
 
             <span className="text-foreground font-bold font-mono text-xs sm:text-sm pl-0.5 sm:pl-1">
@@ -228,6 +277,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
                   card={currentCard}
                   isFlipped={isFlipped}
                   onFlip={handleFlip}
+                  onEdit={openEditModal}
+                  onDelete={openDeleteModal}
                 />
 
                 {/* 전환 시 찰나의 은은한 컬러 틴트 오버레이 */}
@@ -250,63 +301,125 @@ export const StudyView: React.FC<StudyViewProps> = ({
           </div>
         </div>
 
-        {/* 하단 학습 평가 버튼 액션 바 */}
-        <div className="max-w-2xl mx-auto mt-6 grid grid-cols-2 gap-4">
+        {/* 하단 학습 컨트롤 버튼 바 */}
+        <div className="max-w-2xl mx-auto mt-6 flex items-stretch gap-3 sm:gap-4">
+          {/* 1. 이전 카드 버튼 (왼쪽 화살표) */}
           <button
             type="button"
-            onClick={handleKnow}
+            onClick={handlePrevious}
+            disabled={!canGoPrevious}
             className={cn(
-              'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
-              actionFeedback === 'know'
-                ? 'border-emerald-400 bg-emerald-100/90 ring-2 ring-emerald-400/50 scale-[0.98] text-emerald-950'
-                : 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 hover:border-emerald-300 active:scale-[0.98] text-emerald-950'
+              'group flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2.5 py-3 px-3.5 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs select-none shrink-0 min-w-[76px] sm:min-w-[105px]',
+              canGoPrevious
+                ? 'border-border bg-card hover:bg-muted text-foreground active:scale-[0.98] cursor-pointer'
+                : 'border-border/40 bg-muted/20 text-muted-foreground/40 cursor-not-allowed opacity-50'
             )}
+            title={canGoPrevious ? '이전 카드로 이동 (←)' : '첫 번째 카드입니다'}
           >
             <div
               className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform',
-                actionFeedback === 'know'
-                  ? 'bg-emerald-200 text-emerald-900 scale-110'
-                  : 'bg-emerald-100 text-emerald-800 group-hover:scale-110'
+                'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                canGoPrevious ? 'bg-muted text-foreground group-hover:bg-background' : 'bg-transparent text-muted-foreground/40'
               )}
             >
-              <ThumbsUp className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4" />
             </div>
-            <div className="text-left">
-              <div className="text-sm font-bold flex items-center gap-1.5 text-emerald-950">
-                알아요
-                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-emerald-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-emerald-900">←</kbd>
+            <div className="text-center sm:text-left">
+              <div className="text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1">
+                <span>이전</span>
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-border bg-muted/60 px-1 font-mono text-[10px] font-medium text-muted-foreground">
+                  ←
+                </kbd>
               </div>
-              <div className="text-xs text-emerald-800/80 font-normal">마스터 완료로 이동</div>
+              <div className="hidden sm:block text-[11px] text-muted-foreground font-normal">이전 카드</div>
             </div>
           </button>
 
+          {/* 2. 알아요 토글 버튼 (Enter) */}
           <button
             type="button"
-            onClick={handleUnknown}
+            onClick={handleToggleKnow}
             className={cn(
-              'group flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
-              actionFeedback === 'unknown'
-                ? 'border-amber-400 bg-amber-100/90 ring-2 ring-amber-400/50 scale-[0.98] text-amber-950'
-                : 'border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 hover:border-amber-300 active:scale-[0.98] text-amber-950'
+              'flex-1 group flex items-center justify-center gap-2.5 sm:gap-3 py-3.5 px-3 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
+              isCurrentCardLearned
+                ? 'border-emerald-500 bg-emerald-500 text-white shadow-xs ring-2 ring-emerald-500/20 active:scale-[0.98]'
+                : 'border-border bg-card hover:bg-emerald-500/10 hover:border-emerald-500/40 text-foreground active:scale-[0.98]'
             )}
+            title="알아요 상태 토글 (↵ Enter)"
           >
             <div
               className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-300',
-                actionFeedback === 'unknown'
-                  ? 'bg-amber-200 text-amber-900 rotate-180'
-                  : 'bg-amber-100 text-amber-800 group-hover:rotate-180'
+                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform shrink-0',
+                isCurrentCardLearned
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-muted text-muted-foreground group-hover:text-emerald-600 group-hover:bg-emerald-500/20'
               )}
             >
-              <RotateCw className="w-4 h-4" />
+              {isCurrentCardLearned ? (
+                <Check className="w-4.5 h-4.5" />
+              ) : (
+                <ThumbsUp className="w-4 h-4" />
+              )}
             </div>
-            <div className="text-left">
-              <div className="text-sm font-bold flex items-center gap-1.5 text-amber-950">
-                몰라요
-                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-amber-300 bg-white/90 px-1 font-mono text-[10px] font-medium text-amber-900">→</kbd>
+            <div className="text-left min-w-0">
+              <div className="text-sm font-bold flex items-center gap-1.5">
+                <span>{isCurrentCardLearned ? '알아요 (완료됨)' : '알아요'}</span>
+                <kbd
+                  className={cn(
+                    'pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded px-1 font-mono text-[10px] font-medium',
+                    isCurrentCardLearned
+                      ? 'bg-white/20 text-white border border-white/30'
+                      : 'border border-border bg-muted text-foreground'
+                  )}
+                >
+                  ↵ Enter
+                </kbd>
               </div>
-              <div className="text-xs text-amber-800/80 font-normal">큐의 뒤로 보내 재학습</div>
+              <div
+                className={cn(
+                  'text-xs font-normal truncate',
+                  isCurrentCardLearned ? 'text-white/80' : 'text-muted-foreground'
+                )}
+              >
+                {isCurrentCardLearned ? '다시 누르면 해제' : '암기 완료로 표시'}
+              </div>
+            </div>
+          </button>
+
+          {/* 3. 다음 카드 버튼 (오른쪽 화살표) */}
+          <button
+            type="button"
+            onClick={handleNext}
+            className={cn(
+              'flex-1 group flex items-center justify-center gap-2.5 sm:gap-3 py-3.5 px-3 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
+              isLastCard
+                ? 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 active:scale-[0.98]'
+                : 'border-border bg-card hover:bg-muted text-foreground active:scale-[0.98]'
+            )}
+            title={isLastCard ? '학습 완료하기 (→)' : '다음 카드로 이동 (→)'}
+          >
+            <div className="text-left min-w-0">
+              <div className="text-sm font-bold flex items-center gap-1.5">
+                <span>{isLastCard ? '학습 완료' : '다음'}</span>
+                <kbd className="pointer-events-none hidden md:inline-flex h-4 select-none items-center rounded border border-border bg-muted/60 px-1 font-mono text-[10px] font-medium text-muted-foreground">
+                  →
+                </kbd>
+              </div>
+              <div className="text-xs text-muted-foreground font-normal truncate">
+                {isLastCard ? '결과 확인하기' : '다음 카드로'}
+              </div>
+            </div>
+            <div
+              className={cn(
+                'w-8 h-8 rounded-lg flex items-center justify-center transition-transform shrink-0',
+                isLastCard ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:text-foreground'
+              )}
+            >
+              {isLastCard ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : (
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              )}
             </div>
           </button>
         </div>
@@ -316,6 +429,106 @@ export const StudyView: React.FC<StudyViewProps> = ({
           <ShortcutBadge />
         </div>
       </div>
+
+      {/* 마지막 카드 도달 시 라운드 종료 / 재학습 모달 */}
+      <Modal
+        isOpen={isFinishModalOpen}
+        onClose={closeFinishModal}
+        title={remainingUnlearnedCount === 0 ? '학습 완료! 🎉' : `${round}라운드 완료`}
+        icon={
+          remainingUnlearnedCount === 0 ? (
+            <Trophy className="w-5 h-5 text-amber-500" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-primary" />
+          )
+        }
+        maxWidth="md"
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {remainingUnlearnedCount === 0
+              ? `'${deck.title}' 덱의 모든 카드를 성공적으로 암기(알아요) 완료했습니다!`
+              : `이번 라운드의 카드를 모두 확인했습니다. '알아요' 완료된 카드를 제외한 남은 미완료 카드(${remainingUnlearnedCount}개)로 다시 학습을 시작하시겠습니까?`}
+          </p>
+
+          {/* 학습 요약 정보 카드 그리드 */}
+          <div className="grid grid-cols-3 gap-2.5 p-3 rounded-xl bg-muted/40 border border-border">
+            <div className="text-center p-2">
+              <span className="block text-xl font-bold font-mono text-foreground">
+                {sessionCards.length}
+              </span>
+              <span className="text-[11px] text-muted-foreground font-medium">이번 라운드</span>
+            </div>
+            <div className="text-center p-2 border-x border-border">
+              <span className="block text-xl font-bold font-mono text-emerald-600">
+                {masteredCount}
+              </span>
+              <span className="text-[11px] text-muted-foreground font-medium">알아요 완료</span>
+            </div>
+            <div className="text-center p-2">
+              <span className="block text-xl font-bold font-mono text-amber-600">
+                {remainingUnlearnedCount}
+              </span>
+              <span className="text-[11px] text-muted-foreground font-medium">남은 미완료</span>
+            </div>
+          </div>
+
+          {/* 하단 액션 버튼 */}
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExit}
+              className="font-medium"
+            >
+              학습 종료
+            </Button>
+
+            {remainingUnlearnedCount > 0 ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRestartUnlearned}
+                leftIcon={isShuffle ? <Shuffle className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                className="font-semibold"
+              >
+                {isShuffle ? '랜덤 순서로 다시 학습' : '정방향으로 다시 학습'}
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRestartAll}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                className="font-semibold"
+              >
+                전체 카드 다시 학습
+              </Button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* 카드 즉석 내용 수정 모달 */}
+      <EditCardModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditModal}
+        card={currentCard}
+        onSave={handleUpdateCurrentCard}
+        onDelete={openDeleteModal}
+      />
+
+      {/* 카드 즉석 삭제 확인 모달 */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        onConfirm={handleDeleteCurrentCard}
+        title="카드 삭제"
+        message={`현재 학습 중인 카드를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없으며, 덱에서도 완전히 삭제됩니다.`}
+        confirmText="삭제"
+        cancelText="취소"
+        isDanger
+      />
     </div>
   );
 };

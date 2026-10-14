@@ -24,18 +24,28 @@ export const ShortcutBadge: React.FC<ShortcutBadgeProps> = ({ className }) => {
       </div>
 
       <div className="flex items-center gap-1.5">
-        <kbd className={kbdClass}>Space</kbd>
+        <kbd className={kbdClass}>↑ / ↓</kbd>
         <span>뒤집기</span>
       </div>
 
       <div className="flex items-center gap-1.5">
         <kbd className={kbdClass}>←</kbd>
-        <span>알아요</span>
+        <span>이전 카드</span>
       </div>
 
       <div className="flex items-center gap-1.5">
         <kbd className={kbdClass}>→</kbd>
-        <span>몰라요</span>
+        <span>다음 카드</span>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <kbd className={kbdClass}>↵ Enter</kbd>
+        <span>알아요 토글</span>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <kbd className={kbdClass}>E</kbd>
+        <span>카드 수정</span>
       </div>
 
       <div className="flex items-center gap-1.5">

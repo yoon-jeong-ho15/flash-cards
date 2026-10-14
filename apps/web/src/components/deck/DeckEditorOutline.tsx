@@ -13,25 +13,38 @@ interface DeckEditorOutlineProps {
   onRemoveCard: (index: number) => void;
   onSave?: () => void;
   isSaving?: boolean;
+  className?: string;
 }
 
-// HTML 태그 제거 및 순수 텍스트 추출 헬퍼
+// HTML 태그 제거 및 순수 텍스트 추출 헬퍼 (정규식 기반 고성능 텍스트 추출)
 function stripHtml(html?: string): string {
   if (!html) return '';
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return (div.textContent || div.innerText || '').trim();
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
 }
 
-export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = ({
+export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(({
   cards,
   activeIndex,
   onSelectCard,
   onAddCard,
   onRemoveCard,
+  className,
 }) => {
   return (
-    <aside className="w-64 xl:w-72 shrink-0 sticky top-20 h-[calc(100vh-6rem)] flex flex-col bg-card rounded-2xl border border-border p-3.5 shadow-xs select-none">
+    <aside
+      className={cn(
+        'w-64 xl:w-72 shrink-0 h-[calc(100vh-10.25rem)] flex flex-col bg-card rounded-2xl border border-border p-3.5 shadow-xs select-none',
+        className
+      )}
+    >
       {/* 목차 헤더 */}
       <div className="flex items-center justify-between pb-3 border-b border-border/70 shrink-0">
         <div className="flex items-center gap-2">
@@ -157,4 +170,6 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = ({
       </div>
     </aside>
   );
-};
+});
+
+DeckEditorOutline.displayName = 'DeckEditorOutline';
