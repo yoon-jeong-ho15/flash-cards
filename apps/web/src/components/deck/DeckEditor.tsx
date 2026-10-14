@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { DeckCardEditorItem } from './DeckCardEditorItem';
 import { DeckEditorOutline } from './DeckEditorOutline';
 import { useDeckEditor } from '../../hooks/useDeckEditor';
@@ -60,7 +60,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
   const [activeOutlineIndex, setActiveOutlineIndex] = useState<number | undefined>();
   const [highlightCardId, setHighlightCardId] = useState<string | undefined>(focusCardId);
 
-  const handleSelectCardFromOutline = (index: number) => {
+  const handleSelectCardFromOutline = useCallback((index: number) => {
     setActiveOutlineIndex(index);
     const targetEl = document.getElementById(`card-editor-${index}`);
     if (targetEl) {
@@ -73,7 +73,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         }, 2000);
       }
     }
-  };
+  }, [cardItems]);
 
   return (
     <div className="relative">

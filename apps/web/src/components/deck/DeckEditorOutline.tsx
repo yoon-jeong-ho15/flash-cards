@@ -15,15 +15,21 @@ interface DeckEditorOutlineProps {
   isSaving?: boolean;
 }
 
-// HTML 태그 제거 및 순수 텍스트 추출 헬퍼
+// HTML 태그 제거 및 순수 텍스트 추출 헬퍼 (정규식 기반 고성능 텍스트 추출)
 function stripHtml(html?: string): string {
   if (!html) return '';
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  return (div.textContent || div.innerText || '').trim();
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
 }
 
-export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = ({
+export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(({
   cards,
   activeIndex,
   onSelectCard,
@@ -157,4 +163,6 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = ({
       </div>
     </aside>
   );
-};
+});
+
+DeckEditorOutline.displayName = 'DeckEditorOutline';
