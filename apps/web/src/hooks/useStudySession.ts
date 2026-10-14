@@ -33,11 +33,12 @@ export interface StudyHistoryEntry {
 export interface StudySessionState {
   deck: Deck | undefined;
   deckCards: Card[];
-  queue: Card[];
-  masteredCards: Card[];
-  difficultCardIds: Set<string>;
-  totalInitialCount: number;
+  sessionCards: Card[];
+  currentIndex: number;
   currentCard: Card | null;
+  totalInitialCount: number;
+  masteredCount: number;
+  isCurrentCardLearned: boolean;
   isFlipped: boolean;
   round: number;
   isShake: boolean;
@@ -47,11 +48,14 @@ export interface StudySessionState {
   stepCount: number;
   isShuffle: boolean;
   canGoPrevious: boolean;
+  isLastCard: boolean;
   handleFlip: () => void;
   handlePrevious: () => void;
+  handleNext: () => void;
+  handleToggleKnow: () => void;
   handleUnknown: () => void;
   handleKnow: () => void;
-  initSession: (filterDifficult?: boolean, shouldShuffle?: boolean) => void;
+  initSession: (filterUnlearnedOnly?: boolean, shouldShuffle?: boolean) => void;
 }
 
 export const useStudySession = ({
@@ -65,20 +69,15 @@ export const useStudySession = ({
   const deck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
   const deckCards = useMemo(() => cards.filter((c) => c.deckId === deckId), [cards, deckId]);
 
-  // 학습 대기 큐 및 마스터 카드 상태
-  const [queue, setQueue] = useState<Card[]>([]);
-  const [masteredCards, setMasteredCards] = useState<Card[]>([]);
-  const [difficultCardIds, setDifficultCardIds] = useState<Set<string>>(new Set());
-  const [history, setHistory] = useState<StudyHistoryEntry[]>([]);
-  const [totalInitialCount, setTotalInitialCount] = useState<number>(0);
+  // 학습 세션 카드 목록 및 현재 인덱스
+  const [sessionCards, setSessionCards] = useState<Card[]>([]);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
-  const [round, setRound] = useState<number>(1);
-  const [isShake, setIsShake] = useState<boolean>(false);
+  const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<StudyActionType>(null);
   const [direction, setDirection] = useState<number>(0);
   const [stepCount, setStepCount] = useState<number>(0);
 
-  const shakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerFeedback = useCallback((type: StudyActionType) => {
@@ -93,7 +92,6 @@ export const useStudySession = ({
 
   useEffect(() => {
     return () => {
-      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
       if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     };
   }, []);
@@ -103,29 +101,22 @@ export const useStudySession = ({
     deckCardsRef.current = deckCards;
   }, [deckCards]);
 
-  const difficultCardIdsRef = useRef(difficultCardIds);
-  useEffect(() => {
-    difficultCardIdsRef.current = difficultCardIds;
-  }, [difficultCardIds]);
-
   // 세션 초기화
   const initSession = useCallback(
-    (filterDifficult = false, shouldShuffle = shuffle) => {
+    (filterUnlearnedOnly = false, shouldShuffle = shuffle) => {
       let targetCards = deckCardsRef.current;
-      if (filterDifficult && difficultCardIdsRef.current.size > 0) {
-        targetCards = deckCardsRef.current.filter((c) => difficultCardIdsRef.current.has(c.id));
+      if (filterUnlearnedOnly) {
+        targetCards = targetCards.filter((c) => !c.learned);
       }
 
       if (shouldShuffle) {
         targetCards = shuffleCards(targetCards);
       }
 
-      setQueue(targetCards);
-      setMasteredCards([]);
-      setHistory([]);
-      setTotalInitialCount(targetCards.length);
+      setSessionCards(targetCards);
+      setCurrentIndex(0);
       setIsFlipped(false);
-      setRound(1);
+      setIsCompleted(false);
       setDirection(0);
       setActionFeedback(null);
       setStepCount(0);
@@ -133,7 +124,7 @@ export const useStudySession = ({
     [shuffle]
   );
 
-  // 세션 진입 시 (또는 덱/모드 변경 시) 1회만 초기화하여 학습 중 store/difficult 상태 변경으로 인한 리셋 방지
+  // 세션 진입 시 (또는 덱/모드 변경 시) 1회만 초기화하여 학습 중 store 변경으로 인한 리셋 방지
   const lastInitParamsRef = useRef<string>('');
 
   useEffect(() => {
@@ -149,121 +140,49 @@ export const useStudySession = ({
     setIsFlipped((prev) => !prev);
   }, []);
 
-  // "이전 카드 (되돌리기)"
+  // "이전 카드" (왼쪽 화살표)
   const handlePrevious = useCallback(() => {
-    if (history.length === 0) return;
-
-    const lastEntry = history[history.length - 1];
-    setHistory((prev) => prev.slice(0, -1));
-
-    if (lastEntry.action === 'know') {
-      // 1. 마스터 완료 목록에서 제거
-      setMasteredCards((prev) => prev.filter((c) => c.id !== lastEntry.card.id));
-      // 2. 원래 학습 상태 복원
-      setCardLearned(lastEntry.card.id, lastEntry.wasLearnedOriginally);
-      // 3. 큐 맨 앞에 복원
-      setQueue((prev) => [lastEntry.card, ...prev]);
-    } else {
-      // 1. 오답 세트 복원 (원래 오답이 아니었다면 Set에서 제거)
-      if (!lastEntry.wasDifficultAlready) {
-        setDifficultCardIds((prev) => {
-          const next = new Set(prev);
-          next.delete(lastEntry.card.id);
-          return next;
-        });
-      }
-      // 2. 큐 복원: 큐 뒤로 보냈던 카드를 다시 큐 맨 앞으로 이동
-      setQueue((prev) => {
-        const next = [...prev];
-        const lastIdx = next.map((c) => c.id).lastIndexOf(lastEntry.card.id);
-        if (lastIdx !== -1) {
-          next.splice(lastIdx, 1);
-        }
-        return [lastEntry.card, ...next];
-      });
-    }
-
-    setRound(lastEntry.previousRound);
+    if (currentIndex <= 0) return;
+    setCurrentIndex((prev) => prev - 1);
     setIsFlipped(false);
-    setDirection(1);
+    setDirection(1); // 이전 방향 애니메이션
     setStepCount((c) => c + 1);
-  }, [history, setCardLearned]);
+  }, [currentIndex]);
 
-  // "몰라요 (학습 중)" - 큐의 맨 뒤로 이동
-  const handleUnknown = useCallback(() => {
-    if (queue.length === 0) return;
-
-    const currentCard = queue[0];
-    const rest = queue.slice(1);
-
-    // 히스토리 기록
-    setHistory((prev) => [
-      ...prev,
-      {
-        card: currentCard,
-        action: 'unknown',
-        wasDifficultAlready: difficultCardIds.has(currentCard.id),
-        wasLearnedOriginally: Boolean(currentCard.learned),
-        previousRound: round,
-      },
-    ]);
-
-    // 오답 세트에 추가
-    setDifficultCardIds((prev) => new Set(prev).add(currentCard.id));
-    setDirection(1);
-    triggerFeedback('unknown');
-    setStepCount((c) => c + 1);
-
-    if (rest.length === 0) {
-      // 남은 카드가 1장뿐인 경우 살짝 흔들림 피드백 후 앞면으로 리셋
-      setIsShake(true);
-      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
-      shakeTimeoutRef.current = setTimeout(() => {
-        setIsShake(false);
-      }, 500);
-      setIsFlipped(false);
+  // "다음 카드" (오른쪽 화살표)
+  const handleNext = useCallback(() => {
+    if (currentIndex >= sessionCards.length - 1) {
+      // 마지막 카드에서 다음을 누르면 완료 화면으로 전환
+      setIsCompleted(true);
       return;
     }
-
-    // 현재 카드를 큐의 맨 뒤로 보냄
-    setQueue([...rest, currentCard]);
+    setCurrentIndex((prev) => prev + 1);
     setIsFlipped(false);
-  }, [queue, round, difficultCardIds, triggerFeedback]);
-
-  // "알아요 (완료)" - 마스터 목록으로 이동
-  const handleKnow = useCallback(() => {
-    if (queue.length === 0) return;
-
-    const currentCard = queue[0];
-    const rest = queue.slice(1);
-
-    // 히스토리 기록
-    setHistory((prev) => [
-      ...prev,
-      {
-        card: currentCard,
-        action: 'know',
-        wasDifficultAlready: difficultCardIds.has(currentCard.id),
-        wasLearnedOriginally: Boolean(currentCard.learned),
-        previousRound: round,
-      },
-    ]);
-
-    // 스토어 학습 상태 업데이트
-    setCardLearned(currentCard.id, true);
-    setDirection(-1);
-    triggerFeedback('know');
+    setDirection(-1); // 다음 방향 애니메이션
     setStepCount((c) => c + 1);
+  }, [currentIndex, sessionCards.length]);
 
-    setMasteredCards((prev) => [...prev, currentCard]);
-    setQueue(rest);
-    setIsFlipped(false);
+  // "알아요 토글" (Enter 키)
+  const handleToggleKnow = useCallback(() => {
+    if (sessionCards.length === 0 || currentIndex >= sessionCards.length) return;
+    const card = sessionCards[currentIndex];
+    const newLearned = !card.learned;
 
-    // 라운드 번호 증가 체크
-    if (rest.length > 0 && rest.length % Math.max(1, totalInitialCount) === 0) {
-      setRound((r) => r + 1);
-    }
-  }, [queue, round, difficultCardIds, totalInitialCount, setCardLearned, triggerFeedback]);
+    // 1. 스토어 상태 반영
+    setCardLearned(card.id, newLearned);
+
+    // 2. 세션 카드 목록 상태 반영
+    setSessionCards((prev) =>
+      prev.map((c, i) => (i === currentIndex ? { ...c, learned: newLearned } : c))
+    );
+
+    // 3. 토글 피드백
+    triggerFeedback(newLearned ? 'know' : null);
+  }, [sessionCards, currentIndex, setCardLearned, triggerFeedback]);
+
+  // 호환용 별칭
+  const handleUnknown = handleNext;
+  const handleKnow = handleToggleKnow;
 
   // 키보드 단축키 이벤트 핸들러
   useEffect(() => {
@@ -284,10 +203,10 @@ export const useStudySession = ({
         handlePrevious();
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        handleUnknown();
+        handleNext();
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        handleKnow();
+        handleToggleKnow();
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onExit();
@@ -296,30 +215,41 @@ export const useStudySession = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleFlip, handlePrevious, handleUnknown, handleKnow, onExit]);
+  }, [handleFlip, handlePrevious, handleNext, handleToggleKnow, onExit]);
 
-  const currentCard = queue.length > 0 ? queue[0] : null;
-  const isCompleted = queue.length === 0 && totalInitialCount > 0;
+  const currentCard =
+    sessionCards.length > 0 && currentIndex < sessionCards.length
+      ? sessionCards[currentIndex]
+      : null;
+  const isCurrentCardLearned = Boolean(currentCard?.learned);
+  const masteredCount = sessionCards.filter((c) => c.learned).length;
+  const totalInitialCount = sessionCards.length;
+  const canGoPrevious = currentIndex > 0;
+  const isLastCard = currentIndex >= sessionCards.length - 1;
 
   return {
     deck,
     deckCards,
-    queue,
-    masteredCards,
-    difficultCardIds,
-    totalInitialCount,
+    sessionCards,
+    currentIndex,
     currentCard,
+    totalInitialCount,
+    masteredCount,
+    isCurrentCardLearned,
     isFlipped,
-    round,
-    isShake,
+    round: 1,
+    isShake: false,
     isCompleted,
     actionFeedback,
     direction,
     stepCount,
     isShuffle: shuffle,
-    canGoPrevious: history.length > 0,
+    canGoPrevious,
+    isLastCard,
     handleFlip,
     handlePrevious,
+    handleNext,
+    handleToggleKnow,
     handleUnknown,
     handleKnow,
     initSession,

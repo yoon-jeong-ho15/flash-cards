@@ -35,12 +35,12 @@ export const ShortcutBadge: React.FC<ShortcutBadgeProps> = ({ className }) => {
 
       <div className="flex items-center gap-1.5">
         <kbd className={kbdClass}>→</kbd>
-        <span>몰라요</span>
+        <span>다음 카드</span>
       </div>
 
       <div className="flex items-center gap-1.5">
         <kbd className={kbdClass}>↵ Enter</kbd>
-        <span>알아요</span>
+        <span>알아요 토글</span>
       </div>
 
       <div className="flex items-center gap-1.5">
