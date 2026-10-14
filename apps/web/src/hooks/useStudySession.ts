@@ -87,12 +87,22 @@ export const useStudySession = ({
     };
   }, []);
 
+  const deckCardsRef = useRef(deckCards);
+  useEffect(() => {
+    deckCardsRef.current = deckCards;
+  }, [deckCards]);
+
+  const difficultCardIdsRef = useRef(difficultCardIds);
+  useEffect(() => {
+    difficultCardIdsRef.current = difficultCardIds;
+  }, [difficultCardIds]);
+
   // 세션 초기화
   const initSession = useCallback(
     (filterDifficult = false, shouldShuffle = shuffle) => {
-      let targetCards = deckCards;
-      if (filterDifficult && difficultCardIds.size > 0) {
-        targetCards = deckCards.filter((c) => difficultCardIds.has(c.id));
+      let targetCards = deckCardsRef.current;
+      if (filterDifficult && difficultCardIdsRef.current.size > 0) {
+        targetCards = deckCardsRef.current.filter((c) => difficultCardIdsRef.current.has(c.id));
       }
 
       if (shouldShuffle) {
@@ -108,12 +118,19 @@ export const useStudySession = ({
       setActionFeedback(null);
       setStepCount(0);
     },
-    [deckCards, difficultCardIds, shuffle]
+    [shuffle]
   );
 
+  // 세션 진입 시 (또는 덱/모드 변경 시) 1회만 초기화하여 학습 중 store/difficult 상태 변경으로 인한 리셋 방지
+  const lastInitParamsRef = useRef<string>('');
+
   useEffect(() => {
-    initSession(onlyDifficult, shuffle);
-  }, [deckId, onlyDifficult, shuffle, initSession]);
+    const currentParamKey = `${deckId}-${onlyDifficult}-${shuffle}`;
+    if (deckCards.length > 0 && lastInitParamsRef.current !== currentParamKey) {
+      lastInitParamsRef.current = currentParamKey;
+      initSession(onlyDifficult, shuffle);
+    }
+  }, [deckId, onlyDifficult, shuffle, deckCards.length, initSession]);
 
   // 카드 뒤집기
   const handleFlip = useCallback(() => {
