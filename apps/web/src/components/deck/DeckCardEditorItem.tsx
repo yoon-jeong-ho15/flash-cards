@@ -201,19 +201,18 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
       {/* 카드 간 새 카드 삽입 버튼 (마지막 카드가 아닐 때) */}
       {index < totalCards - 1 && onInsertAfter && !isDragging && (
         <div className="py-2 flex items-center justify-center relative group">
-          <div className="absolute inset-0 flex items-center" aria-hidden="true">
-            <div className="w-full border-t border-dashed border-border/80 group-hover:border-primary/40 transition-colors" />
-          </div>
+          <div className="flex-1 border-t border-dashed border-border/80 group-hover:border-primary/40 transition-colors" />
           <button
             type="button"
             tabIndex={-1}
             onClick={() => onInsertAfter(index)}
-            className="relative z-10 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium text-muted-foreground hover:text-primary bg-background hover:bg-primary/5 border border-border/80 hover:border-primary/40 shadow-2xs hover:shadow-xs transition-all cursor-pointer select-none active:scale-95"
+            className="mx-2 shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium text-muted-foreground hover:text-primary bg-background hover:bg-primary/5 border border-border/80 hover:border-primary/40 shadow-2xs hover:shadow-xs transition-all cursor-pointer select-none active:scale-95"
             title="이 위치에 새 카드 삽입"
           >
             <Plus className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
             <span>카드 삽입</span>
           </button>
+          <div className="flex-1 border-t border-dashed border-border/80 group-hover:border-primary/40 transition-colors" />
         </div>
       )}
     </Reorder.Item>
