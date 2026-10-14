@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "119489560534",
+    "project_id": "yoon-apps",
+    "storage_bucket": "yoon-apps.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:119489560534:android:c603c4ce5721c6b805ee77",
+        "android_client_info": {
+          "package_name": "com.flashcards.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "119489560534-mtigctg1uq7gd2l8fued2ivfbbcedkqh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvSVWNrLT9y5OIZ1mzBU7ZnDoknT_AJLc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "119489560534-lup9jgesodj37lvpnfc88jpd77bl28ah.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "119489560534-4oa737q6ejm5b2h1si2us6snm25ba2hu.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.flashcards.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -5,10 +5,22 @@ import { useFlashcardStore } from '../store/useFlashcardStore';
 interface UseStudySessionOptions {
   deckId: string;
   onlyDifficult?: boolean;
+  shuffle?: boolean;
   onExit: () => void;
 }
 
 export type StudyActionType = 'unknown' | 'know' | null;
+
+function shuffleCards<T>(array: T[]): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = result[i];
+    result[i] = result[j];
+    result[j] = temp;
+  }
+  return result;
+}
 
 export interface StudySessionState {
   deck: Deck | undefined;
@@ -25,15 +37,17 @@ export interface StudySessionState {
   actionFeedback: StudyActionType;
   direction: number;
   stepCount: number;
+  isShuffle: boolean;
   handleFlip: () => void;
   handleUnknown: () => void;
   handleKnow: () => void;
-  initSession: (filterDifficult?: boolean) => void;
+  initSession: (filterDifficult?: boolean, shouldShuffle?: boolean) => void;
 }
 
 export const useStudySession = ({
   deckId,
   onlyDifficult = false,
+  shuffle = false,
   onExit,
 }: UseStudySessionOptions): StudySessionState => {
   const { decks, cards, setCardLearned } = useFlashcardStore();
@@ -75,10 +89,14 @@ export const useStudySession = ({
 
   // 세션 초기화
   const initSession = useCallback(
-    (filterDifficult = false) => {
+    (filterDifficult = false, shouldShuffle = shuffle) => {
       let targetCards = deckCards;
       if (filterDifficult && difficultCardIds.size > 0) {
         targetCards = deckCards.filter((c) => difficultCardIds.has(c.id));
+      }
+
+      if (shouldShuffle) {
+        targetCards = shuffleCards(targetCards);
       }
 
       setQueue(targetCards);
@@ -90,12 +108,12 @@ export const useStudySession = ({
       setActionFeedback(null);
       setStepCount(0);
     },
-    [deckCards, difficultCardIds]
+    [deckCards, difficultCardIds, shuffle]
   );
 
   useEffect(() => {
-    initSession(onlyDifficult);
-  }, [deckId, onlyDifficult]);
+    initSession(onlyDifficult, shuffle);
+  }, [deckId, onlyDifficult, shuffle, initSession]);
 
   // 카드 뒤집기
   const handleFlip = useCallback(() => {
@@ -202,6 +220,7 @@ export const useStudySession = ({
     actionFeedback,
     direction,
     stepCount,
+    isShuffle: shuffle,
     handleFlip,
     handleUnknown,
     handleKnow,

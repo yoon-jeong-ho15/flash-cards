@@ -2,20 +2,21 @@
   "expo": {
     "name": "Flashcards",
     "slug": "flashcards-mobile",
+    "scheme": [
+      "flashcards",
+      "com.googleusercontent.apps.119489560534-4oa737q6ejm5b2h1si2us6snm25ba2hu"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.flashcards.app"
+      "bundleIdentifier": "com.flashcards.app",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
-      "package": "com.flashcards.app"
+      "package": "com.flashcards.app",
+      "googleServicesFile": "./google-services.json"
     }
   }
 }

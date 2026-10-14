@@ -1,314 +1,192 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
-  SafeAreaView,
-  TouchableOpacity,
-  FlatList,
   StatusBar,
+  Platform,
+  BackHandler,
+  SafeAreaView,
 } from 'react-native';
-import type { Deck, Card } from '@flashcards/types';
+import type { ViewMode } from '@flashcards/types';
+import { FlashcardProvider } from './src/store/flashcardStore';
+import { DashboardScreen } from './src/screens/DashboardScreen';
+import { AllFoldersScreen } from './src/screens/AllFoldersScreen';
+import { AllDecksScreen } from './src/screens/AllDecksScreen';
+import { FolderDetailScreen } from './src/screens/FolderDetailScreen';
+import { DeckDetailScreen } from './src/screens/DeckDetailScreen';
+import { DeckEditorScreen } from './src/screens/DeckEditorScreen';
+import { StudyScreen } from './src/screens/StudyScreen';
+import { FolderModal } from './src/components/folder/FolderModal';
 
-// 샘플 데모 데이터 (공통 Card, Deck 타입 준수)
-const DEMO_DECKS: Deck[] = [
-  {
-    id: 'deck-1',
-    title: 'CS 네트워크 핵심 요약',
-    description: 'OSI 7계층, TCP/UDP, HTTP/HTTPS 핵심',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  },
-  {
-    id: 'deck-2',
-    title: 'React & React Native',
-    description: 'Hook, 라이프사이클, 리렌더링 최적화',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  },
-];
+function MainApp() {
+  const [currentView, setCurrentView] = useState<ViewMode>({ type: 'dashboard' });
+  const [history, setHistory] = useState<ViewMode[]>([]);
+  const [folderModalState, setFolderModalState] = useState<{
+    isOpen: boolean;
+    folderId?: string;
+  }>({ isOpen: false });
 
-const DEMO_CARDS: Card[] = [
-  {
-    id: 'card-1',
-    deckId: 'deck-1',
-    termRichText: '<p>TCP와 UDP의 가장 큰 차이점은?</p>',
-    definitionRichText: '<p>TCP는 연결 지향적이고 신뢰성을 보장하며, UDP는 비연결형으로 빠른 속도를 보장합니다.</p>',
-    learned: false,
-  },
-  {
-    id: 'card-2',
-    deckId: 'deck-1',
-    termRichText: '<p>HTTP 3의 주요 전송 계층 프로토콜은?</p>',
-    definitionRichText: '<p>UDP 기반의 QUIC 프로토콜을 사용합니다.</p>',
-    learned: false,
-  },
-];
+  // 뷰 전환 네비게이션 함수 (히스토리 스택 누적)
+  const navigateTo = useCallback((nextView: ViewMode) => {
+    setHistory((prev) => [...prev, currentView]);
+    setCurrentView(nextView);
+  }, [currentView]);
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>?/gm, '');
-}
+  // 뒤로 가기 처리
+  const handleBack = useCallback(() => {
+    if (history.length > 0) {
+      const prevView = history[history.length - 1];
+      setHistory((prev) => prev.slice(0, prev.length - 1));
+      setCurrentView(prevView);
+      return true;
+    } else if (currentView.type !== 'dashboard') {
+      setCurrentView({ type: 'dashboard' });
+      return true;
+    }
+    return false;
+  }, [history, currentView]);
 
-export default function App() {
-  const [selectedDeck, setSelectedDeck] = useState<Deck | null>(null);
-  const [cardIndex, setCardIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false);
+  // 안드로이드 하드웨어 뒤로가기 버튼 처리
+  useEffect(() => {
+    const backAction = () => {
+      if (folderModalState.isOpen) {
+        setFolderModalState({ isOpen: false });
+        return true;
+      }
+      return handleBack();
+    };
 
-  const currentCards = DEMO_CARDS.filter((c) => c.deckId === selectedDeck?.id);
-  const currentCard = currentCards[cardIndex];
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+    return () => backHandler.remove();
+  }, [handleBack, folderModalState.isOpen]);
+
+  // 화면 이동 헬퍼들
+  const navigateHome = () => {
+    setHistory([]);
+    setCurrentView({ type: 'dashboard' });
+  };
+  const navigateAllFolders = () => navigateTo({ type: 'all-folders' });
+  const navigateAllDecks = () => navigateTo({ type: 'all-decks' });
+  const navigateFolder = (folderId: string) => navigateTo({ type: 'folder', folderId });
+  const navigateDeck = (deckId: string) => navigateTo({ type: 'deck', deckId });
+  const navigateEditDeck = (deckId?: string, folderId?: string, focusCardId?: string) =>
+    navigateTo({ type: 'edit-deck', deckId, folderId, focusCardId });
+  const navigateStudy = (deckId: string, onlyDifficult = false) =>
+    navigateTo({ type: 'study', deckId, onlyDifficult });
+
+  const openNewFolderModal = () => setFolderModalState({ isOpen: true });
+  const closeFolderModal = () => setFolderModalState({ isOpen: false });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          {selectedDeck ? selectedDeck.title : '플래시카드 (Flashcards)'}
-        </Text>
-        {selectedDeck && (
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => {
-              setSelectedDeck(null);
-              setCardIndex(0);
-              setIsFlipped(false);
+      {/* 현재 ViewMode에 따른 스크린 렌더링 */}
+      <View style={styles.screenContainer}>
+        {currentView.type === 'dashboard' && (
+          <DashboardScreen
+            onNavigateFolder={navigateFolder}
+            onNavigateDeck={navigateDeck}
+            onNavigateAllFolders={navigateAllFolders}
+            onNavigateAllDecks={navigateAllDecks}
+            onStartStudy={(deckId) => navigateStudy(deckId)}
+            onCreateDeck={() => navigateEditDeck()}
+            onCreateFolder={openNewFolderModal}
+          />
+        )}
+
+        {currentView.type === 'all-folders' && (
+          <AllFoldersScreen
+            onNavigateFolder={navigateFolder}
+            onCreateFolder={openNewFolderModal}
+            onBack={handleBack}
+          />
+        )}
+
+        {currentView.type === 'all-decks' && (
+          <AllDecksScreen
+            onNavigateDeck={navigateDeck}
+            onStartStudy={(deckId) => navigateStudy(deckId)}
+            onCreateDeck={() => navigateEditDeck()}
+            onBack={handleBack}
+          />
+        )}
+
+        {currentView.type === 'folder' && (
+          <FolderDetailScreen
+            folderId={currentView.folderId}
+            onNavigateDeck={navigateDeck}
+            onStartStudy={(deckId) => navigateStudy(deckId)}
+            onCreateDeckInFolder={(fId) => navigateEditDeck(undefined, fId)}
+            onBack={handleBack}
+          />
+        )}
+
+        {currentView.type === 'deck' && (
+          <DeckDetailScreen
+            deckId={currentView.deckId}
+            onStartStudy={(deckId) => navigateStudy(deckId)}
+            onEditDeck={(deckId, focusCardId) => navigateEditDeck(deckId, undefined, focusCardId)}
+            onNavigateFolder={navigateFolder}
+            onBack={handleBack}
+          />
+        )}
+
+        {currentView.type === 'edit-deck' && (
+          <DeckEditorScreen
+            deckId={currentView.deckId}
+            initialFolderId={currentView.folderId}
+            focusCardId={currentView.focusCardId}
+            onClose={handleBack}
+            onSaved={(savedDeckId) => {
+              navigateDeck(savedDeckId);
             }}
-          >
-            <Text style={styles.backButtonText}>덱 목록</Text>
-          </TouchableOpacity>
+          />
+        )}
+
+        {currentView.type === 'study' && (
+          <StudyScreen
+            deckId={currentView.deckId}
+            onlyDifficult={currentView.onlyDifficult}
+            onExit={handleBack}
+            onEditDeck={(deckId) => navigateEditDeck(deckId)}
+          />
         )}
       </View>
 
-      {!selectedDeck ? (
-        /* 덱 목록 뷰 */
-        <View style={styles.content}>
-          <Text style={styles.sectionTitle}>학습할 덱을 선택하세요</Text>
-          <FlatList
-            data={DEMO_DECKS}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.deckCard}
-                onPress={() => setSelectedDeck(item)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.deckTitle}>{item.title}</Text>
-                <Text style={styles.deckDescription}>{item.description}</Text>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
-      ) : (
-        /* 학습 뷰 */
-        <View style={styles.content}>
-          {currentCard ? (
-            <View style={styles.studyContainer}>
-              <Text style={styles.progressText}>
-                {cardIndex + 1} / {currentCards.length}
-              </Text>
-
-              {/* 플래시카드 영역 (탭하여 뒤집기) */}
-              <TouchableOpacity
-                style={[styles.flashcard, isFlipped && styles.flashcardFlipped]}
-                onPress={() => setIsFlipped(!isFlipped)}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.cardBadge}>
-                  {isFlipped ? '정답 (뒷면)' : '질문 (앞면)'}
-                </Text>
-                <Text style={styles.cardContent}>
-                  {isFlipped
-                    ? stripHtml(currentCard.definitionRichText)
-                    : stripHtml(currentCard.termRichText)}
-                </Text>
-                <Text style={styles.flipHint}>탭하여 뒤집기 🔄</Text>
-              </TouchableOpacity>
-
-              {/* 컨트롤 버튼 */}
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={[styles.navButton, cardIndex === 0 && styles.disabledButton]}
-                  disabled={cardIndex === 0}
-                  onPress={() => {
-                    setCardIndex((prev) => Math.max(0, prev - 1));
-                    setIsFlipped(false);
-                  }}
-                >
-                  <Text style={styles.navButtonText}>이전</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.navButton,
-                    styles.primaryButton,
-                    cardIndex === currentCards.length - 1 && styles.disabledButton,
-                  ]}
-                  disabled={cardIndex === currentCards.length - 1}
-                  onPress={() => {
-                    setCardIndex((prev) => Math.min(currentCards.length - 1, prev + 1));
-                    setIsFlipped(false);
-                  }}
-                >
-                  <Text style={[styles.navButtonText, styles.primaryButtonText]}>다음</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>등록된 카드가 없습니다.</Text>
-          )}
-        </View>
-      )}
+      {/* 글로벌 폴더 생성/수정 모달 */}
+      <FolderModal
+        isOpen={folderModalState.isOpen}
+        folderId={folderModalState.folderId}
+        onClose={closeFolderModal}
+        onSaved={(newFolderId) => {
+          closeFolderModal();
+          navigateFolder(newFolderId);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
+export default function App() {
+  return (
+    <FlashcardProvider>
+      <MainApp />
+    </FlashcardProvider>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0,
+  },
+  screenContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
-    flex: 1,
-  },
-  backButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-  },
-  backButtonText: {
-    fontSize: 14,
-    color: '#334155',
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 16,
-  },
-  deckCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 18,
-    borderRadius: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  deckTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 6,
-  },
-  deckDescription: {
-    fontSize: 14,
-    color: '#64748B',
-    lineHeight: 20,
-  },
-  studyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 16,
-  },
-  flashcard: {
-    width: '100%',
-    minHeight: 280,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  flashcardFlipped: {
-    borderColor: '#6366F1',
-    backgroundColor: '#FDFEFE',
-  },
-  cardBadge: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6366F1',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  cardContent: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1E293B',
-    textAlign: 'center',
-    lineHeight: 28,
-  },
-  flipHint: {
-    fontSize: 13,
-    color: '#94A3B8',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 28,
-    width: '100%',
-  },
-  navButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  navButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  primaryButton: {
-    backgroundColor: '#4F46E5',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-  },
-  disabledButton: {
-    opacity: 0.4,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: 40,
   },
 });
