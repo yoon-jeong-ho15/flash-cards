@@ -20,12 +20,13 @@ import {
   Layers,
   Search,
   Plus,
+  Shuffle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DeckDetailViewProps {
   deckId: string;
-  onStartStudy: (deckId: string) => void;
+  onStartStudy: (deckId: string, shuffle?: boolean) => void;
   onEditDeck: (deckId: string, focusCardId?: string) => void;
   onNavigateFolder: (folderId: string) => void;
   onBack: () => void;
@@ -129,6 +130,18 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
             <Button
               variant="outline"
               size="sm"
+              onClick={() => onStartStudy(deck.id, true)}
+              disabled={deckCards.length === 0}
+              leftIcon={<Shuffle className="w-3.5 h-3.5" />}
+              className="font-semibold shadow-xs px-2.5 sm:px-3"
+              title="랜덤학습"
+            >
+              <span className="hidden sm:inline">랜덤학습</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => onEditDeck(deck.id)}
               leftIcon={<Edit3 className="w-3.5 h-3.5" />}
             >
@@ -223,6 +236,17 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                   className="w-full shadow-sm font-semibold text-sm"
                 >
                   플래시카드 학습 시작
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => onStartStudy(deck.id, true)}
+                  disabled={deckCards.length === 0}
+                  leftIcon={<Shuffle className="w-4 h-4" />}
+                  className="w-full shadow-sm font-semibold text-sm border border-border/60 hover:bg-secondary/80 transition-all"
+                >
+                  랜덤학습
                 </Button>
 
                 <Button

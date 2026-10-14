@@ -104,8 +104,8 @@ export const App: React.FC = () => {
   const navigateDeck = (deckId: string) => setCurrentView({ type: 'deck', deckId });
   const navigateEditDeck = (deckId?: string, folderId?: string, focusCardId?: string) =>
     setCurrentView({ type: 'edit-deck', deckId, folderId, focusCardId });
-  const navigateStudy = (deckId: string, onlyDifficult = false) =>
-    setCurrentView({ type: 'study', deckId, onlyDifficult });
+  const navigateStudy = (deckId: string, onlyDifficult = false, shuffle = false) =>
+    setCurrentView({ type: 'study', deckId, onlyDifficult, shuffle });
 
   const openNewFolderModal = () => setFolderModalState({ isOpen: true });
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
@@ -189,7 +189,7 @@ export const App: React.FC = () => {
         {currentView.type === 'deck' && (
           <DeckDetailView
             deckId={currentView.deckId}
-            onStartStudy={(deckId) => navigateStudy(deckId)}
+            onStartStudy={(deckId, shuffle) => navigateStudy(deckId, false, shuffle)}
             onEditDeck={(deckId, focusCardId) => navigateEditDeck(deckId, undefined, focusCardId)}
             onNavigateFolder={navigateFolder}
             onBack={navigateHome}
@@ -218,6 +218,7 @@ export const App: React.FC = () => {
           <StudyView
             deckId={currentView.deckId}
             onlyDifficult={currentView.onlyDifficult}
+            shuffle={currentView.shuffle}
             onExit={() => navigateDeck(currentView.deckId)}
             onEditDeck={(deckId) => navigateEditDeck(deckId)}
           />

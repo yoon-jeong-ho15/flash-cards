@@ -8,7 +8,7 @@ import { useStudySession } from '../../hooks/useStudySession';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '../common/EmptyState';
-import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, PlusCircle } from 'lucide-react';
+import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, PlusCircle, Shuffle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // 미니멀 푸시 & 컬러 플래시 전환 애니메이션 (옵션 3)
@@ -59,6 +59,7 @@ const cardVariants: Variants = {
 interface StudyViewProps {
   deckId: string;
   onlyDifficult?: boolean;
+  shuffle?: boolean;
   onExit: () => void;
   onEditDeck: (deckId: string) => void;
 }
@@ -66,6 +67,7 @@ interface StudyViewProps {
 export const StudyView: React.FC<StudyViewProps> = ({
   deckId,
   onlyDifficult = false,
+  shuffle = false,
   onExit,
   onEditDeck,
 }) => {
@@ -84,11 +86,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
     actionFeedback,
     direction,
     stepCount,
+    isShuffle,
     handleFlip,
     handleUnknown,
     handleKnow,
     initSession,
-  } = useStudySession({ deckId, onlyDifficult, onExit });
+  } = useStudySession({ deckId, onlyDifficult, shuffle, onExit });
 
   if (!deck) {
     return (
@@ -136,8 +139,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
         totalCards={totalInitialCount}
         difficultCardsCount={difficultCardIds.size}
         roundCount={round}
-        onRestartAll={() => initSession(false)}
-        onRestartDifficultOnly={() => initSession(true)}
+        onRestartAll={() => initSession(false, isShuffle)}
+        onRestartDifficultOnly={() => initSession(true, isShuffle)}
         onBackToDeck={onExit}
       />
     );
@@ -159,9 +162,16 @@ export const StudyView: React.FC<StudyViewProps> = ({
             {deck.title}
           </h2>
         }
-        description="플래시카드 반복 학습"
+        description={isShuffle ? "플래시카드 랜덤 순서 학습" : "플래시카드 반복 학습"}
         right={
           <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {isShuffle && (
+              <Badge variant="secondary" className="gap-1 font-medium text-xs px-2 py-0.5 sm:py-1 border border-border">
+                <Shuffle className="w-3 h-3 text-primary" />
+                <span className="hidden sm:inline">랜덤학습</span>
+              </Badge>
+            )}
+
             {round > 1 && (
               <Badge variant="secondary" className="gap-1 font-mono text-xs px-2 py-0.5 sm:py-1">
                 <Layers className="w-3 h-3 text-primary" />
