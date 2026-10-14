@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.20.0",
   "scripts": {
     "dev:web": "turbo run dev --filter=@flashcards/web",
-    "dev:mobile": "turbo run start --filter=@flashcards/mobile",
+    "dev:mobile": "pnpm --filter @flashcards/mobile start",
     "build:web": "turbo run build --filter=@flashcards/web",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck"

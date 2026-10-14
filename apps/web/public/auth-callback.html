@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlashCards Google 인증</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+      margin: 0;
+      padding: 20px;
+      background-color: #F8FAFC;
+      color: #0F172A;
+      text-align: center;
+    }
+    .card {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 16px;
+      padding: 32px 24px;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    .icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+    }
+    h2 {
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    p {
+      margin: 0 0 20px 0;
+      font-size: 14px;
+      color: #64748B;
+      line-height: 1.5;
+    }
+    .btn {
+      display: inline-block;
+      width: 100%;
+      box-sizing: border-box;
+      background-color: #4F46E5;
+      color: #FFFFFF;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      text-decoration: none;
+      transition: background-color 0.2s;
+    }
+    .btn:hover {
+      background-color: #4338CA;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">⚡</div>
+    <h2>Google 인증 완료</h2>
+    <p id="msg">FlashCards 모바일 앱으로 이동 중입니다...</p>
+    <a id="appBtn" class="btn" href="#">FlashCards 앱 열기</a>
+  </div>
+
+  <script>
+    (function() {
+      var hash = window.location.hash || '';
+      var search = window.location.search || '';
+      var query = hash ? hash : search;
+      var targetUrl = 'flashcards://oauth-callback' + query;
+      
+      var btn = document.getElementById('appBtn');
+      if (btn) {
+        btn.href = targetUrl;
+      }
+      
+      // Auto-redirect to the custom scheme for Expo/React Native
+      if (query) {
+        window.location.href = targetUrl;
+      } else {
+        document.getElementById('msg').innerText = '인증 토큰을 확인할 수 없습니다. 앱으로 돌아가 다시 시도해 주세요.';
+      }
+    })();
+  </script>
+</body>
+</html>

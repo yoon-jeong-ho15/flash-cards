@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "yoon-apps"
+  },
   "targets": {},
   "etags": {}
 }

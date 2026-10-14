@@ -15,5 +15,13 @@
         "supportEmail": "yoonjeongho33@gmail.com"
       }
     }
+  },
+  "hosting": {
+    "public": "apps/web/dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
   }
 }
