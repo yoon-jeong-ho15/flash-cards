@@ -4,11 +4,12 @@ import { Flashcard } from './Flashcard';
 import { StudyComplete } from './StudyComplete';
 import { ShortcutBadge } from './ShortcutBadge';
 import { StickyActionBar } from '../common/StickyActionBar';
+import { Modal } from '../common/Modal';
 import { useStudySession } from '../../hooks/useStudySession';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '../common/EmptyState';
-import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, PlusCircle, Shuffle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, RotateCcw, Trophy, PlusCircle, Shuffle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // 미니멀 푸시 & 컬러 플래시 전환 애니메이션 (옵션 3)
@@ -90,11 +91,16 @@ export const StudyView: React.FC<StudyViewProps> = ({
     isShuffle,
     canGoPrevious,
     isLastCard,
+    isFinishModalOpen,
+    remainingUnlearnedCount,
     handleFlip,
     handlePrevious,
     handleNext,
     handleToggleKnow,
     initSession,
+    handleRestartUnlearned,
+    handleRestartAll,
+    closeFinishModal,
   } = useStudySession({ deckId, onlyDifficult, shuffle, onExit });
 
   if (!deck) {
@@ -127,6 +133,34 @@ export const StudyView: React.FC<StudyViewProps> = ({
                 onClick={() => onEditDeck(deck.id)}
               >
                 카드 추가하기
+              </Button>
+            </div>
+          }
+        />
+      </div>
+    );
+  }
+
+  // 덱의 모든 카드가 이미 알아요 상태인 경우
+  if (deckCards.length > 0 && sessionCards.length === 0) {
+    return (
+      <div className="max-w-md mx-auto py-16 px-4">
+        <EmptyState
+          icon={<CheckCircle2 className="w-8 h-8 text-emerald-500" />}
+          title="모든 카드를 이미 마스터했습니다!"
+          description={`'${deck.title}' 덱의 모든 카드(${deckCards.length}개)가 이미 '알아요' 상태입니다.`}
+          action={
+            <div className="flex justify-center gap-2.5">
+              <Button variant="outline" size="sm" onClick={onExit}>
+                돌아가기
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => initSession(false, isShuffle, true)}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+              >
+                전체 카드 다시 학습하기
               </Button>
             </div>
           }
@@ -170,6 +204,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
         description={isShuffle ? "플래시카드 랜덤 순서 학습" : "플래시카드 순차 학습"}
         right={
           <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {round > 1 && (
+              <Badge variant="outline" className="font-semibold text-xs px-2 py-0.5 sm:py-1 border border-primary/30 text-primary bg-primary/5">
+                {round}라운드
+              </Badge>
+            )}
+
             {isShuffle && (
               <Badge variant="secondary" className="gap-1 font-medium text-xs px-2 py-0.5 sm:py-1 border border-border">
                 <Shuffle className="w-3 h-3 text-primary" />
@@ -377,6 +417,85 @@ export const StudyView: React.FC<StudyViewProps> = ({
           <ShortcutBadge />
         </div>
       </div>
+
+      {/* 마지막 카드 도달 시 라운드 종료 / 재학습 모달 */}
+      <Modal
+        isOpen={isFinishModalOpen}
+        onClose={closeFinishModal}
+        title={remainingUnlearnedCount === 0 ? '학습 완료! 🎉' : `${round}라운드 완료`}
+        icon={
+          remainingUnlearnedCount === 0 ? (
+            <Trophy className="w-5 h-5 text-amber-500" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-primary" />
+          )
+        }
+        maxWidth="md"
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {remainingUnlearnedCount === 0
+              ? `'${deck.title}' 덱의 모든 카드를 성공적으로 암기(알아요) 완료했습니다!`
+              : `이번 라운드의 카드를 모두 확인했습니다. '알아요' 완료된 카드를 제외한 남은 미완료 카드(${remainingUnlearnedCount}개)로 다시 학습을 시작하시겠습니까?`}
+          </p>
+
+          {/* 학습 요약 정보 카드 그리드 */}
+          <div className="grid grid-cols-3 gap-2.5 p-3 rounded-xl bg-muted/40 border border-border">
+            <div className="text-center p-2">
+              <span className="block text-xl font-bold font-mono text-foreground">
+                {sessionCards.length}
+              </span>
+              <span className="text-[11px] text-muted-foreground font-medium">이번 라운드</span>
+            </div>
+            <div className="text-center p-2 border-x border-border">
+              <span className="block text-xl font-bold font-mono text-emerald-600">
+                {masteredCount}
+              </span>
+              <span className="text-[11px] text-muted-foreground font-medium">알아요 완료</span>
+            </div>
+            <div className="text-center p-2">
+              <span className="block text-xl font-bold font-mono text-amber-600">
+                {remainingUnlearnedCount}
+              </span>
+              <span className="text-[11px] text-muted-foreground font-medium">남은 미완료</span>
+            </div>
+          </div>
+
+          {/* 하단 액션 버튼 */}
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExit}
+              className="font-medium"
+            >
+              학습 종료
+            </Button>
+
+            {remainingUnlearnedCount > 0 ? (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRestartUnlearned}
+                leftIcon={isShuffle ? <Shuffle className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                className="font-semibold"
+              >
+                {isShuffle ? '랜덤 순서로 다시 학습' : '정방향으로 다시 학습'}
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleRestartAll}
+                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                className="font-semibold"
+              >
+                전체 카드 다시 학습
+              </Button>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
