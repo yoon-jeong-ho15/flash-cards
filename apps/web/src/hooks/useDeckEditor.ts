@@ -138,6 +138,11 @@ export const useDeckEditor = ({
     });
   }, []);
 
+  // 특정 카드 바로 뒤에 카드 삽입 (메모이제이션 콜백)
+  const handleInsertCardAfter = useCallback((index: number) => {
+    handleInsertCard(index + 1);
+  }, [handleInsertCard]);
+
   // 카드 삭제
   const handleRemoveCard = useCallback((index: number) => {
     setCardItems((prev) => {
@@ -311,6 +316,7 @@ export const useDeckEditor = ({
     setErrors,
     handleAddCard,
     handleInsertCard,
+    handleInsertCardAfter,
     handleRemoveCard,
     handleDuplicateCard,
     handleMoveUp,

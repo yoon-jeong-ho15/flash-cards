@@ -46,6 +46,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     setErrors,
     handleAddCard,
     handleInsertCard,
+    handleInsertCardAfter,
     handleRemoveCard,
     handleDuplicateCard,
     handleMoveUp,
@@ -218,7 +219,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                 onMoveDown={handleMoveDown}
                 onDuplicate={handleDuplicateCard}
                 onRemove={handleRemoveCard}
-                onInsertAfter={(idx) => handleInsertCard(idx + 1)}
+                onInsertAfter={handleInsertCardAfter}
               />
             ))}
           </AnimatePresence>
