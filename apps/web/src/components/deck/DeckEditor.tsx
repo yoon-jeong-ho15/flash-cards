@@ -109,8 +109,8 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
       {/* 본문 콘텐츠 컨테이너 (데스크탑: 좌측 목차 + 우측 폼 2열 배치) */}
       <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6">
         <div className="lg:flex lg:gap-8 lg:items-start">
-          {/* 좌측 카드 목차 패널 (데스크탑 전용) */}
-          <div className="hidden lg:block">
+          {/* 좌측 카드 목차 사이드바 (데스크탑 고정 사이드바) */}
+          <div className="hidden lg:block shrink-0 sticky top-[8.75rem] self-start z-20">
             <DeckEditorOutline
               cards={cardItems}
               activeIndex={activeOutlineIndex}

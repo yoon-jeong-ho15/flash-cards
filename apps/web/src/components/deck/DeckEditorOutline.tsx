@@ -13,6 +13,7 @@ interface DeckEditorOutlineProps {
   onRemoveCard: (index: number) => void;
   onSave?: () => void;
   isSaving?: boolean;
+  className?: string;
 }
 
 // HTML 태그 제거 및 순수 텍스트 추출 헬퍼 (정규식 기반 고성능 텍스트 추출)
@@ -35,9 +36,15 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(({
   onSelectCard,
   onAddCard,
   onRemoveCard,
+  className,
 }) => {
   return (
-    <aside className="w-64 xl:w-72 shrink-0 sticky top-20 h-[calc(100vh-6rem)] flex flex-col bg-card rounded-2xl border border-border p-3.5 shadow-xs select-none">
+    <aside
+      className={cn(
+        'w-64 xl:w-72 shrink-0 h-[calc(100vh-10.25rem)] flex flex-col bg-card rounded-2xl border border-border p-3.5 shadow-xs select-none',
+        className
+      )}
+    >
       {/* 목차 헤더 */}
       <div className="flex items-center justify-between pb-3 border-b border-border/70 shrink-0">
         <div className="flex items-center gap-2">
