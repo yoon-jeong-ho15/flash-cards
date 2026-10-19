@@ -100,9 +100,32 @@ export const flashcardService = {
         };
       });
 
-      // 덱별로 묶어서 정렬하고, order가 없는 카드는 index를 부여하여 자동 마이그레이션 대상에 포함
-      const cardsByDeck = new Map<string, Card[]>();
+      // 1. 현재 존재하는 유효 덱 ID 목록 확인
+      const validDeckIds = new Set(decks.map((d) => d.id));
+      const validRawCards: Card[] = [];
+      const orphanCardIds: string[] = [];
+
       rawCards.forEach((c) => {
+        if (validDeckIds.has(c.deckId)) {
+          validRawCards.push(c);
+        } else {
+          orphanCardIds.push(c.id);
+        }
+      });
+
+      // 2. 삭제된 덱에 속했던 고아(유령) 카드가 있다면 백그라운드에서 Firestore 영구 삭제
+      if (orphanCardIds.length > 0) {
+        console.log(
+          `[flashcardService] 삭제된 덱의 유령(고아) 카드 ${orphanCardIds.length}장 감지. Firestore 영구 정리 실행`
+        );
+        flashcardService.batchDeleteCards(orphanCardIds).catch((err) => {
+          console.warn('[flashcardService] 고아 카드 영구 정리 실패:', err);
+        });
+      }
+
+      // 3. 유효 덱의 카드들만 덱별로 묶어서 정렬하고, order가 없는 카드는 index를 부여
+      const cardsByDeck = new Map<string, Card[]>();
+      validRawCards.forEach((c) => {
         const list = cardsByDeck.get(c.deckId) || [];
         list.push(c);
         cardsByDeck.set(c.deckId, list);

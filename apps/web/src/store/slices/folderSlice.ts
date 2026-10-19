@@ -92,14 +92,19 @@ export const createFolderSlice: StateCreator<
     const { user } = get();
     const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
 
+    const stateBefore = get();
+    const decksToDelete = deleteContainedDecks
+      ? stateBefore.decks.filter((d) => d.folderId === id).map((d) => d.id)
+      : [];
+    const cardsToDelete = deleteContainedDecks
+      ? stateBefore.cards.filter((c) => decksToDelete.includes(c.deckId)).map((c) => c.id)
+      : [];
+
     set((state) => {
       const newDeletedFolderIds = Array.from(new Set([...state.pendingSync.deletedFolderIds, id]));
       const newFolderIds = state.pendingSync.folderIds.filter((fid) => fid !== id);
 
       if (deleteContainedDecks) {
-        const decksToDelete = state.decks.filter((d) => d.folderId === id).map((d) => d.id);
-        const cardsToDelete = state.cards.filter((c) => decksToDelete.includes(c.deckId)).map((c) => c.id);
-
         return {
           folders: state.folders.filter((f) => f.id !== id),
           decks: state.decks.filter((d) => d.folderId !== id),
@@ -130,7 +135,16 @@ export const createFolderSlice: StateCreator<
     });
 
     if (isOnline) {
-      flashcardService.deleteFolder(id)
+      const deleteOps: Promise<void>[] = [flashcardService.deleteFolder(id)];
+      if (deleteContainedDecks) {
+        if (decksToDelete.length > 0) {
+          deleteOps.push(flashcardService.batchDeleteDecks(decksToDelete));
+        }
+        if (cardsToDelete.length > 0) {
+          deleteOps.push(flashcardService.batchDeleteCards(cardsToDelete));
+        }
+      }
+      Promise.all(deleteOps)
         .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
         .catch(() => set({ syncStatus: 'offline' }));
     }

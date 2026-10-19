@@ -43,9 +43,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'root'>('all');
 
+  // 유효한 덱에 속한 실제 활성 카드만 필터링 (과거 삭제된 덱의 고아 카드 배제)
+  const validDeckIds = useMemo(() => new Set(decks.map((d) => d.id)), [decks]);
+  const activeCards = useMemo(
+    () => cards.filter((c) => validDeckIds.has(c.deckId)),
+    [cards, validDeckIds]
+  );
+
   // 통계 계산
-  const totalCards = cards.length;
-  const masteredCards = cards.filter((c) => c.learned).length;
+  const totalCards = activeCards.length;
+  const masteredCards = activeCards.filter((c) => c.learned).length;
   const overallProgress = totalCards > 0 ? Math.round((masteredCards / totalCards) * 100) : 0;
 
   // 검색 필터링

@@ -109,45 +109,48 @@ export const createSyncSlice: StateCreator<
       const cloudData = await flashcardService.fetchAllData(user.uid);
 
       if (cloudData) {
-        if (cloudData.decks.length > 0 || cloudData.folders.length > 0) {
-          // 스마트 병합: 로컬 상태와 클라우드 상태를 안전하게 합침
-          const currentFolders = get().folders;
-          const currentDecks = get().decks;
-          const currentCards = get().cards;
+        // 서버(Firestore) 데이터를 신뢰할 수 있는 최신 기준(Source of Truth)으로 설정
+        const finalFolders: Folder[] = [...cloudData.folders];
+        const finalDecks: Deck[] = [...cloudData.decks];
+        const finalCards: Card[] = [...cloudData.cards];
 
-          // 클라우드 데이터를 우선하되, 방금 로컬에 추가된 신규 ID가 빠지지 않도록 병합
-          const mergedFoldersMap = new Map<string, Folder>();
-          cloudData.folders.forEach((f) => mergedFoldersMap.set(f.id, f));
-          currentFolders.forEach((f) => {
-            if (!mergedFoldersMap.has(f.id)) mergedFoldersMap.set(f.id, f);
-          });
+        // 예외 보존: 오프라인 상태에서 현재 브라우저에 새로 작성되어 아직 서버로 전송되지 못한 대기 항목(pendingSync)만 병합
+        const currentPending = get().pendingSync;
 
-          const mergedDecksMap = new Map<string, Deck>();
-          cloudData.decks.forEach((d) => mergedDecksMap.set(d.id, d));
-          currentDecks.forEach((d) => {
-            if (!mergedDecksMap.has(d.id)) mergedDecksMap.set(d.id, d);
-          });
-
-          const mergedCardsMap = new Map<string, Card>();
-          cloudData.cards.forEach((c) => mergedCardsMap.set(c.id, c));
-          currentCards.forEach((c) => {
-            if (!mergedCardsMap.has(c.id)) mergedCardsMap.set(c.id, c);
-          });
-
-          set({
-            folders: Array.from(mergedFoldersMap.values()),
-            decks: Array.from(mergedDecksMap.values()),
-            cards: sortCardsByOrder(Array.from(mergedCardsMap.values())),
-            syncStatus: 'synced',
-            lastSyncedAt: Date.now(),
-          });
-        } else {
-          // 클라우드가 비어있는 경우 기존 로컬 데이터를 자동 시딩하지 않고 동기화 상태만 완료
-          set({
-            syncStatus: 'synced',
-            lastSyncedAt: Date.now(),
-          });
+        if (currentPending.folderIds.length > 0) {
+          const pendingFolderIds = new Set(currentPending.folderIds);
+          const unsyncedFolders = get().folders.filter(
+            (f) => pendingFolderIds.has(f.id) && !finalFolders.some((sf) => sf.id === f.id)
+          );
+          finalFolders.push(...unsyncedFolders);
         }
+
+        if (currentPending.deckIds.length > 0) {
+          const pendingDeckIds = new Set(currentPending.deckIds);
+          const unsyncedDecks = get().decks.filter(
+            (d) => pendingDeckIds.has(d.id) && !finalDecks.some((sd) => sd.id === d.id)
+          );
+          finalDecks.push(...unsyncedDecks);
+        }
+
+        if (currentPending.cardIds.length > 0) {
+          const pendingCardIds = new Set(currentPending.cardIds);
+          const unsyncedCards = get().cards.filter(
+            (c) => pendingCardIds.has(c.id) && !finalCards.some((sc) => sc.id === c.id)
+          );
+          finalCards.push(...unsyncedCards);
+        }
+
+        const validDeckIdSet = new Set(finalDecks.map((d) => d.id));
+        const activeFinalCards = finalCards.filter((c) => validDeckIdSet.has(c.deckId));
+
+        set({
+          folders: finalFolders,
+          decks: finalDecks,
+          cards: sortCardsByOrder(activeFinalCards),
+          syncStatus: 'synced',
+          lastSyncedAt: Date.now(),
+        });
       }
     } catch (err: any) {
       console.error('클라우드 동기화 실패:', err);

@@ -133,6 +133,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return sortDecksByName(list);
   }, [decks]);
 
+  // 유효한 덱에 속한 실제 총 카드 수 (과거 삭제된 덱의 고아 카드 배제)
+  const totalValidCardsCount = useMemo(() => {
+    const validDeckIdSet = new Set(decks.map((d) => d.id));
+    return cards.filter((c) => validDeckIdSet.has(c.deckId)).length;
+  }, [decks, cards]);
+
   // 활성 여부 체크 헬퍼
   const isHomeActive = currentView.type === 'dashboard';
   const isAllFoldersActive = currentView.type === 'all-folders';
@@ -321,7 +327,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 내 학습 보관함
               </span>
               <span className="text-[10px] font-mono text-muted-foreground/70">
-                총 {cards.length}장
+                총 {totalValidCardsCount}장
               </span>
             </div>
 
