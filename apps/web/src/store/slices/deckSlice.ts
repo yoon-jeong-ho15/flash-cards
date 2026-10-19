@@ -135,6 +135,8 @@ export const createDeckSlice: StateCreator<
       );
     }
 
+    const cardIdsToDelete = deckCards.map((c) => c.id);
+
     set((state) => ({
       decks: state.decks.filter((d) => d.id !== id),
       cards: state.cards.filter((c) => c.deckId !== id),
@@ -143,11 +145,17 @@ export const createDeckSlice: StateCreator<
         ...state.pendingSync,
         deckIds: state.pendingSync.deckIds.filter((did) => did !== id),
         deletedDeckIds: Array.from(new Set([...state.pendingSync.deletedDeckIds, id])),
+        cardIds: state.pendingSync.cardIds.filter((cid) => !cardIdsToDelete.includes(cid)),
+        deletedCardIds: Array.from(new Set([...state.pendingSync.deletedCardIds, ...cardIdsToDelete])),
       },
     }));
 
     if (isOnline) {
-      flashcardService.deleteDeck(id)
+      const deleteOps: Promise<void>[] = [flashcardService.deleteDeck(id)];
+      if (cardIdsToDelete.length > 0) {
+        deleteOps.push(flashcardService.batchDeleteCards(cardIdsToDelete));
+      }
+      Promise.all(deleteOps)
         .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
         .catch(() => set({ syncStatus: 'offline' }));
     }

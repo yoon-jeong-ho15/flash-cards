@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ViewMode, Folder, Deck } from '../../types';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import {
@@ -86,14 +86,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     (pendingSync?.deletedDeckIds?.length || 0) +
     (pendingSync?.deletedCardIds?.length || 0);
 
-  // 폴더별 아코디언 펼침/접힘 상태 관리 (기본적으로 모두 펼침)
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Record<string, boolean>>(() => {
-    const init: Record<string, boolean> = {};
-    folders.forEach((f) => {
-      init[f.id] = true;
-    });
-    return init;
-  });
+  // 폴더별 아코디언 펼침/접힘 상태 관리 (기본적으로 모두 닫힘)
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Record<string, boolean>>({});
 
   const toggleFolderAccordion = (folderId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -103,8 +97,61 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }));
   };
 
-  // 미분류 덱 목록
-  const unassignedDecks = decks.filter((d) => !d.folderId);
+  // 덱 이름순(가나다/자연정렬) 정렬 헬퍼
+  const sortDecksByName = (deckList: Deck[]) =>
+    [...deckList].sort((a, b) => {
+      const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
+      return diff !== 0
+        ? diff
+        : (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
+    });
+
+  // 폴더별 덱 목록 (이름순 정렬)
+  const decksByFolder = useMemo(() => {
+    const map = new Map<string, Deck[]>();
+    folders.forEach((f) => map.set(f.id, []));
+    decks.forEach((d) => {
+      if (d.folderId && map.has(d.folderId)) {
+        map.get(d.folderId)!.push(d);
+      }
+    });
+    map.forEach((deckList, folderId) => {
+      map.set(folderId, sortDecksByName(deckList));
+    });
+    return map;
+  }, [folders, decks]);
+
+  // 미분류 덱 목록 (이름순 정렬)
+  const unassignedDecks = useMemo(() => {
+    const list = decks.filter((d) => !d.folderId);
+    return sortDecksByName(list);
+  }, [decks]);
+
+  // 유효한 덱에 속한 실제 총 카드 수 (과거 삭제된 덱의 고아 카드 배제)
+  const totalValidCardsCount = useMemo(() => {
+    const validDeckIdSet = new Set(decks.map((d) => d.id));
+    return cards.filter((c) => validDeckIdSet.has(c.deckId)).length;
+  }, [decks, cards]);
+
+  // 폴더별 총 카드 수 계산
+  const cardsCountByFolder = useMemo(() => {
+    const map = new Map<string, number>();
+    folders.forEach((f) => map.set(f.id, 0));
+
+    const deckCardsCountMap = new Map<string, number>();
+    cards.forEach((c) => {
+      deckCardsCountMap.set(c.deckId, (deckCardsCountMap.get(c.deckId) || 0) + 1);
+    });
+
+    decks.forEach((d) => {
+      if (d.folderId && map.has(d.folderId)) {
+        const count = deckCardsCountMap.get(d.id) || 0;
+        map.set(d.folderId, map.get(d.folderId)! + count);
+      }
+    });
+
+    return map;
+  }, [folders, decks, cards]);
 
   // 활성 여부 체크 헬퍼
   const isHomeActive = currentView.type === 'dashboard';
@@ -294,15 +341,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 내 학습 보관함
               </span>
               <span className="text-[10px] font-mono text-muted-foreground/70">
-                총 {cards.length}장
+                총 {totalValidCardsCount}장
               </span>
             </div>
 
             {/* 폴더 목록 트리 */}
             <div className="space-y-1">
               {folders.map((folder) => {
-                const folderDecks = decks.filter((d) => d.folderId === folder.id);
-                const isExpanded = expandedFolderIds[folder.id];
+                const folderDecks = decksByFolder.get(folder.id) || [];
+                const folderCardsCount = cardsCountByFolder.get(folder.id) || 0;
+                const isExpanded = Boolean(expandedFolderIds[folder.id]);
                 const isSelected = isCurrentFolder(folder.id);
 
                 return (
@@ -336,12 +384,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span className="truncate">{folder.title}</span>
                       </div>
 
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] px-1 py-0 h-4 font-mono text-muted-foreground border-border/60 shrink-0"
-                      >
-                        {folderDecks.length}
-                      </Badge>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] px-1 py-0 h-4 font-mono text-muted-foreground border-border/60 shrink-0"
+                          title={`덱 ${folderDecks.length}개`}
+                        >
+                          {folderDecks.length}
+                        </Badge>
+                        <span
+                          className="text-[10px] font-mono text-muted-foreground/70 shrink-0"
+                          title={`총 ${folderCardsCount}장`}
+                        >
+                          {folderCardsCount}장
+                        </span>
+                      </div>
                     </div>
 
                     {/* 폴더 하위 덱 목록 아코디언 */}
