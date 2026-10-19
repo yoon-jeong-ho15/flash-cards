@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 
 export interface CardFormItem {
   id?: string;
+  order?: number;
   termRichText: string;
   definitionRichText: string;
   frontImageUrl?: string;

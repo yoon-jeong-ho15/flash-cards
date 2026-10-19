@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, Deck } from '../types';
 import { useFlashcardStore } from '../store/useFlashcardStore';
+import { sortCardsByOrder } from '../services/flashcardService';
 
 interface UseStudySessionOptions {
   deckId: string;
@@ -81,7 +82,10 @@ export const useStudySession = ({
   const { decks, cards, setCardLearned, updateCard, deleteCard } = useFlashcardStore();
 
   const deck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
-  const deckCards = useMemo(() => cards.filter((c) => c.deckId === deckId), [cards, deckId]);
+  const deckCards = useMemo(
+    () => sortCardsByOrder(cards.filter((c) => c.deckId === deckId)),
+    [cards, deckId]
+  );
 
   // 학습 세션 카드 목록 및 현재 상태
   const [sessionCards, setSessionCards] = useState<Card[]>([]);
@@ -122,7 +126,8 @@ export const useStudySession = ({
   // 세션 초기화 (기본적으로 '알아요' 완료 카드는 제외)
   const initSession = useCallback(
     (filterUnlearnedOnly = true, shouldShuffle = shuffle, resetRound = false) => {
-      const storeCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+      const rawStoreCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+      const storeCards = sortCardsByOrder(rawStoreCards);
       let targetCards = storeCards;
       if (filterUnlearnedOnly) {
         targetCards = targetCards.filter((c) => !c.learned);
@@ -205,7 +210,8 @@ export const useStudySession = ({
 
   // '알아요' 제외하고 다시 학습 (모달에서 재학습 선택 시)
   const handleRestartUnlearned = useCallback(() => {
-    const storeCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+    const rawStoreCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+    const storeCards = sortCardsByOrder(rawStoreCards);
     let targetCards = storeCards.filter((c) => !c.learned);
 
     if (shuffle) {
@@ -224,7 +230,8 @@ export const useStudySession = ({
 
   // 전체 카드 다시 학습 (모달에서 전체 재학습 선택 시)
   const handleRestartAll = useCallback(() => {
-    const storeCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+    const rawStoreCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+    const storeCards = sortCardsByOrder(rawStoreCards);
     let targetCards = storeCards;
 
     if (shuffle) {

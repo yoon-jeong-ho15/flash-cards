@@ -28,6 +28,20 @@ async function commitInBatches(
   }
 }
 
+/**
+ * 카드를 order 속성(오름차순)으로 정렬하고, 없는 경우 ID(생성시간) 오름차순으로 정렬합니다.
+ */
+export function sortCardsByOrder(cards: Card[]): Card[] {
+  return [...cards].sort((a, b) => {
+    if (a.order !== undefined && b.order !== undefined) {
+      return a.order - b.order;
+    }
+    if (a.order !== undefined) return -1;
+    if (b.order !== undefined) return 1;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 export const flashcardService = {
   /**
    * Firebase Firestore로부터 현재 사용자의 모든 폴더, 덱, 카드 데이터를 조회합니다.
@@ -70,12 +84,13 @@ export const flashcardService = {
         })
         .sort((a, b) => b.updatedAt - a.updatedAt);
 
-      const cards: Card[] = cardsSnap.docs.map((d) => {
+      const rawCards: Card[] = cardsSnap.docs.map((d) => {
         const data = d.data();
         return {
           id: data.id || d.id,
           userId: data.userId || userId,
           deckId: data.deckId || '',
+          order: data.order !== undefined ? Number(data.order) : undefined,
           termRichText: data.termRichText || '',
           definitionRichText: data.definitionRichText || '',
           frontImageUrl: data.frontImageUrl || undefined,
@@ -84,6 +99,38 @@ export const flashcardService = {
           learned: Boolean(data.learned),
         };
       });
+
+      // 덱별로 묶어서 정렬하고, order가 없는 카드는 index를 부여하여 자동 마이그레이션 대상에 포함
+      const cardsByDeck = new Map<string, Card[]>();
+      rawCards.forEach((c) => {
+        const list = cardsByDeck.get(c.deckId) || [];
+        list.push(c);
+        cardsByDeck.set(c.deckId, list);
+      });
+
+      const cards: Card[] = [];
+      const cardsToMigrate: Card[] = [];
+
+      cardsByDeck.forEach((deckCardsList) => {
+        const sorted = sortCardsByOrder(deckCardsList);
+        sorted.forEach((card, index) => {
+          if (card.order === undefined) {
+            const updatedCard = { ...card, order: index };
+            cards.push(updatedCard);
+            cardsToMigrate.push(updatedCard);
+          } else {
+            cards.push(card);
+          }
+        });
+      });
+
+      // 기존 카드 중 order가 없었던 카드들을 백그라운드에서 Firestore에 일괄 저장
+      if (cardsToMigrate.length > 0) {
+        console.log(`[flashcardService] order 속성이 없는 카드 ${cardsToMigrate.length}장 자동 마이그레이션 실행`);
+        flashcardService.batchUpsertCards(cardsToMigrate, userId).catch((err) => {
+          console.warn('[flashcardService] 카드 order 자동 마이그레이션 실패:', err);
+        });
+      }
 
       return { folders, decks, cards };
     } catch (err) {
@@ -228,6 +275,7 @@ export const flashcardService = {
         id: card.id,
         userId,
         deckId: card.deckId,
+        order: card.order !== undefined ? card.order : 0,
         termRichText: card.termRichText,
         definitionRichText: card.definitionRichText,
         frontImageUrl: card.frontImageUrl || null,
@@ -244,7 +292,7 @@ export const flashcardService = {
    */
   async batchUpsertCards(cards: Card[], userId: string): Promise<void> {
     if (!db || !isFirebaseConfigured || !userId || cards.length === 0) return;
-    const ops = cards.map((c) => (batch: WriteBatch) => {
+    const ops = cards.map((c, index) => (batch: WriteBatch) => {
       const docRef = doc(db!, 'flashcard_cards', c.id);
       batch.set(
         docRef,
@@ -252,6 +300,7 @@ export const flashcardService = {
           id: c.id,
           userId,
           deckId: c.deckId,
+          order: c.order !== undefined ? c.order : index,
           termRichText: c.termRichText,
           definitionRichText: c.definitionRichText,
           frontImageUrl: c.frontImageUrl || null,
@@ -287,7 +336,7 @@ export const flashcardService = {
       });
 
       // 2. 전달된 카드들 저장
-      cards.forEach((c) => {
+      cards.forEach((c, index) => {
         ops.push((batch: WriteBatch) => {
           const docRef = doc(db!, 'flashcard_cards', c.id);
           batch.set(
@@ -296,6 +345,7 @@ export const flashcardService = {
               id: c.id,
               userId,
               deckId: deckId,
+              order: c.order !== undefined ? c.order : index,
               termRichText: c.termRichText,
               definitionRichText: c.definitionRichText,
               frontImageUrl: c.frontImageUrl || null,

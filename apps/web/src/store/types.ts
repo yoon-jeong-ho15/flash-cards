@@ -75,6 +75,7 @@ export interface CardSlice {
     deckData: { title: string; description?: string; folderId?: string | null },
     cardsData: Array<{
       id?: string;
+      order?: number;
       termRichText: string;
       definitionRichText: string;
       frontImageUrl?: string;

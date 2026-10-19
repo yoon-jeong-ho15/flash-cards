@@ -18,11 +18,19 @@ export const createCardSlice: StateCreator<
 
   addCard: (cardData) => {
     const id = `card-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    const { user } = get();
+    const { user, cards } = get();
+    const existingDeckCards = cards.filter((c) => c.deckId === cardData.deckId);
+    const maxOrder = existingDeckCards.reduce(
+      (max, c) => (c.order !== undefined && c.order > max ? c.order : max),
+      -1
+    );
+    const calculatedOrder = cardData.order !== undefined ? cardData.order : maxOrder + 1;
+
     const newCard: Card = {
       ...cardData,
       id,
       userId: user?.uid,
+      order: calculatedOrder,
     };
 
     const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
@@ -140,6 +148,7 @@ export const createCardSlice: StateCreator<
       id: item.id || `card-${now}-${index}-${Math.random().toString(36).substr(2, 6)}`,
       deckId: targetDeckId,
       userId: user?.uid,
+      order: item.order !== undefined ? item.order : index,
       termRichText: item.termRichText,
       definitionRichText: item.definitionRichText,
       frontImageUrl: item.frontImageUrl,

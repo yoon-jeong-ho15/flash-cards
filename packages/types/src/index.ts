@@ -11,6 +11,7 @@ export interface Card {
   id: string;
   deckId: string;
   userId?: string;
+  order?: number;             // 정렬 순서 (0부터 시작하는 인덱스)
   termRichText: string;       // 앞면 (Tiptap HTML 또는 텍스트)
   definitionRichText: string; // 뒷면 (Tiptap HTML 또는 텍스트)
   frontImageUrl?: string;     // 앞면 첨부 이미지 (URL 또는 Base64)
