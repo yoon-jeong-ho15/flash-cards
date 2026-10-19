@@ -22,16 +22,20 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
   const { folders, decks } = useFlashcardStore();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 폴더 검색 필터링
+  // 폴더 검색 필터링 및 이름순 정렬
   const filteredFolders = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return folders;
+    let result = folders;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = folders.filter((f) => {
+        const titleMatch = f.title.toLowerCase().includes(q);
+        const descMatch = f.description?.toLowerCase().includes(q);
+        return titleMatch || descMatch;
+      });
     }
-    const q = searchQuery.toLowerCase();
-    return folders.filter((f) => {
-      const titleMatch = f.title.toLowerCase().includes(q);
-      const descMatch = f.description?.toLowerCase().includes(q);
-      return titleMatch || descMatch;
+    return [...result].sort((a, b) => {
+      const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
+      return diff !== 0 ? diff : (b.createdAt || 0) - (a.createdAt || 0);
     });
   }, [folders, searchQuery]);
 

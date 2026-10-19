@@ -55,6 +55,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const masteredCards = activeCards.filter((c) => c.learned).length;
   const overallProgress = totalCards > 0 ? Math.round((masteredCards / totalCards) * 100) : 0;
 
+  // 이름순으로 정렬된 폴더 목록
+  const sortedFolders = useMemo(() => {
+    return [...folders].sort((a, b) => {
+      const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
+      return diff !== 0 ? diff : (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  }, [folders]);
+
   // 검색 필터링
   const filteredDecks = useMemo(() => {
     let result = decks;
@@ -256,7 +264,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {folders.slice(0, 6).map((f) => {
+              {sortedFolders.slice(0, 6).map((f) => {
                 const count = decks.filter((d) => d.folderId === f.id).length;
                 return (
                   <FolderCard

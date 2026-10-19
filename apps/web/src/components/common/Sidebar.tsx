@@ -106,6 +106,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         : (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
     });
 
+  // 폴더 이름순(가나다/자연정렬) 정렬 헬퍼
+  const sortedFolders = useMemo(() => {
+    return [...folders].sort((a, b) => {
+      const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
+      return diff !== 0 ? diff : (b.createdAt || 0) - (a.createdAt || 0);
+    });
+  }, [folders]);
+
   // 폴더별 덱 목록 (이름순 정렬)
   const decksByFolder = useMemo(() => {
     const map = new Map<string, Deck[]>();
@@ -347,7 +355,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {/* 폴더 목록 트리 */}
             <div className="space-y-1">
-              {folders.map((folder) => {
+              {sortedFolders.map((folder) => {
                 const folderDecks = decksByFolder.get(folder.id) || [];
                 const folderCardsCount = cardsCountByFolder.get(folder.id) || 0;
                 const isExpanded = Boolean(expandedFolderIds[folder.id]);
