@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { CardFormItem } from '../components/deck/DeckCardEditorItem';
+import { sortCardsByOrder } from '../services/flashcardService';
 import {
   extractAllFirebaseImageUrlsFromCard,
   deleteImagesByUrls,
@@ -55,10 +56,11 @@ export const useDeckEditor = ({
   });
   const [cardItems, setCardItems] = useState<CardFormItem[]>(() => {
     if (deckId) {
-      const existingCards = cards.filter((c) => c.deckId === deckId);
+      const existingCards = sortCardsByOrder(cards.filter((c) => c.deckId === deckId));
       if (existingCards.length > 0) {
         return existingCards.map((c) => ({
           id: c.id,
+          order: c.order,
           termRichText: c.termRichText,
           definitionRichText: c.definitionRichText,
           frontImageUrl: c.frontImageUrl,
@@ -97,11 +99,12 @@ export const useDeckEditor = ({
         setDescription(existingDeck.description || '');
         setSelectedFolderId(existingDeck.folderId || null);
 
-        const existingCards = cards.filter((c) => c.deckId === deckId);
+        const existingCards = sortCardsByOrder(cards.filter((c) => c.deckId === deckId));
         if (existingCards.length > 0) {
           setCardItems(
             existingCards.map((c) => ({
               id: c.id,
+              order: c.order,
               termRichText: c.termRichText,
               definitionRichText: c.definitionRichText,
               frontImageUrl: c.frontImageUrl,
@@ -267,8 +270,9 @@ export const useDeckEditor = ({
           description: description.trim(),
           folderId: selectedFolderId,
         },
-        cardItems.map((c) => ({
+        cardItems.map((c, index) => ({
           id: c.id && c.id.startsWith('temp-') ? undefined : c.id,
+          order: index,
           termRichText: c.termRichText || '<p></p>',
           definitionRichText: c.definitionRichText || '<p></p>',
           frontImageUrl: c.frontImageUrl,

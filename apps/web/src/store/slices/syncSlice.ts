@@ -1,6 +1,6 @@
 import { StateCreator } from 'zustand';
 import { FlashcardStoreState, SyncSlice, EMPTY_PENDING_SYNC, SyncStatus } from '../types';
-import { flashcardService } from '../../services/flashcardService';
+import { flashcardService, sortCardsByOrder } from '../../services/flashcardService';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import { Folder, Deck, Card } from '../../types';
 
@@ -137,7 +137,7 @@ export const createSyncSlice: StateCreator<
           set({
             folders: Array.from(mergedFoldersMap.values()),
             decks: Array.from(mergedDecksMap.values()),
-            cards: Array.from(mergedCardsMap.values()),
+            cards: sortCardsByOrder(Array.from(mergedCardsMap.values())),
             syncStatus: 'synced',
             lastSyncedAt: Date.now(),
           });

@@ -34,6 +34,7 @@ export const createDeckSlice: StateCreator<
       id: `card-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 6)}`,
       deckId,
       userId: user?.uid,
+      order: index,
       termRichText: c.termRichText,
       definitionRichText: c.definitionRichText,
       frontImageUrl: c.frontImageUrl,

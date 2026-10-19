@@ -22,6 +22,7 @@ import {
   Plus,
   Shuffle,
 } from 'lucide-react';
+import { sortCardsByOrder } from '../../services/flashcardService';
 import { cn } from '@/lib/utils';
 
 interface DeckDetailViewProps {
@@ -48,7 +49,10 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   const deck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
-  const deckCards = useMemo(() => cards.filter((c) => c.deckId === deckId), [cards, deckId]);
+  const deckCards = useMemo(
+    () => sortCardsByOrder(cards.filter((c) => c.deckId === deckId)),
+    [cards, deckId]
+  );
   const folder = useMemo(
     () => (deck?.folderId ? folders.find((f) => f.id === deck.folderId) : null),
     [folders, deck]
