@@ -224,9 +224,10 @@ const styles = StyleSheet.create({
   definitionMainText: {
     fontSize: 16,
     color: '#1E293B',
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 24,
     fontWeight: '500',
+    width: '100%',
   },
   cardFooter: {
     paddingTop: 10,
