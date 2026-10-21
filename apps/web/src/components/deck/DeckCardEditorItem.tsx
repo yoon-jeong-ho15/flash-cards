@@ -29,6 +29,8 @@ interface DeckCardEditorItemProps {
   onDuplicate: (index: number) => void;
   onRemove: (index: number) => void;
   onInsertAfter?: (index: number) => void;
+  onFocusCard?: (index: number, cardId?: string) => void;
+  onGrabCardHandle?: (index: number, cardId?: string) => void;
 }
 
 export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
@@ -43,6 +45,8 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
   onDuplicate,
   onRemove,
   onInsertAfter,
+  onFocusCard,
+  onGrabCardHandle,
 }) => {
   const dragControls = useDragControls();
   const itemRef = useRef<HTMLLIElement>(null);
@@ -86,12 +90,17 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
         scale: 1.015,
         zIndex: 50,
       }}
-      onDragStart={() => setIsDragging(true)}
+      onDragStart={() => {
+        setIsDragging(true);
+        onGrabCardHandle?.(index, card.id);
+      }}
       onDragEnd={() => setIsDragging(false)}
       transition={{ duration: 0.2 }}
       className="relative list-none"
     >
       <div
+        onFocusCapture={() => onFocusCard?.(index, card.id)}
+        onClick={() => onFocusCard?.(index, card.id)}
         className={cn(
           "bg-card rounded-xl border border-border p-4 shadow-xs space-y-3 focus-within:border-primary/50 transition-all duration-300",
           isDragging && "shadow-xl border-primary/40 ring-1 ring-primary/20",
@@ -106,7 +115,10 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             type="button"
             tabIndex={-1}
             className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground hover:text-foreground rounded transition-colors touch-none"
-            onPointerDown={(e) => dragControls.start(e)}
+            onPointerDown={(e) => {
+              onGrabCardHandle?.(index, card.id);
+              dragControls.start(e);
+            }}
             title="드래그하여 순서 변경"
           >
             <GripVertical className="w-4 h-4" />

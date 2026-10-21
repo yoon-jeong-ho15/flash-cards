@@ -353,7 +353,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
               </div>
             </div>
 
-            {/* 2열 반응형 카드 그리드 */}
+            {/* 1열 세로 카드 목록 */}
             {filteredCards.length === 0 ? (
               <EmptyState
                 icon={<Layers className="w-6 h-6 text-muted-foreground" />}
@@ -384,7 +384,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                 }
               />
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="flex flex-col gap-3.5">
                 {filteredCards.map((card, index) => (
                   <DeckCardPreviewItem
                     key={card.id}

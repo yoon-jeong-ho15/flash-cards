@@ -198,26 +198,28 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
           {/* 중앙 내용 (뒷면 텍스트 & 이미지) - my-auto prevents top clipping */}
           <div className="flex-1 flex flex-col px-4 overflow-y-auto max-h-[300px] w-full">
-            <div className="my-auto w-full text-center">
+            <div className="my-auto w-full">
               {backImage && (
-                <ImageWithSkeleton
-                  src={backImage}
-                  alt="카드 설명 이미지"
-                  containerClassName="mb-4 max-h-40 min-h-[100px] min-w-[140px] inline-flex items-center justify-center rounded-xl overflow-hidden border border-border bg-muted/40 p-1 cursor-zoom-in hover:opacity-90 transition-opacity mx-auto"
-                  className="max-h-36 object-contain rounded-lg mx-auto"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.open(backImage, '_blank');
-                  }}
-                  title="클릭하여 원본 이미지 보기"
-                />
+                <div className="text-center">
+                  <ImageWithSkeleton
+                    src={backImage}
+                    alt="카드 설명 이미지"
+                    containerClassName="mb-4 max-h-40 min-h-[100px] min-w-[140px] inline-flex items-center justify-center rounded-xl overflow-hidden border border-border bg-muted/40 p-1 cursor-zoom-in hover:opacity-90 transition-opacity mx-auto"
+                    className="max-h-36 object-contain rounded-lg mx-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(backImage, '_blank');
+                    }}
+                    title="클릭하여 원본 이미지 보기"
+                  />
+                </div>
               )}
 
-              <div className="w-full text-center">
+              <div className="w-full text-left">
                 <RichTextViewer
                   html={card.definitionRichText}
                   textSize="lg"
-                  className="text-foreground leading-relaxed"
+                  className="text-foreground leading-relaxed text-left"
                 />
               </div>
             </div>

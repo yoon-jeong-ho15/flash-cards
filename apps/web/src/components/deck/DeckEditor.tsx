@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { DeckCardEditorItem } from './DeckCardEditorItem';
 import { DeckEditorOutline } from './DeckEditorOutline';
 import { useDeckEditor } from '../../hooks/useDeckEditor';
@@ -56,16 +56,45 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     handleSave,
   } = useDeckEditor({ deckId, initialFolderId, focusCardId, onSaved });
 
-  // 좌측 카드 목차에서 선택된 인덱스 및 하이라이트 상태
-  const [activeOutlineIndex, setActiveOutlineIndex] = useState<number | undefined>();
+  // 좌측 카드 목차에서 선택된 인덱스 및 활성 카드 상태
+  const [activeCardId, setActiveCardId] = useState<string | undefined>(focusCardId);
+  const [activeOutlineIndex, setActiveOutlineIndex] = useState<number | undefined>(() => {
+    if (focusCardId) {
+      const idx = cardItems.findIndex((c) => c.id === focusCardId);
+      return idx !== -1 ? idx : undefined;
+    }
+    return undefined;
+  });
   const [highlightCardId, setHighlightCardId] = useState<string | undefined>(focusCardId);
 
+  // 목차 항목이 뷰포트 안에 보이도록 스크롤하는 헬퍼
+  const scrollOutlineIntoView = useCallback((index: number) => {
+    const outlineEl = document.getElementById(`outline-card-${index}`);
+    if (outlineEl) {
+      outlineEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, []);
+
+  // 카드 목록(cardItems) 변경 시(순서 이동, 추가, 삭제 등) 활성 카드의 인덱스 동기화
+  useEffect(() => {
+    if (activeCardId) {
+      const idx = cardItems.findIndex((c) => c.id === activeCardId);
+      if (idx !== -1 && idx !== activeOutlineIndex) {
+        setActiveOutlineIndex(idx);
+      }
+    }
+  }, [cardItems, activeCardId, activeOutlineIndex]);
+
+  // 1. 목차에서 카드 클릭 시 (기존 하이라이트 및 스크롤 방식 100% 유지)
   const handleSelectCardFromOutline = useCallback((index: number) => {
     setActiveOutlineIndex(index);
+    const targetCard = cardItems[index];
+    if (targetCard?.id) {
+      setActiveCardId(targetCard.id);
+    }
     const targetEl = document.getElementById(`card-editor-${index}`);
     if (targetEl) {
       targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const targetCard = cardItems[index];
       if (targetCard?.id) {
         setHighlightCardId(targetCard.id);
         setTimeout(() => {
@@ -74,6 +103,24 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
       }
     }
   }, [cardItems]);
+
+  // 2. 본문 카드에 포커스를 두었을 때
+  const handleCardFocus = useCallback((index: number, cardId?: string) => {
+    setActiveOutlineIndex((prev) => (prev === index ? prev : index));
+    if (cardId) {
+      setActiveCardId((prev) => (prev === cardId ? prev : cardId));
+    }
+    scrollOutlineIntoView(index);
+  }, [scrollOutlineIntoView]);
+
+  // 3. 순서를 움직이기 위해 핸들을 잡았을 때
+  const handleCardGrab = useCallback((index: number, cardId?: string) => {
+    setActiveOutlineIndex(index);
+    if (cardId) {
+      setActiveCardId(cardId);
+    }
+    scrollOutlineIntoView(index);
+  }, [scrollOutlineIntoView]);
 
   return (
     <div className="relative">
@@ -114,7 +161,10 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             <DeckEditorOutline
               cards={cardItems}
               activeIndex={activeOutlineIndex}
+              activeCardId={activeCardId}
               onSelectCard={handleSelectCardFromOutline}
+              onReorderCards={handleReorderCards}
+              onGrabCardHandle={handleCardGrab}
               onAddCard={handleAddCard}
               onRemoveCard={handleRemoveCard}
             />
@@ -220,6 +270,8 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                 onDuplicate={handleDuplicateCard}
                 onRemove={handleRemoveCard}
                 onInsertAfter={handleInsertCardAfter}
+                onFocusCard={handleCardFocus}
+                onGrabCardHandle={handleCardGrab}
               />
             ))}
           </AnimatePresence>
