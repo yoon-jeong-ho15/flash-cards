@@ -10,6 +10,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { StickyActionBar } from '../common/StickyActionBar';
+import { ConfirmModal } from '../common/ConfirmModal';
 import { Reorder, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +67,16 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     return undefined;
   });
   const [highlightCardId, setHighlightCardId] = useState<string | undefined>(focusCardId);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const handleRequestClose = useCallback(() => {
+    setShowCancelConfirm(true);
+  }, []);
+
+  const handleConfirmClose = useCallback(() => {
+    setShowCancelConfirm(false);
+    onClose();
+  }, [onClose]);
 
   // 목차 항목이 뷰포트 안에 보이도록 스크롤하는 헬퍼
   const scrollOutlineIntoView = useCallback((index: number) => {
@@ -126,7 +137,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     <div className="relative">
       {/* 상단 Sticky 메뉴바 */}
       <StickyActionBar
-        onBack={onClose}
+        onBack={handleRequestClose}
         iconOnlyBack
         backTitle="취소하고 뒤로 가기"
         title={deckId ? '덱 수정하기' : '새 플래시카드 덱 만들기'}
@@ -136,7 +147,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={onClose}
+              onClick={handleRequestClose}
             >
               취소
             </Button>
@@ -293,7 +304,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         <Button
           variant="outline"
           size="default"
-          onClick={onClose}
+          onClick={handleRequestClose}
         >
           취소
         </Button>
@@ -320,6 +331,18 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 작성/수정 취소 확인 모달 */}
+      <ConfirmModal
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={handleConfirmClose}
+        title={deckId ? '덱 수정 취소' : '덱 만들기 취소'}
+        message={`정말로 취소하시겠습니까?\n저장하지 않은 모든 변경사항은 복구할 수 없습니다.`}
+        confirmText="취소하고 나가기"
+        cancelText="계속 작성"
+        isDanger={true}
+      />
     </div>
   );
 };
