@@ -160,13 +160,24 @@ export const DeckEditorScreen: React.FC<DeckEditorScreenProps> = ({
       return;
     }
 
-    const validCards = cardItems.filter(
-      (c) => c.termRichText.trim() || c.definitionRichText.trim()
-    );
+    const isCardItemEmpty = (c: CardEditItem) => {
+      const termEmpty = !c.termRichText.replace(/[\s\u00a0\u200b\ufeff\u3000]/g, '').trim();
+      const defEmpty = !c.definitionRichText.replace(/[\s\u00a0\u200b\ufeff\u3000]/g, '').trim();
+      const frontImgEmpty = !c.frontImageUrl?.trim();
+      const backImgEmpty = !c.backImageUrl?.trim();
+      return termEmpty && defEmpty && frontImgEmpty && backImgEmpty;
+    };
+
+    // 앞뒤가 비어있는 카드(스페이스, 줄바꿈만 있는 카드 포함) 자동 제외/삭제
+    const validCards = cardItems.filter((c) => !isCardItemEmpty(c));
 
     if (validCards.length === 0) {
       Alert.alert('입력 확인', '최소 1개 이상의 유효한 카드를 작성해 주세요.');
       return;
+    }
+
+    if (validCards.length !== cardItems.length) {
+      setCardItems(validCards);
     }
 
     const savedDeckId = saveDeckWithCards(

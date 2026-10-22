@@ -6,6 +6,7 @@ import {
   extractAllFirebaseImageUrlsFromCard,
   deleteImagesByUrls,
 } from '../services/storageService';
+import { isCardItemEmpty } from '../utils/cardValidation';
 
 interface UseDeckEditorOptions {
   deckId?: string;
@@ -69,14 +70,7 @@ const isDraftMeaningful = (
 ): boolean => {
   if (title.trim()) return true;
   if (description.trim()) return true;
-  return cardItems.some(
-    (c) =>
-      c.termRichText.replace(/<[^>]*>/g, '').trim() ||
-      c.definitionRichText.replace(/<[^>]*>/g, '').trim() ||
-      c.frontImageUrl ||
-      c.backImageUrl ||
-      c.imageUrl
-  );
+  return cardItems.some((c) => !isCardItemEmpty(c));
 };
 
 const isDraftDifferentFromOriginal = (
@@ -443,17 +437,8 @@ export const useDeckEditor = ({
       newErrors.title = '덱 제목을 입력해 주세요.';
     }
 
-    // 최소 1장 이상의 카드에 앞면 혹은 뒷면 내용 또는 이미지가 있어야 함
-    const validCards = cardItems.filter(
-      (c) =>
-        c.termRichText.replace(/<[^>]*>/g, '').trim() ||
-        c.definitionRichText.replace(/<[^>]*>/g, '').trim() ||
-        c.termRichText.includes('<img') ||
-        c.definitionRichText.includes('<img') ||
-        c.frontImageUrl ||
-        c.backImageUrl ||
-        c.imageUrl
-    );
+    // 앞뒤가 모두 비어있는 카드(스페이스, 줄바꿈만 있는 카드 포함)를 자동으로 제외/삭제
+    const validCards = cardItems.filter((c) => !isCardItemEmpty(c));
 
     if (validCards.length === 0) {
       newErrors.general = '최소 1개 이상의 카드에 단어(앞면) 또는 설명(뒷면)을 입력해야 합니다.';
@@ -475,14 +460,19 @@ export const useDeckEditor = ({
           });
       }
 
-      // 2) 현재 카드들(새로 저장될 데이터)의 이미지 URL 목록 수집
+      // 2) 현재 카드들(새로 저장될 유효한 카드들)의 이미지 URL 목록 수집
       const afterUrls = new Set<string>();
-      cardItems.forEach((c) => {
+      validCards.forEach((c) => {
         extractAllFirebaseImageUrlsFromCard(c).forEach((u) => afterUrls.add(u));
       });
 
       // 3) 차집합 계산 (수정 전에는 있었으나 현재 사라진 이미지들)
       const removedUrls = Array.from(beforeUrls).filter((url) => !afterUrls.has(url));
+
+      // 빈 카드가 삭제되었으므로 화면 상태도 동기화
+      if (validCards.length !== cardItems.length) {
+        setCardItems(validCards);
+      }
 
       const savedDeckId = saveDeckWithCards(
         deckId || null,
@@ -491,7 +481,7 @@ export const useDeckEditor = ({
           description: description.trim(),
           folderId: selectedFolderId,
         },
-        cardItems.map((c, index) => ({
+        validCards.map((c, index) => ({
           id: c.id && c.id.startsWith('temp-') ? undefined : c.id,
           order: index,
           termRichText: c.termRichText || '<p></p>',

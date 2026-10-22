@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card as CardType } from '../../types';
 import { Modal } from '../common/Modal';
 import { RichTextEditor } from '../editor/RichTextEditor';
+import { isRichTextEmpty } from '../../utils/cardValidation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Pencil, Save, Trash2, AlertCircle } from 'lucide-react';
@@ -13,16 +14,6 @@ interface EditCardModalProps {
   onSave: (updates: { termRichText: string; definitionRichText: string }) => void;
   onDelete?: () => void;
 }
-
-const isHtmlEmpty = (html?: string | null): boolean => {
-  if (!html) return true;
-  const stripped = html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .trim();
-  const hasImage = /<img[^>]*>/i.test(html);
-  return stripped.length === 0 && !hasImage;
-};
 
 export const EditCardModal: React.FC<EditCardModalProps> = ({
   isOpen,
@@ -47,7 +38,7 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    if (isHtmlEmpty(term) && isHtmlEmpty(definition)) {
+    if (isRichTextEmpty(term) && isRichTextEmpty(definition)) {
       setErrorMessage('앞면 또는 뒷면 내용 중 최소 하나는 입력해야 합니다.');
       return;
     }
