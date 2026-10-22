@@ -1,15 +1,21 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { DeckCardEditorItem } from './DeckCardEditorItem';
 import { DeckEditorOutline } from './DeckEditorOutline';
-import { useDeckEditor } from '../../hooks/useDeckEditor';
+import {
+  useDeckEditor,
+  formatDraftTime,
+  formatDraftFullDateTime,
+} from '../../hooks/useDeckEditor';
 import {
   Plus,
   Save,
   Folder as FolderIcon,
   HelpCircle,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { StickyActionBar } from '../common/StickyActionBar';
+import { ConfirmModal } from '../common/ConfirmModal';
 import { Reorder, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +60,12 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     handleReorderCards,
     handleUpdateCard,
     handleSave,
+    lastSavedAt,
+    showDraftRestoreModal,
+    draftSavedAt,
+    handleRestoreDraft,
+    handleDiscardDraft,
+    clearDraft,
   } = useDeckEditor({ deckId, initialFolderId, focusCardId, onSaved });
 
   // 좌측 카드 목차에서 선택된 인덱스 및 활성 카드 상태
@@ -66,6 +78,17 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     return undefined;
   });
   const [highlightCardId, setHighlightCardId] = useState<string | undefined>(focusCardId);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const handleRequestClose = useCallback(() => {
+    setShowCancelConfirm(true);
+  }, []);
+
+  const handleConfirmClose = useCallback(() => {
+    setShowCancelConfirm(false);
+    clearDraft();
+    onClose();
+  }, [clearDraft, onClose]);
 
   // 목차 항목이 뷰포트 안에 보이도록 스크롤하는 헬퍼
   const scrollOutlineIntoView = useCallback((index: number) => {
@@ -126,17 +149,30 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     <div className="relative">
       {/* 상단 Sticky 메뉴바 */}
       <StickyActionBar
-        onBack={onClose}
+        onBack={handleRequestClose}
         iconOnlyBack
         backTitle="취소하고 뒤로 가기"
         title={deckId ? '덱 수정하기' : '새 플래시카드 덱 만들기'}
-        description="앞면에는 핵심 키워드/단어, 뒷면에는 상세 설명과 이미지를 등록하세요."
+        description={
+          lastSavedAt
+            ? `앞면에는 핵심 키워드/단어, 뒷면에는 상세 설명과 이미지를 등록하세요. · 자동 임시 저장됨 (${formatDraftTime(lastSavedAt)})`
+            : "앞면에는 핵심 키워드/단어, 뒷면에는 상세 설명과 이미지를 등록하세요."
+        }
         right={
           <>
+            {lastSavedAt && (
+              <div
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/60 px-2.5 py-1 rounded-full border border-border/60 mr-1 select-none"
+                title="브라우저에 안전하게 임시 저장되었습니다."
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>임시 저장됨 ({formatDraftTime(lastSavedAt)})</span>
+              </div>
+            )}
             <Button
               variant="outline"
               size="sm"
-              onClick={onClose}
+              onClick={handleRequestClose}
             >
               취소
             </Button>
@@ -293,7 +329,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         <Button
           variant="outline"
           size="default"
-          onClick={onClose}
+          onClick={handleRequestClose}
         >
           취소
         </Button>
@@ -320,6 +356,30 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 작성/수정 취소 확인 모달 */}
+      <ConfirmModal
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={handleConfirmClose}
+        title={deckId ? '덱 수정 취소' : '덱 만들기 취소'}
+        message={`정말로 취소하시겠습니까?\n저장하지 않은 모든 변경사항은 복구할 수 없습니다.`}
+        confirmText="취소하고 나가기"
+        cancelText="계속 작성"
+        isDanger={true}
+      />
+
+      {/* 작성 중이던 임시 저장본 복원 확인 모달 */}
+      <ConfirmModal
+        isOpen={showDraftRestoreModal}
+        onClose={handleDiscardDraft}
+        onConfirm={handleRestoreDraft}
+        title="작성 중이던 내용 복원"
+        message={`이전에 저장하지 않고 종료된 임시 저장본이 있습니다.\n(저장 일시: ${formatDraftFullDateTime(draftSavedAt)})\n\n임시 저장된 내용을 복원하여 계속 편집하시겠습니까?`}
+        confirmText="복원하기"
+        cancelText="새로 작성"
+        isDanger={false}
+      />
     </div>
   );
 };

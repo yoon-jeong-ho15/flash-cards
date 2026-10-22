@@ -14,6 +14,7 @@ import { useFlashcardStore } from '../store/flashcardStore';
 import { Header } from '../components/common/Header';
 import { Input } from '../components/common/Input';
 import { Button } from '../components/common/Button';
+import { ConfirmModal } from '../components/common/ConfirmModal';
 import { stripHtml } from '../utils/textUtils';
 
 interface CardEditItem {
@@ -45,6 +46,16 @@ export const DeckEditorScreen: React.FC<DeckEditorScreenProps> = ({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(initialFolderId || null);
   const [cardItems, setCardItems] = useState<CardEditItem[]>([]);
   const [errors, setErrors] = useState<{ title?: string; general?: string }>({});
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const handleRequestClose = () => {
+    setShowCancelConfirm(true);
+  };
+
+  const handleConfirmClose = () => {
+    setShowCancelConfirm(false);
+    onClose();
+  };
 
   useEffect(() => {
     if (deckId) {
@@ -149,13 +160,24 @@ export const DeckEditorScreen: React.FC<DeckEditorScreenProps> = ({
       return;
     }
 
-    const validCards = cardItems.filter(
-      (c) => c.termRichText.trim() || c.definitionRichText.trim()
-    );
+    const isCardItemEmpty = (c: CardEditItem) => {
+      const termEmpty = !c.termRichText.replace(/[\s\u00a0\u200b\ufeff\u3000]/g, '').trim();
+      const defEmpty = !c.definitionRichText.replace(/[\s\u00a0\u200b\ufeff\u3000]/g, '').trim();
+      const frontImgEmpty = !c.frontImageUrl?.trim();
+      const backImgEmpty = !c.backImageUrl?.trim();
+      return termEmpty && defEmpty && frontImgEmpty && backImgEmpty;
+    };
+
+    // 앞뒤가 비어있는 카드(스페이스, 줄바꿈만 있는 카드 포함) 자동 제외/삭제
+    const validCards = cardItems.filter((c) => !isCardItemEmpty(c));
 
     if (validCards.length === 0) {
       Alert.alert('입력 확인', '최소 1개 이상의 유효한 카드를 작성해 주세요.');
       return;
+    }
+
+    if (validCards.length !== cardItems.length) {
+      setCardItems(validCards);
     }
 
     const savedDeckId = saveDeckWithCards(
@@ -182,7 +204,7 @@ export const DeckEditorScreen: React.FC<DeckEditorScreenProps> = ({
       <Header
         title={deckId ? '덱 수정하기' : '새 플래시카드 덱'}
         subtitle="질문과 정답, 이미지를 등록하세요"
-        onBack={onClose}
+        onBack={handleRequestClose}
         rightActions={
           <Button variant="default" size="sm" onPress={handleSave}>
             저장
@@ -394,7 +416,7 @@ export const DeckEditorScreen: React.FC<DeckEditorScreenProps> = ({
             <Button
               variant="outline"
               size="lg"
-              onPress={onClose}
+              onPress={handleRequestClose}
               style={styles.bottomBtn}
             >
               취소
@@ -410,6 +432,18 @@ export const DeckEditorScreen: React.FC<DeckEditorScreenProps> = ({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 작성/수정 취소 확인 모달 */}
+      <ConfirmModal
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={handleConfirmClose}
+        title={deckId ? '덱 수정 취소' : '덱 만들기 취소'}
+        message={`정말로 취소하시겠습니까?\n저장하지 않은 모든 변경사항은 복구할 수 없습니다.`}
+        confirmText="취소하고 나가기"
+        cancelText="계속 작성"
+        isDanger={true}
+      />
     </View>
   );
 };

@@ -6,6 +6,7 @@ import {
   extractAllFirebaseImageUrlsFromCard,
   deleteImagesByUrls,
 } from '../services/storageService';
+import { isCardItemEmpty } from '../utils/cardValidation';
 
 interface UseDeckEditorOptions {
   deckId?: string;
@@ -18,6 +19,101 @@ export interface DeckEditorErrors {
   title?: string;
   general?: string;
 }
+
+export interface DeckDraftData {
+  deckId?: string;
+  title: string;
+  description: string;
+  selectedFolderId: string | null;
+  cardItems: CardFormItem[];
+  savedAt: number;
+}
+
+const getDraftStorageKey = (deckId?: string) => {
+  return deckId ? `flashcards_deck_draft_${deckId}` : `flashcards_deck_draft_new`;
+};
+
+export const loadDeckDraft = (deckId?: string): DeckDraftData | null => {
+  try {
+    const key = getDraftStorageKey(deckId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as DeckDraftData;
+  } catch (e) {
+    console.error('Failed to load deck draft:', e);
+    return null;
+  }
+};
+
+export const saveDeckDraft = (draft: DeckDraftData): void => {
+  try {
+    const key = getDraftStorageKey(draft.deckId);
+    localStorage.setItem(key, JSON.stringify(draft));
+  } catch (e) {
+    console.error('Failed to save deck draft:', e);
+  }
+};
+
+export const removeDeckDraft = (deckId?: string): void => {
+  try {
+    const key = getDraftStorageKey(deckId);
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.error('Failed to remove deck draft:', e);
+  }
+};
+
+const isDraftMeaningful = (
+  title: string,
+  description: string,
+  cardItems: CardFormItem[]
+): boolean => {
+  if (title.trim()) return true;
+  if (description.trim()) return true;
+  return cardItems.some((c) => !isCardItemEmpty(c));
+};
+
+const isDraftDifferentFromOriginal = (
+  draft: DeckDraftData,
+  origTitle: string,
+  origDesc: string,
+  origFolderId: string | null,
+  origCards: CardFormItem[]
+): boolean => {
+  if (draft.title.trim() !== origTitle.trim()) return true;
+  if ((draft.description || '').trim() !== (origDesc || '').trim()) return true;
+  if ((draft.selectedFolderId || null) !== (origFolderId || null)) return true;
+  if (draft.cardItems.length !== origCards.length) return true;
+
+  for (let i = 0; i < draft.cardItems.length; i++) {
+    const dc = draft.cardItems[i];
+    const oc = origCards[i];
+    if (dc.termRichText !== oc.termRichText) return true;
+    if (dc.definitionRichText !== oc.definitionRichText) return true;
+    if (dc.frontImageUrl !== oc.frontImageUrl) return true;
+    if ((dc.backImageUrl || dc.imageUrl) !== (oc.backImageUrl || oc.imageUrl)) return true;
+  }
+  return false;
+};
+
+export const formatDraftTime = (timestamp?: number | null): string => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+export const formatDraftFullDateTime = (timestamp?: number | null): string => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}년 ${month}월 ${day}일 ${hours}:${minutes}`;
+};
 
 const createEmptyCardItem = (): CardFormItem => ({
   id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -75,6 +171,13 @@ export const useDeckEditor = ({
   const [newlyAddedCardId, setNewlyAddedCardId] = useState<string | null>(null);
   const [errors, setErrors] = useState<DeckEditorErrors>({});
 
+  // 임시 저장(Draft) 관련 상태
+  const [draftToRestore, setDraftToRestore] = useState<DeckDraftData | null>(null);
+  const [showDraftRestoreModal, setShowDraftRestoreModal] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const isReadyForAutoSaveRef = useRef(false);
+  const lastSavedJsonRef = useRef<string>('');
+
   // 수정 전 덱/카드에 존재하던 이미지 URL들을 기억하여, 저장 시 삭제된 이미지를 정리
   const initialImageUrlsRef = useRef<Set<string>>(new Set());
 
@@ -89,6 +192,118 @@ export const useDeckEditor = ({
       initialImageUrlsRef.current = urls;
     }
   }, [deckId]);
+
+  // 마운트 시 로컬 임시 저장본(Draft) 확인
+  useEffect(() => {
+    const draft = loadDeckDraft(deckId);
+    if (draft && isDraftMeaningful(draft.title, draft.description, draft.cardItems)) {
+      let origTitle = '';
+      let origDesc = '';
+      let origFolderId: string | null = initialFolderId || null;
+      let origCards: CardFormItem[] = [];
+
+      if (deckId) {
+        const existingDeck = decks.find((d) => d.id === deckId);
+        if (existingDeck) {
+          origTitle = existingDeck.title;
+          origDesc = existingDeck.description || '';
+          origFolderId = existingDeck.folderId || null;
+          origCards = sortCardsByOrder(cards.filter((c) => c.deckId === deckId)).map((c) => ({
+            id: c.id,
+            order: c.order,
+            termRichText: c.termRichText,
+            definitionRichText: c.definitionRichText,
+            frontImageUrl: c.frontImageUrl,
+            backImageUrl: c.backImageUrl || c.imageUrl,
+            imageUrl: c.imageUrl || c.backImageUrl,
+            learned: c.learned,
+          }));
+        }
+      }
+
+      if (isDraftDifferentFromOriginal(draft, origTitle, origDesc, origFolderId, origCards)) {
+        setDraftToRestore(draft);
+        setShowDraftRestoreModal(true);
+        // 복원 여부 결정을 기다리는 동안 자동 저장 보류
+        return;
+      } else {
+        removeDeckDraft(deckId);
+      }
+    }
+
+    isReadyForAutoSaveRef.current = true;
+  }, [deckId]);
+
+  // 임시 저장본 복원 실행
+  const handleRestoreDraft = useCallback(() => {
+    if (draftToRestore) {
+      setTitle(draftToRestore.title);
+      setDescription(draftToRestore.description);
+      setSelectedFolderId(draftToRestore.selectedFolderId);
+      setCardItems(draftToRestore.cardItems);
+      setLastSavedAt(draftToRestore.savedAt);
+      lastSavedJsonRef.current = JSON.stringify({
+        title: draftToRestore.title,
+        description: draftToRestore.description,
+        selectedFolderId: draftToRestore.selectedFolderId,
+        cardItems: draftToRestore.cardItems,
+      });
+    }
+    setDraftToRestore(null);
+    setShowDraftRestoreModal(false);
+    isReadyForAutoSaveRef.current = true;
+  }, [draftToRestore]);
+
+  // 임시 저장본 삭제하고 원본/초기 상태 유지
+  const handleDiscardDraft = useCallback(() => {
+    removeDeckDraft(deckId);
+    setDraftToRestore(null);
+    setShowDraftRestoreModal(false);
+    isReadyForAutoSaveRef.current = true;
+  }, [deckId]);
+
+  // 임시 저장본 완전 제거 (정식 저장 성공 또는 취소 확인 시)
+  const clearDraft = useCallback(() => {
+    removeDeckDraft(deckId);
+    setLastSavedAt(null);
+  }, [deckId]);
+
+  // 주기적 로컬 임시 저장 (디바운스 2초 + 내용 변경 감지)
+  useEffect(() => {
+    if (!isReadyForAutoSaveRef.current) return;
+
+    if (!isDraftMeaningful(title, description, cardItems)) {
+      return;
+    }
+
+    const currentData = {
+      title,
+      description,
+      selectedFolderId,
+      cardItems,
+    };
+    const currentJson = JSON.stringify(currentData);
+
+    if (currentJson === lastSavedJsonRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const now = Date.now();
+      saveDeckDraft({
+        deckId,
+        title,
+        description,
+        selectedFolderId,
+        cardItems,
+        savedAt: now,
+      });
+      lastSavedJsonRef.current = currentJson;
+      setLastSavedAt(now);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [title, description, selectedFolderId, cardItems, deckId]);
 
   // 기존 덱 수정 시 데이터 로드 (외부 상태 변경 동기화용)
   useEffect(() => {
@@ -222,17 +437,8 @@ export const useDeckEditor = ({
       newErrors.title = '덱 제목을 입력해 주세요.';
     }
 
-    // 최소 1장 이상의 카드에 앞면 혹은 뒷면 내용 또는 이미지가 있어야 함
-    const validCards = cardItems.filter(
-      (c) =>
-        c.termRichText.replace(/<[^>]*>/g, '').trim() ||
-        c.definitionRichText.replace(/<[^>]*>/g, '').trim() ||
-        c.termRichText.includes('<img') ||
-        c.definitionRichText.includes('<img') ||
-        c.frontImageUrl ||
-        c.backImageUrl ||
-        c.imageUrl
-    );
+    // 앞뒤가 모두 비어있는 카드(스페이스, 줄바꿈만 있는 카드 포함)를 자동으로 제외/삭제
+    const validCards = cardItems.filter((c) => !isCardItemEmpty(c));
 
     if (validCards.length === 0) {
       newErrors.general = '최소 1개 이상의 카드에 단어(앞면) 또는 설명(뒷면)을 입력해야 합니다.';
@@ -254,14 +460,19 @@ export const useDeckEditor = ({
           });
       }
 
-      // 2) 현재 카드들(새로 저장될 데이터)의 이미지 URL 목록 수집
+      // 2) 현재 카드들(새로 저장될 유효한 카드들)의 이미지 URL 목록 수집
       const afterUrls = new Set<string>();
-      cardItems.forEach((c) => {
+      validCards.forEach((c) => {
         extractAllFirebaseImageUrlsFromCard(c).forEach((u) => afterUrls.add(u));
       });
 
       // 3) 차집합 계산 (수정 전에는 있었으나 현재 사라진 이미지들)
       const removedUrls = Array.from(beforeUrls).filter((url) => !afterUrls.has(url));
+
+      // 빈 카드가 삭제되었으므로 화면 상태도 동기화
+      if (validCards.length !== cardItems.length) {
+        setCardItems(validCards);
+      }
 
       const savedDeckId = saveDeckWithCards(
         deckId || null,
@@ -270,7 +481,7 @@ export const useDeckEditor = ({
           description: description.trim(),
           folderId: selectedFolderId,
         },
-        cardItems.map((c, index) => ({
+        validCards.map((c, index) => ({
           id: c.id && c.id.startsWith('temp-') ? undefined : c.id,
           order: index,
           termRichText: c.termRichText || '<p></p>',
@@ -289,6 +500,10 @@ export const useDeckEditor = ({
           console.warn('[DeckEditor] 이미지 정리 실패:', err);
         });
       }
+
+      // 5) 정식 저장 성공 시 임시 저장본(draft) 정리
+      removeDeckDraft(deckId);
+      setLastSavedAt(null);
 
       onSaved(savedDeckId);
     } catch (err: any) {
@@ -328,5 +543,11 @@ export const useDeckEditor = ({
     handleReorderCards,
     handleUpdateCard,
     handleSave,
+    lastSavedAt,
+    showDraftRestoreModal,
+    draftSavedAt: draftToRestore?.savedAt || null,
+    handleRestoreDraft,
+    handleDiscardDraft,
+    clearDraft,
   };
 };
