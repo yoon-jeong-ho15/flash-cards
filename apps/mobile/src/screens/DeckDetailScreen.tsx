@@ -71,6 +71,15 @@ export const DeckDetailScreen: React.FC<DeckDetailScreenProps> = ({
     return result;
   }, [deckCards, cardFilter, searchQuery]);
 
+  // 원본 덱 내에서의 카드 순번(0-based 인덱스) 매핑 (검색/필터 시에도 원래 번호 유지)
+  const cardIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    deckCards.forEach((c, index) => {
+      map.set(c.id, index);
+    });
+    return map;
+  }, [deckCards]);
+
   if (!deck) {
     return (
       <View style={styles.container}>
@@ -328,7 +337,7 @@ export const DeckDetailScreen: React.FC<DeckDetailScreenProps> = ({
               <DeckCardPreviewItem
                 key={card.id}
                 card={card}
-                index={index}
+                index={cardIndexMap.get(card.id) ?? index}
                 onEdit={(cId) => onEditDeck(deck.id, cId)}
               />
             ))}
