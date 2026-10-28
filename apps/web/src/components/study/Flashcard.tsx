@@ -25,6 +25,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({
 
   return (
     <div
+      role="group"
+      aria-label="학습 카드"
       className="perspective-1200 w-full max-w-2xl h-[420px] sm:h-[460px] mx-auto select-none cursor-pointer group"
       onClick={onFlip}
     >
@@ -34,7 +36,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         }`}
       >
         {/* 앞면 (Term / 단어 & 이미지) */}
-        <div className="card-face-front bg-card rounded-2xl border border-border shadow-sm hover:border-primary/40 transition-colors p-6 sm:p-8 flex flex-col justify-between">
+        <div aria-hidden={isFlipped} ref={node => { if (node) node.inert = isFlipped; }} className="card-face-front bg-card rounded-2xl border border-border shadow-sm hover:border-primary/40 transition-colors p-5 sm:p-8 flex flex-col justify-between">
           {/* 상단 헤더 */}
           <div className="flex items-center justify-between shrink-0">
             <Badge variant="secondary" className="text-xs font-medium">
@@ -141,7 +143,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         </div>
 
         {/* 뒷면 (Definition / 정의 & 이미지) */}
-        <div className="card-face-back bg-card rounded-2xl border border-primary/40 shadow-sm hover:border-primary/60 transition-colors p-6 sm:p-8 flex flex-col justify-between">
+        <div aria-hidden={!isFlipped} ref={node => { if (node) node.inert = !isFlipped; }} className="card-face-back bg-card rounded-2xl border border-primary/40 shadow-sm hover:border-primary/60 transition-colors p-5 sm:p-8 flex flex-col justify-between">
           {/* 상단 헤더 */}
           <div className="flex items-center justify-between shrink-0">
             <Badge variant="warning" className="text-xs font-medium">

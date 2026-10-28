@@ -30,6 +30,7 @@ interface RichTextEditorProps {
   minHeight?: string;
   className?: string;
   autoFocus?: boolean;
+  ariaLabel?: string;
 }
 
 const normalizeHtml = (html?: string | null): string => {
@@ -49,6 +50,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   minHeight,
   className = '',
   autoFocus = false,
+  ariaLabel,
 }) => {
   const user = useFlashcardStore(state => state.user);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -200,6 +202,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     },
     editorProps: {
       attributes: {
+        role: 'textbox',
+        'aria-multiline': 'true',
+        'aria-label': ariaLabel || placeholder,
         class: `prose prose-sm max-w-none focus:outline-none p-3 text-foreground text-sm leading-relaxed overflow-y-auto`,
         style: `min-height: 0; height: ${editorHeight}; max-height: ${editorHeight};`,
       },
@@ -278,7 +283,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   const ToolbarButton = ({
     onClick,
-    isActive = false,
+    isActive,
     title,
     children,
   }: {
@@ -289,7 +294,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }) => (
     <button
       type="button"
-      tabIndex={-1}
+      tabIndex={title === '굵게 (Ctrl+B)' ? 0 : -1}
+      aria-label={title}
+      aria-pressed={isActive}
       onClick={(e) => {
         e.preventDefault();
         onClick();
@@ -335,7 +342,17 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       />
 
       {/* 툴바 */}
-      <div className="flex items-center justify-between px-2 py-1.5 bg-muted/40 border-b border-border select-none overflow-x-auto gap-2">
+      <div role="toolbar" aria-label={`${ariaLabel || '카드'} 서식`} onKeyDown={event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+        const index = buttons.indexOf(event.target as HTMLButtonElement);
+        if (index < 0) return;
+        event.preventDefault();
+        const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+        buttons[index].tabIndex = -1;
+        buttons[nextIndex].tabIndex = 0;
+        buttons[nextIndex].focus();
+      }} className="flex items-center justify-between px-2 py-1.5 bg-muted/40 border-b border-border select-none overflow-x-auto gap-2">
         <div className="flex items-center gap-1 shrink-0">
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -384,7 +401,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           {/* 본문 사진 업로드 버튼 */}
           <ToolbarButton
             onClick={() => fileInputRef.current?.click()}
-            isActive={false}
             title="본문에 사진 삽입 (드래그 & 드롭, 붙여넣기도 가능)"
           >
             {isUploading ? (
@@ -405,7 +421,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           <ToolbarButton
             onClick={() => editor.chain().focus().undo().run()}
-            isActive={false}
             title="실행 취소 (Ctrl+Z)"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -413,7 +428,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
           <ToolbarButton
             onClick={() => editor.chain().focus().redo().run()}
-            isActive={false}
             title="다시 실행 (Ctrl+Y)"
           >
             <RotateCw className="w-3.5 h-3.5" />

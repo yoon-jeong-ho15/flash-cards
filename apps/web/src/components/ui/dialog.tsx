@@ -1,6 +1,10 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+
+const DialogTitleContext = React.createContext<string | undefined>(undefined);
 
 export interface DialogProps {
   open: boolean;
@@ -9,35 +13,29 @@ export interface DialogProps {
 }
 
 export const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) => {
-  React.useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onOpenChange?.(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    const originalStyle = window.getComputedStyle(document.body).overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalStyle;
-    };
-  }, [open, onOpenChange]);
+  const titleId = React.useId();
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  useDialogFocus(containerRef, open, () => onOpenChange?.(false));
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+  return createPortal(
+    <DialogTitleContext.Provider value={titleId}>
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in"
-        onClick={() => onOpenChange?.(false)}
-        aria-hidden="true"
-      />
-      {children}
-    </div>
+        ref={containerRef}
+        tabIndex={-1}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-foreground/30 backdrop-blur-sm transition-opacity duration-200"
+          onClick={() => onOpenChange?.(false)}
+          aria-hidden="true"
+        />
+        {children}
+      </div>
+    </DialogTitleContext.Provider>,
+    document.body
   );
 };
 
@@ -49,6 +47,7 @@ export const DialogContent = React.forwardRef<
     maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
   }
 >(({ className, children, onClose, showClose = true, maxWidth = 'md', ...props }, ref) => {
+  const titleId = React.useContext(DialogTitleContext);
   const maxWidthMap = {
     sm: 'max-w-sm',
     md: 'max-w-md',
@@ -61,9 +60,10 @@ export const DialogContent = React.forwardRef<
       ref={ref}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={titleId}
       onClick={(e) => e.stopPropagation()}
       className={cn(
-        'relative z-50 grid w-full gap-4 border border-border bg-card p-6 shadow-xl rounded-xl duration-200 animate-in fade-in zoom-in-95',
+        'relative z-50 grid max-h-[calc(100dvh-2rem)] w-full gap-4 overflow-y-auto overscroll-contain border border-border bg-card p-6 shadow-xl rounded-2xl',
         maxWidthMap[maxWidth],
         className
       )}
@@ -85,24 +85,15 @@ export const DialogContent = React.forwardRef<
 });
 DialogContent.displayName = 'DialogContent';
 
-export const DialogHeader = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+export const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn(
-      'flex flex-col space-y-1.5 text-center sm:text-left pr-8',
-      className
-    )}
+    className={cn('flex flex-col space-y-1.5 text-center sm:text-left pr-8', className)}
     {...props}
   />
 );
 DialogHeader.displayName = 'DialogHeader';
 
-export const DialogFooter = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+export const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
       'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-2 gap-2 sm:gap-0',
@@ -116,13 +107,20 @@ DialogFooter.displayName = 'DialogFooter';
 export const DialogTitle = React.forwardRef<
   HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h2
-    ref={ref}
-    className={cn('text-lg font-semibold leading-none tracking-tight text-foreground flex items-center gap-2', className)}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const titleId = React.useContext(DialogTitleContext);
+  return (
+    <h2
+      ref={ref}
+      id={titleId}
+      className={cn(
+        'text-lg font-semibold leading-none tracking-tight text-foreground flex items-center gap-2',
+        className
+      )}
+      {...props}
+    />
+  );
+});
 DialogTitle.displayName = 'DialogTitle';
 
 export const DialogDescription = React.forwardRef<

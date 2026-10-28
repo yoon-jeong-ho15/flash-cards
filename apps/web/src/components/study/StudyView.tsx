@@ -8,6 +8,7 @@ import { Modal } from '../common/Modal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { EditCardModal } from './EditCardModal';
 import { useStudySession } from '../../hooks/useStudySession';
+import { ProgressBar } from '../common/ProgressBar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '../common/EmptyState';
@@ -249,6 +250,11 @@ export const StudyView: React.FC<StudyViewProps> = ({
       />
 
       <div className="max-w-4xl mx-auto py-4 sm:py-6 px-4 sm:px-6 overflow-x-clip">
+        <div className="mx-auto mb-5 max-w-2xl">
+          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{isFlipped ? '정답을 확인하고, 기억했는지 표시해 보세요.' : '먼저 떠올려 보고, 카드를 뒤집어 보세요.'}</span><span className="shrink-0 pl-2 tabular-nums">{masteredCount} / {totalInitialCount}장</span></div>
+          <ProgressBar value={percentage} />
+          <span role="status" className="sr-only">{actionFeedback === 'know' ? '암기 완료 상태를 변경했습니다.' : ''}</span>
+        </div>
         {/* 플래시카드 본체 영역 */}
         <div className="relative w-full max-w-2xl mx-auto">
           {/* 1장만 남았을 때 복습 힌트 배지 */}

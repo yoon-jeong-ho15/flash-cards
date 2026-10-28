@@ -27,7 +27,7 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
   const filteredFolders = useMemo(() => {
     let result = folders;
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.trim().toLowerCase();
       result = folders.filter((f) => {
         const titleMatch = f.title.toLowerCase().includes(q);
         const descMatch = f.description?.toLowerCase().includes(q);
@@ -62,17 +62,18 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
         }
       />
 
-      <div className="max-w-6xl mx-auto py-6 sm:py-8 px-4 sm:px-6 space-y-6">
+      <div className="page-container space-y-6">
         {/* 검색 및 카운트 바 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center gap-2">
             <FolderIcon className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium text-foreground">
-              총 폴더
+              내 폴더
             </span>
             <Badge variant="secondary" className="font-mono text-xs">
               {filteredFolders.length}
             </Badge>
+            <span role="status" className="sr-only">폴더 {filteredFolders.length}개 표시</span>
           </div>
 
           <div className="w-full sm:max-w-xs">
@@ -80,8 +81,8 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="폴더 이름, 설명 검색..."
+              aria-label="폴더 이름, 설명 검색"
               leftIcon={<Search className="w-4 h-4" />}
-              className="h-9"
             />
           </div>
         </div>
@@ -97,9 +98,9 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
                 : '폴더를 생성하여 관련된 카드 덱을 체계적으로 묶어보세요.'
             }
             action={
-              !searchQuery && (
-                <Button variant="default" size="sm" onClick={onCreateFolder}>
-                  새 폴더 만들기
+              (
+                <Button variant={searchQuery ? 'outline' : 'default'} size="sm" onClick={searchQuery ? () => setSearchQuery('') : onCreateFolder}>
+                  {searchQuery ? '검색어 지우기' : '새 폴더 만들기'}
                 </Button>
               )
             }

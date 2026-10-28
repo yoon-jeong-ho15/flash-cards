@@ -1,10 +1,12 @@
-import { indexCards } from '../../store/cardSelectors';
-import React, { useState, useMemo } from 'react';
-import { ViewMode, Folder, Deck } from '../../types';
+import React, { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ViewMode } from '../../types';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
+import { indexCards } from '../../store/cardSelectors';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
 import {
   Layers,
-  Folder as FolderIcon,
+  Folder,
   Home,
   Plus,
   FolderPlus,
@@ -14,14 +16,14 @@ import {
   PanelLeft,
   X,
   FileText,
-  Check,
   CloudOff,
   RefreshCw,
   LogOut,
   AlertCircle,
+  Check,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -53,691 +55,385 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreateDeck,
   onCreateFolder,
 }) => {
-  const folders = useFlashcardStore(state => state.folders);
-  const decks = useFlashcardStore(state => state.decks);
-  const cards = useFlashcardStore(state => state.cards);
-  const syncStatus = useFlashcardStore(state => state.syncStatus);
-  const user = useFlashcardStore(state => state.user);
-  const loginWithGoogle = useFlashcardStore(state => state.loginWithGoogle);
-  const logout = useFlashcardStore(state => state.logout);
-  const initCloudSync = useFlashcardStore(state => state.initCloudSync);
-  const pendingSync = useFlashcardStore(state => state.pendingSync);
-  const lastSyncedAt = useFlashcardStore(state => state.lastSyncedAt);
-
+  const folders = useFlashcardStore((state) => state.folders);
+  const decks = useFlashcardStore((state) => state.decks);
+  const cards = useFlashcardStore((state) => state.cards);
+  const user = useFlashcardStore((state) => state.user);
+  const syncStatus = useFlashcardStore((state) => state.syncStatus);
+  const pendingSync = useFlashcardStore((state) => state.pendingSync);
+  const login = useFlashcardStore((state) => state.loginWithGoogle);
+  const logout = useFlashcardStore((state) => state.logout);
+  const sync = useFlashcardStore((state) => state.initCloudSync);
+  const lastSyncedAt = useFlashcardStore((state) => state.lastSyncedAt);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-
-  const handleGoogleLogin = async () => {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const drawerRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(drawerRef, isMobileOpen, onCloseMobile);
+  const counts = useMemo(() => indexCards(cards).byDeck, [cards]);
+  const sortedFolders = useMemo(
+    () => [...folders].sort((a, b) => a.title.localeCompare(b.title, 'ko', { numeric: true })),
+    [folders]
+  );
+  const sortedDecks = useMemo(
+    () => [...decks].sort((a, b) => a.title.localeCompare(b.title, 'ko', { numeric: true })),
+    [decks]
+  );
+  const pendingCount = Object.values(pendingSync ?? {}).reduce((sum, ids) => sum + ids.length, 0);
+  const navigate = (action: () => void) => {
+    action();
+    onCloseMobile();
+  };
+  const handleLogin = async () => {
     setIsLoggingIn(true);
     try {
-      await loginWithGoogle();
+      await login();
     } catch {
-      // ignore
+      /* Auth errors are displayed by Navbar. */
     } finally {
       setIsLoggingIn(false);
     }
   };
-
-  const pendingCount =
-    (pendingSync?.folderIds?.length || 0) +
-    (pendingSync?.deckIds?.length || 0) +
-    (pendingSync?.cardIds?.length || 0) +
-    (pendingSync?.deletedFolderIds?.length || 0) +
-    (pendingSync?.deletedDeckIds?.length || 0) +
-    (pendingSync?.deletedCardIds?.length || 0);
-
-  // 폴더별 아코디언 펼침/접힘 상태 관리 (기본적으로 모두 닫힘)
-  const [expandedFolderIds, setExpandedFolderIds] = useState<Record<string, boolean>>({});
-
-  const toggleFolderAccordion = (folderId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedFolderIds((prev) => ({
-      ...prev,
-      [folderId]: !prev[folderId],
-    }));
-  };
-
-  // 덱 이름순(가나다/자연정렬) 정렬 헬퍼
-  const sortDecksByName = (deckList: Deck[]) =>
-    [...deckList].sort((a, b) => {
-      const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
-      return diff !== 0
-        ? diff
-        : (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
-    });
-
-  // 폴더 이름순(가나다/자연정렬) 정렬 헬퍼
-  const sortedFolders = useMemo(() => {
-    return [...folders].sort((a, b) => {
-      const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
-      return diff !== 0 ? diff : (b.createdAt || 0) - (a.createdAt || 0);
-    });
-  }, [folders]);
-
-  // 폴더별 덱 목록 (이름순 정렬)
-  const decksByFolder = useMemo(() => {
-    const map = new Map<string, Deck[]>();
-    folders.forEach((f) => map.set(f.id, []));
-    decks.forEach((d) => {
-      if (d.folderId && map.has(d.folderId)) {
-        map.get(d.folderId)!.push(d);
-      }
-    });
-    map.forEach((deckList, folderId) => {
-      map.set(folderId, sortDecksByName(deckList));
-    });
-    return map;
-  }, [folders, decks]);
-
-  // 미분류 덱 목록 (이름순 정렬)
-  const unassignedDecks = useMemo(() => {
-    const list = decks.filter((d) => !d.folderId);
-    return sortDecksByName(list);
-  }, [decks]);
-
-  // 유효한 덱에 속한 실제 총 카드 수 (과거 삭제된 덱의 고아 카드 배제)
-  const totalValidCardsCount = useMemo(() => {
-    const validDeckIdSet = new Set(decks.map((d) => d.id));
-    return cards.filter((c) => validDeckIdSet.has(c.deckId)).length;
-  }, [decks, cards]);
-
-  // 폴더별 총 카드 수 계산
-  const cardsCountByFolder = useMemo(() => {
-    const map = new Map<string, number>();
-    folders.forEach((f) => map.set(f.id, 0));
-
-    const deckCardsCountMap = new Map<string, number>();
-    cards.forEach((c) => {
-      deckCardsCountMap.set(c.deckId, (deckCardsCountMap.get(c.deckId) || 0) + 1);
-    });
-
-    decks.forEach((d) => {
-      if (d.folderId && map.has(d.folderId)) {
-        const count = deckCardsCountMap.get(d.id) || 0;
-        map.set(d.folderId, map.get(d.folderId)! + count);
-      }
-    });
-
-    return map;
-  }, [folders, decks, cards]);
-
-  // 활성 여부 체크 헬퍼
-  const isHomeActive = currentView.type === 'dashboard';
-  const isAllFoldersActive = currentView.type === 'all-folders';
-  const isAllDecksActive = currentView.type === 'all-decks';
-  const isCurrentFolder = (folderId: string) =>
-    currentView.type === 'folder' && currentView.folderId === folderId;
-  const isCurrentDeck = (deckId: string) =>
-    (currentView.type === 'deck' && currentView.deckId === deckId) ||
-    (currentView.type === 'edit-deck' && currentView.deckId === deckId);
-
-
-
-  const renderSidebarContent = (collapsed: boolean) => (
-    <div className="h-full flex flex-col justify-between bg-card text-card-foreground select-none">
-      {/* 1. 상단 컨트롤 바 (접기/펼치기 및 닫기) */}
-      <div>
-        <div
-          className={cn(
-            'h-14 sm:h-16 flex items-center border-b border-border/80 px-3 transition-all',
-            collapsed ? 'justify-center' : 'justify-end'
-          )}
-        >
-          {/* 데스크탑 접기/펼치기 토글 버튼 */}
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="hidden lg:flex p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-            title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
-          >
-            {collapsed ? (
-              <PanelLeft className="w-4 h-4" />
-            ) : (
-              <PanelLeftClose className="w-4 h-4" />
-            )}
-          </button>
-
-          {/* 모바일 닫기 버튼 */}
-          <button
-            type="button"
-            onClick={onCloseMobile}
-            className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-            title="사이드바 닫기"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* 2. 퀵 생성 액션 버튼 */}
-        <div className="p-3 border-b border-border/60">
-          {!collapsed ? (
-            <div className="space-y-1.5">
-              <Button
-                variant="default"
-                size="sm"
-                className="w-full justify-start gap-2 shadow-xs font-medium"
-                onClick={() => {
-                  onCreateDeck();
-                  onCloseMobile();
-                }}
-              >
-                <Plus className="w-4 h-4" />
-                <span>새 덱 만들기</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  onCreateFolder();
-                  onCloseMobile();
-                }}
-              >
-                <FolderPlus className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>새 폴더 추가</span>
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onCreateDeck();
-                  onCloseMobile();
-                }}
-                className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs hover:bg-primary/90 transition-colors"
-                title="새 덱 만들기"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onCreateFolder();
-                  onCloseMobile();
-                }}
-                className="w-9 h-9 rounded-lg border border-border bg-background text-muted-foreground hover:text-foreground flex items-center justify-center hover:bg-muted transition-colors"
-                title="새 폴더 추가"
-              >
-                <FolderPlus className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 3. 기본 메인 네비게이션 메뉴 */}
-        <div className="p-2 space-y-0.5 border-b border-border/60">
-          <button
-            type="button"
-            onClick={() => {
-              onNavigateHome();
-              onCloseMobile();
-            }}
-            className={cn(
-              'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer',
-              isHomeActive
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              collapsed && 'justify-center px-0'
-            )}
-            title="대시보드"
-          >
-            <Home className="w-4 h-4 shrink-0" />
-            {!collapsed && <span>대시보드</span>}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              onNavigateAllFolders();
-              onCloseMobile();
-            }}
-            className={cn(
-              'w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer',
-              isAllFoldersActive
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              collapsed && 'justify-center px-0'
-            )}
-            title="모든 폴더"
-          >
-            <div className="flex items-center gap-2.5">
-              <FolderIcon className="w-4 h-4 shrink-0" />
-              {!collapsed && <span>모든 폴더</span>}
-            </div>
-            {!collapsed && (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono">
-                {folders.length}
-              </Badge>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              onNavigateAllDecks();
-              onCloseMobile();
-            }}
-            className={cn(
-              'w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors cursor-pointer',
-              isAllDecksActive
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              collapsed && 'justify-center px-0'
-            )}
-            title="모든 덱"
-          >
-            <div className="flex items-center gap-2.5">
-              <Layers className="w-4 h-4 shrink-0" />
-              {!collapsed && <span>모든 덱</span>}
-            </div>
-            {!collapsed && (
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-mono">
-                {decks.length}
-              </Badge>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* 4. 학습 보관함 (폴더 & 덱 계층 구조 스크롤 영역) */}
-      <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+  const isCurrentDeck = (id: string) =>
+    (currentView.type === 'deck' || currentView.type === 'edit-deck') && currentView.deckId === id;
+  const renderDeck = (deck: (typeof decks)[number]) => (
+    <button
+      key={deck.id}
+      type="button"
+      onClick={() => navigate(() => onNavigateDeck(deck.id))}
+      aria-current={isCurrentDeck(deck.id) ? 'page' : undefined}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left text-xs transition-colors hover:bg-muted',
+        isCurrentDeck(deck.id) ? 'bg-secondary font-semibold text-primary' : 'text-muted-foreground'
+      )}
+    >
+      <FileText className="h-3.5 w-3.5 shrink-0 opacity-65" />
+      <span className="min-w-0 flex-1 truncate">{deck.title}</span>
+      <span className="tabular-nums text-[10px]">{counts.get(deck.id)?.length ?? 0}</span>
+    </button>
+  );
+  const content = (collapsed: boolean) => (
+    <div className="flex h-full flex-col bg-[#fdfcf9]">
+      <div
+        className={cn(
+          'flex h-14 sm:h-16 shrink-0 items-center gap-2 px-4',
+          collapsed && 'justify-center px-2'
+        )}
+      >
         {!collapsed && (
-          <div>
-            <div className="flex items-center justify-between px-2 pb-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                내 학습 보관함
+          <button
+            type="button"
+            onClick={() => navigate(onNavigateHome)}
+            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+            aria-label="FlashCards 홈"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white">
+              <Layers className="h-5 w-5" />
+            </span>
+            <span className="text-lg font-bold tracking-tight">
+              FlashCards
+              <span className="mt-0.5 block text-[9px] font-normal tracking-[0.12em] text-muted-foreground">
+                A LITTLE, EVERY DAY
               </span>
-              <span className="text-[10px] font-mono text-muted-foreground/70">
-                총 {totalValidCardsCount}장
-              </span>
-            </div>
-
-            {/* 폴더 목록 트리 */}
-            <div className="space-y-1">
-              {sortedFolders.map((folder) => {
-                const folderDecks = decksByFolder.get(folder.id) || [];
-                const folderCardsCount = cardsCountByFolder.get(folder.id) || 0;
-                const isExpanded = Boolean(expandedFolderIds[folder.id]);
-                const isSelected = isCurrentFolder(folder.id);
-
-                return (
-                  <div key={folder.id} className="space-y-0.5">
-                    <div
-                      onClick={() => {
-                        onNavigateFolder(folder.id);
-                        onCloseMobile();
-                      }}
-                      className={cn(
-                        'group flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors',
-                        isSelected
-                          ? 'bg-secondary text-secondary-foreground font-semibold'
-                          : 'text-foreground/80 hover:bg-muted hover:text-foreground'
-                      )}
-                    >
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <button
-                          type="button"
-                          onClick={(e) => toggleFolderAccordion(folder.id, e)}
-                          className="p-0.5 hover:bg-muted-foreground/10 rounded transition-colors text-muted-foreground"
-                          title={isExpanded ? '접기' : '펼치기'}
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="w-3 h-3" />
-                          ) : (
-                            <ChevronRight className="w-3 h-3" />
-                          )}
-                        </button>
-                        <FolderIcon className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span className="truncate">{folder.title}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge
-                          variant="outline"
-                          className="text-[10px] px-1 py-0 h-4 font-mono text-muted-foreground border-border/60 shrink-0"
-                          title={`덱 ${folderDecks.length}개`}
-                        >
-                          {folderDecks.length}
-                        </Badge>
-                        <span
-                          className="text-[10px] font-mono text-muted-foreground/70 shrink-0"
-                          title={`총 ${folderCardsCount}장`}
-                        >
-                          {folderCardsCount}장
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 폴더 하위 덱 목록 아코디언 */}
-                    {isExpanded && (
-                      <div className="pl-6 space-y-0.5 border-l border-border/40 ml-3.5 my-0.5">
-                        {folderDecks.length === 0 ? (
-                          <div className="px-2 py-1 text-[11px] text-muted-foreground/70 italic">
-                            덱이 없습니다
-                          </div>
-                        ) : (
-                          folderDecks.map((deck) => {
-                            const isDeckActive = isCurrentDeck(deck.id);
-                            const deckCardsCount = (indexCards(cards).byDeck.get(deck.id) || []).length;
-
-                            return (
-                              <div
-                                key={deck.id}
-                                onClick={() => {
-                                  onNavigateDeck(deck.id);
-                                  onCloseMobile();
-                                }}
-                                className={cn(
-                                  'flex items-center justify-between px-2 py-1 rounded-md text-xs cursor-pointer transition-colors',
-                                  isDeckActive
-                                    ? 'bg-primary/10 text-primary font-semibold'
-                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                )}
-                              >
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <FileText className="w-3 h-3 shrink-0 opacity-70" />
-                                  <span className="truncate">{deck.title}</span>
-                                </div>
-                                <span className="text-[10px] font-mono opacity-70 shrink-0">
-                                  {deckCardsCount}
-                                </span>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* 미분류 덱 목록 */}
-              {unassignedDecks.length > 0 && (
-                <div className="pt-2">
-                  <div className="px-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    미분류 덱
-                  </div>
-                  <div className="space-y-0.5">
-                    {unassignedDecks.map((deck) => {
-                      const isDeckActive = isCurrentDeck(deck.id);
-                      const deckCardsCount = (indexCards(cards).byDeck.get(deck.id) || []).length;
-
-                      return (
-                        <div
-                          key={deck.id}
-                          onClick={() => {
-                            onNavigateDeck(deck.id);
-                            onCloseMobile();
-                          }}
-                          className={cn(
-                            'flex items-center justify-between px-2 py-1 rounded-md text-xs cursor-pointer transition-colors',
-                            isDeckActive
-                              ? 'bg-primary/10 text-primary font-semibold'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <FileText className="w-3 h-3 shrink-0 opacity-70" />
-                            <span className="truncate">{deck.title}</span>
-                          </div>
-                          <span className="text-[10px] font-mono opacity-70 shrink-0">
-                            {deckCardsCount}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+            </span>
+          </button>
         )}
-
-        {collapsed && (
-          <div className="flex flex-col items-center gap-3 pt-2">
-            <div className="w-8 h-px bg-border" />
-            {folders.slice(0, 5).map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => {
-                  onNavigateFolder(f.id);
-                  onCloseMobile();
-                }}
-                className={cn(
-                  'w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors',
-                  isCurrentFolder(f.id) && 'bg-primary/10 text-primary'
-                )}
-                title={f.title}
-              >
-                <FolderIcon className="w-4 h-4" />
-              </button>
-            ))}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="hidden rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted lg:block"
+          title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+          aria-label={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
+        >
+          {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="rounded-lg p-2 text-muted-foreground lg:hidden"
+          aria-label="메뉴 닫기"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
-
-      {/* 5. 하단 로그인 & 클라우드 동기화 상태 영역 */}
-      <div className="p-3 border-t border-border/80 space-y-2.5 bg-muted/15">
+      <div className={cn('px-4 pb-5 pt-6', collapsed && 'px-2')}>
+        <Button
+          onClick={() => navigate(onCreateDeck)}
+          className={cn('w-full gap-2', collapsed ? 'px-0' : 'justify-start')}
+          aria-label="새 덱 만들기"
+          title="새 덱 만들기"
+        >
+          <Plus className="h-4 w-4" />
+          {!collapsed && <span>새 덱 만들기</span>}
+        </Button>
+      </div>
+      <nav aria-label="주 메뉴" className={cn('space-y-1 px-3', collapsed && 'px-2')}>
+        {[
+          { type: 'dashboard', label: '학습 홈', icon: Home, action: onNavigateHome, count: null },
+          {
+            type: 'all-decks',
+            label: '모든 덱',
+            icon: Layers,
+            action: onNavigateAllDecks,
+            count: decks.length,
+          },
+          {
+            type: 'all-folders',
+            label: '모든 폴더',
+            icon: Folder,
+            action: onNavigateAllFolders,
+            count: folders.length,
+          },
+        ].map((item) => (
+          <button
+            key={item.type}
+            type="button"
+            onClick={() => navigate(item.action)}
+            aria-current={currentView.type === item.type ? 'page' : undefined}
+            title={item.label}
+            aria-label={collapsed ? item.label : undefined}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors',
+              currentView.type === item.type
+                ? 'bg-secondary font-semibold text-primary'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              collapsed && 'justify-center px-0'
+            )}
+          >
+            <item.icon className="h-[18px] w-[18px] shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.count !== null && (
+                  <span className="text-[11px] tabular-nums opacity-70">{item.count}</span>
+                )}
+              </>
+            )}
+          </button>
+        ))}
+      </nav>
+      <div
+        className={cn(
+          'mt-6 min-h-0 flex-1 overflow-y-auto border-t border-border/70 px-4 pt-5 pb-4',
+          collapsed && 'px-2'
+        )}
+      >
         {!collapsed ? (
           <>
-            {/* 동기화 상태 인디케이터 바 */}
-            <div className="flex items-center justify-between text-xs px-0.5">
-              <span className="text-[11px] text-muted-foreground font-medium">동기화 상태</span>
-              {!user ? (
-                <Badge variant="outline" className="text-[10px] text-muted-foreground font-normal py-0 h-4.5 gap-1">
-                  <CloudOff className="w-3 h-3" />
-                  <span>게스트</span>
-                </Badge>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  {syncStatus === 'synced' && (
-                    <button
-                      type="button"
-                      onClick={() => initCloudSync()}
-                      title={`동기화 완료${lastSyncedAt ? ` (${new Date(lastSyncedAt).toLocaleTimeString()} 갱신)` : ''}`}
-                      className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-medium hover:underline cursor-pointer"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>동기화 완료</span>
-                    </button>
-                  )}
-                  {syncStatus === 'syncing' && (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-medium">
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                      <span>동기화 중...</span>
-                    </span>
-                  )}
-                  {syncStatus === 'offline' && (
-                    <button
-                      type="button"
-                      onClick={() => initCloudSync()}
-                      title="클릭 시 동기화 재시도"
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                    >
-                      <CloudOff className="w-3 h-3" />
-                      <span>{pendingCount > 0 ? `오프라인 (${pendingCount})` : '오프라인'}</span>
-                    </button>
-                  )}
-                  {syncStatus === 'error' && (
-                    <button
-                      type="button"
-                      onClick={() => initCloudSync()}
-                      title="동기화 재시도"
-                      className="inline-flex items-center gap-1 text-[11px] text-destructive hover:underline cursor-pointer"
-                    >
-                      <AlertCircle className="w-3 h-3" />
-                      <span>재시도</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* 계정 프로필 또는 로그인 버튼 */}
-            {!user ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isLoggingIn}
-                onClick={handleGoogleLogin}
-                className="w-full justify-center gap-2 h-8.5 text-xs font-semibold shadow-2xs"
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="section-label">내 보관함</h2>
+              <button
+                type="button"
+                onClick={() => navigate(onCreateFolder)}
+                aria-label="새 폴더 만들기"
+                title="새 폴더 만들기"
+                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
               >
-                {isLoggingIn ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
-                ) : (
-                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
-                )}
-                <span>{isLoggingIn ? '로그인 중...' : 'Google 로그인'}</span>
-              </Button>
-            ) : (
-              <div className="flex items-center justify-between p-1.5 rounded-lg bg-background border border-border/80">
-                <div className="flex items-center gap-2 min-w-0 pr-1" title={user.email || ''}>
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt={user.displayName || 'User'}
-                      className="w-7 h-7 rounded-full border border-border object-cover shrink-0"
-                    />
-                  ) : (
-                    <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20 shrink-0">
-                      {(user.displayName || user.email || 'U')[0].toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground truncate leading-tight">
-                      {user.displayName || user.email?.split('@')[0]}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">
-                      {user.email}
-                    </p>
-                  </div>
-                </div>
+                <FolderPlus className="h-4 w-4" />
+              </button>
+            </div>
+            {!folders.length && !decks.length && (
+              <div className="rounded-xl border border-dashed border-border p-4 text-xs leading-relaxed text-muted-foreground">
+                배우고 싶은 것들을
+                <br />
+                이곳에 차곡차곡 모아보세요.
                 <button
                   type="button"
-                  onClick={() => logout()}
-                  className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer shrink-0"
-                  title="로그아웃"
+                  onClick={() => navigate(onCreateFolder)}
+                  className="mt-3 flex items-center gap-1 text-primary font-medium"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
+                  폴더 만들기
+                  <ArrowUpRight className="h-3 w-3" />
                 </button>
+              </div>
+            )}
+            {sortedFolders.map((folder) => {
+              const folderDecks = sortedDecks.filter((deck) => deck.folderId === folder.id);
+              const isExpanded =
+                expanded[folder.id] ??
+                ((currentView.type === 'folder' && currentView.folderId === folder.id) ||
+                  folderDecks.some((deck) => isCurrentDeck(deck.id)));
+              const selected = currentView.type === 'folder' && currentView.folderId === folder.id;
+              return (
+                <div key={folder.id} className="mb-1">
+                  <div
+                    className={cn(
+                      'flex items-center rounded-lg hover:bg-muted',
+                      selected && 'bg-secondary'
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg px-1 py-3 text-muted-foreground"
+                      onClick={() => setExpanded((prev) => ({ ...prev, [folder.id]: !isExpanded }))}
+                      aria-label={`${folder.title} ${isExpanded ? '접기' : '펼치기'}`}
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(() => onNavigateFolder(folder.id))}
+                      aria-current={selected ? 'page' : undefined}
+                      className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pr-2 text-left text-xs"
+                    >
+                      <Folder className="h-4 w-4 shrink-0 text-[#a58b4e]" />
+                      <span className="flex-1 truncate">{folder.title}</span>
+                      <span className="text-[10px] tabular-nums text-muted-foreground">
+                        {folderDecks.length}
+                      </span>
+                    </button>
+                  </div>
+                  {isExpanded && (
+                    <div className="ml-3 border-l border-border pl-2">
+                      {folderDecks.length ? (
+                        folderDecks.map(renderDeck)
+                      ) : (
+                        <p className="p-3 text-xs text-muted-foreground">아직 덱이 없어요.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {sortedDecks.some((deck) => !deck.folderId) && (
+              <div className="mt-4">
+                <p className="mb-2 px-2 text-[10px] text-muted-foreground">미분류 덱</p>
+                {sortedDecks.filter((deck) => !deck.folderId).map(renderDeck)}
               </div>
             )}
           </>
         ) : (
-          /* 접혔을 때 컴팩트 아이콘 모드 */
-          <div className="flex flex-col items-center gap-2.5">
+          sortedFolders.slice(0, 6).map((folder) => (
+            <button
+              key={folder.id}
+              type="button"
+              onClick={() => navigate(() => onNavigateFolder(folder.id))}
+              title={folder.title}
+              aria-label={folder.title}
+              className="mb-2 flex h-10 w-full items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-primary"
+            >
+              <Folder className="h-4 w-4" />
+            </button>
+          ))
+        )}
+      </div>
+      <div className={cn('shrink-0 border-t border-border/70 p-4', collapsed && 'px-2')}>
+        {!collapsed && (
+          <div className="mb-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>{user ? '클라우드 보관함' : '이 브라우저에 저장 중'}</span>
             {!user ? (
+              <CloudOff className="h-3.5 w-3.5" />
+            ) : (
               <button
                 type="button"
-                onClick={handleGoogleLogin}
-                disabled={isLoggingIn}
-                className="w-8 h-8 rounded-lg border border-border bg-background flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
-                title="Google 로그인"
+                onClick={() => sync()}
+                title={
+                  lastSyncedAt
+                    ? `마지막 동기화: ${new Date(lastSyncedAt).toLocaleString('ko-KR')}`
+                    : '동기화 재시도'
+                }
+                className={cn(
+                  'flex items-center gap-1 hover:underline',
+                  syncStatus === 'error' ? 'text-destructive' : 'text-primary'
+                )}
               >
-                {isLoggingIn ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+                {syncStatus === 'syncing' ? (
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                ) : syncStatus === 'synced' ? (
+                  <Check className="h-3 w-3" />
                 ) : (
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                    />
-                  </svg>
+                  <AlertCircle className="h-3 w-3" />
                 )}
+                {syncStatus === 'synced'
+                  ? '동기화 완료'
+                  : syncStatus === 'syncing'
+                    ? '동기화 중'
+                    : syncStatus === 'error'
+                      ? '재시도'
+                      : `오프라인${pendingCount ? ` (${pendingCount})` : ''}`}
               </button>
-            ) : (
-              <div className="relative group">
-                {user.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName || 'User'}
-                    className="w-8 h-8 rounded-full border border-border object-cover"
-                    title={user.displayName || user.email || ''}
-                  />
-                ) : (
-                  <div
-                    className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs border border-primary/20"
-                    title={user.displayName || user.email || ''}
-                  >
-                    {(user.displayName || user.email || 'U')[0].toUpperCase()}
-                  </div>
-                )}
-                {/* 동기화 인디케이터 점 */}
-                <span
-                  className={cn(
-                    'absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-card',
-                    syncStatus === 'synced' && 'bg-emerald-500',
-                    syncStatus === 'syncing' && 'bg-amber-500 animate-pulse',
-                    syncStatus === 'offline' && 'bg-slate-400',
-                    syncStatus === 'error' && 'bg-destructive'
-                  )}
-                  title={`동기화 상태: ${syncStatus}`}
-                />
-              </div>
             )}
           </div>
+        )}
+        {user ? (
+          <div className="flex items-center gap-2.5">
+            {!collapsed && (
+              <>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/10 bg-secondary text-sm font-semibold text-primary">
+                  {(user.displayName || user.email || 'U')[0].toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold">{user.displayName || '내 계정'}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{user.email}</p>
+                </div>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => logout()}
+              title="로그아웃"
+              aria-label="로그아웃"
+              className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-destructive"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn('w-full', collapsed && 'px-0')}
+            isLoading={isLoggingIn}
+            onClick={handleLogin}
+            aria-label="Google 로그인"
+            leftIcon={
+              <span aria-hidden="true" className="text-base font-bold text-primary">
+                G
+              </span>
+            }
+          >
+            {!collapsed && 'Google로 로그인'}
+          </Button>
         )}
       </div>
     </div>
   );
-
   return (
     <>
-      {/* 1. 데스크탑 고정 사이드바 */}
       <aside
+        aria-label="사이드바"
         className={cn(
-          'hidden lg:block shrink-0 border-r border-border/80 sticky top-0 h-screen transition-all duration-300 z-30',
-          isCollapsed ? 'w-16' : 'w-64 xl:w-72'
+          'sticky top-0 z-30 hidden h-screen shrink-0 border-r border-border/80 transition-[width] duration-200 lg:block',
+          isCollapsed ? 'w-[72px]' : 'w-60 xl:w-64'
         )}
       >
-        {renderSidebarContent(isCollapsed)}
+        {content(isCollapsed)}
       </aside>
-
-      {/* 2. 모바일/태블릿 드로어 (Slide-over Sheet) - 항상 완전히 펼쳐진(collapsed: false) 상태로 렌더링 */}
-      {isMobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          {/* 어두운 배경 오버레이 */}
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
-            onClick={onCloseMobile}
-          />
-
-          {/* 슬라이드인 사이드바 패널 */}
-          <div className="fixed inset-y-0 left-0 w-4/5 max-w-xs shadow-2xl bg-card border-r border-border animate-in slide-in-from-left duration-300">
-            {renderSidebarContent(false)}
-          </div>
-        </div>
-      )}
+      {isMobileOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div
+              className="absolute inset-0 bg-foreground/30 backdrop-blur-sm"
+              onClick={onCloseMobile}
+              aria-hidden="true"
+            />
+            <div
+              ref={drawerRef}
+              tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
+              aria-label="학습 메뉴"
+              className="fixed inset-y-0 left-0 w-[min(85vw,300px)] shadow-2xl"
+            >
+              {content(false)}
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   );
 };

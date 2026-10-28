@@ -325,6 +325,7 @@ export const useStudySession = ({
   // 키보드 단축키 이벤트 핸들러
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing) return;
       // 모달이 열려있는 동안에는 모달 외 단축키 동작 차단 (Esc는 해당 모달 닫기)
       if (isFinishModalOpen) {
         if (e.key === 'Escape') {
@@ -352,11 +353,14 @@ export const useStudySession = ({
 
       // input이나 textarea 포커스 중에는 단축키 무시
       if (
-        ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) ||
         (e.target as HTMLElement)?.isContentEditable
       ) {
         return;
       }
+
+      // Let focused controls keep their native Enter/Space activation.
+      if ((e.key === 'Enter' || e.key === ' ') && (e.target as HTMLElement)?.closest('button, a, [role="button"]')) return;
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();

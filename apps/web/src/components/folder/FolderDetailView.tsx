@@ -125,6 +125,8 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
       {/* 상단 Sticky 메뉴바 */}
       <StickyActionBar
         onBack={onBack}
+        iconOnlyBack
+        backTitle="학습 홈으로 돌아가기"
         right={
           <>
             <Button
@@ -142,6 +144,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
               variant="outline"
               size="sm"
               onClick={() => setShowEditModal(true)}
+              aria-label="폴더 수정"
               leftIcon={<Edit3 className="w-3.5 h-3.5" />}
             >
               <span className="hidden sm:inline">폴더 수정</span>
@@ -151,6 +154,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
               variant="ghost"
               size="sm"
               onClick={() => setShowDeleteConfirm(true)}
+              aria-label="폴더 삭제"
               leftIcon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
@@ -161,7 +165,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
       />
 
       {/* 본문 콘텐츠 컨테이너 */}
-      <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-6">
+      <div className="page-container space-y-6">
 
       {/* 폴더 메인 헤더 Card */}
       <Card className="p-6 sm:p-8">
@@ -218,8 +222,8 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
               >
                 <option value="name-asc">이름순</option>
                 <option value="name-desc">이름역순</option>
-                <option value="date-desc">날짜 최신순</option>
-                <option value="date-asc">날짜 최신역순</option>
+                <option value="date-desc">최근 수정순</option>
+                <option value="date-asc">오래된 수정순</option>
               </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             </div>

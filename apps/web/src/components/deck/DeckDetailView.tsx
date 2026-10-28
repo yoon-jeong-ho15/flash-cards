@@ -10,6 +10,8 @@ import { ProgressBar } from '../common/ProgressBar';
 import { EmptyState } from '../common/EmptyState';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { StickyActionBar } from '../common/StickyActionBar';
+import { ActionMenu } from '../common/ActionMenu';
+import { richTextToText } from '../../utils/search';
 import {
   Play,
   Edit3,
@@ -73,11 +75,11 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
       result = result.filter((c) => !c.learned);
     }
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.trim().toLowerCase();
       result = result.filter(
         (c) =>
-          c.termRichText?.toLowerCase().includes(q) ||
-          c.definitionRichText?.toLowerCase().includes(q)
+          richTextToText(c.termRichText).toLowerCase().includes(q) ||
+          richTextToText(c.definitionRichText).toLowerCase().includes(q)
       );
     }
     return result;
@@ -118,6 +120,8 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
       {/* 상단 Sticky 메뉴바 */}
       <StickyActionBar
         onBack={handleBack}
+        iconOnlyBack
+        backTitle="보관함으로 돌아가기"
         right={
           <>
             <Button
@@ -129,7 +133,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
               className="font-semibold shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all px-2.5 sm:px-3"
               title="학습 시작"
             >
-              <span className="hidden sm:inline">학습 시작</span>
+              <span>학습 시작</span>
             </Button>
 
             <Button
@@ -148,38 +152,25 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
               variant="outline"
               size="sm"
               onClick={() => onEditDeck(deck.id)}
+              aria-label="덱 편집"
               leftIcon={<Edit3 className="w-3.5 h-3.5" />}
             >
               <span className="hidden sm:inline">편집</span>
             </Button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowResetConfirm(true)}
-              leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-            >
-              <span className="hidden sm:inline">진행도 초기화</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-              leftIcon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            >
-              <span className="hidden sm:inline">삭제</span>
-            </Button>
+            <ActionMenu label="덱 추가 작업" actions={[
+              { label: '진행도 초기화', icon: <RotateCcw className="h-3.5 w-3.5" />, onSelect: () => setShowResetConfirm(true) },
+              { label: '덱 삭제', icon: <Trash2 className="h-3.5 w-3.5" />, onSelect: () => setShowDeleteConfirm(true), destructive: true },
+            ]} />
           </>
         }
       />
 
       {/* 본문 콘텐츠 컨테이너 (데스크탑: 좌측 Sticky 요약 + 우측 2열 그리드) */}
-      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6">
+      <div className="page-container">
         <div className="lg:flex lg:gap-8 lg:items-start">
           {/* 좌측 요약 Sticky 패널 (데스크탑 상시 고정) */}
-          <div className="lg:w-80 xl:w-96 shrink-0 lg:sticky lg:top-20 space-y-4 mb-6 lg:mb-0">
+          <div className="lg:w-64 xl:w-72 shrink-0 lg:sticky lg:top-40 space-y-4 mb-6 lg:mb-0">
             <Card className="p-5 sm:p-6 space-y-5">
               <div>
                 {folder && (
@@ -193,7 +184,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                   </button>
                 )}
 
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-tight">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground leading-tight break-words">
                   {deck.title}
                 </h1>
 
@@ -275,6 +266,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setCardFilter('all')}
+                      aria-pressed={cardFilter === 'all'}
                       className={cn(
                         'py-1 text-xs font-medium rounded-md transition-colors text-center cursor-pointer truncate px-1',
                         cardFilter === 'all'
@@ -287,6 +279,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setCardFilter('unlearned')}
+                      aria-pressed={cardFilter === 'unlearned'}
                       className={cn(
                         'py-1 text-xs font-medium rounded-md transition-colors text-center cursor-pointer truncate px-1',
                         cardFilter === 'unlearned'
@@ -299,6 +292,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     <button
                       type="button"
                       onClick={() => setCardFilter('learned')}
+                      aria-pressed={cardFilter === 'learned'}
                       className={cn(
                         'py-1 text-xs font-medium rounded-md transition-colors text-center cursor-pointer truncate px-1',
                         cardFilter === 'learned'
@@ -337,8 +331,9 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="카드 내용 검색..."
+                    aria-label="카드 내용 검색"
                     leftIcon={<Search className="w-3.5 h-3.5 text-muted-foreground" />}
-                    className="h-8 text-xs"
+                    className="h-10"
                   />
                 </div>
 

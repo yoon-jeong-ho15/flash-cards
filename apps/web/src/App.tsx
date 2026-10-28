@@ -11,19 +11,27 @@ import { FolderModal } from './components/folder/FolderModal';
 import { DeckDetailView } from './components/deck/DeckDetailView';
 import { AllFoldersView } from './components/folder/AllFoldersView';
 import { AllDecksView } from './components/deck/AllDecksView';
+import { MotionConfig } from 'motion/react';
 
-const DeckEditor = lazy(() => import('./components/deck/DeckEditor').then(module => ({ default: module.DeckEditor })));
-const StudyView = lazy(() => import('./components/study/StudyView').then(module => ({ default: module.StudyView })));
+const DeckEditor = lazy(() =>
+  import('./components/deck/DeckEditor').then((module) => ({ default: module.DeckEditor }))
+);
+const StudyView = lazy(() =>
+  import('./components/study/StudyView').then((module) => ({ default: module.StudyView }))
+);
 
 export const App: React.FC = () => {
-  const initCloudSync = useFlashcardStore(state => state.initCloudSync);
-  const setSyncStatus = useFlashcardStore(state => state.setSyncStatus);
-  const setUser = useFlashcardStore(state => state.setUser);
-  const user = useFlashcardStore(state => state.user);
+  const initCloudSync = useFlashcardStore((state) => state.initCloudSync);
+  const setSyncStatus = useFlashcardStore((state) => state.setSyncStatus);
+  const setUser = useFlashcardStore((state) => state.setUser);
+  const user = useFlashcardStore((state) => state.user);
 
   // Firebase Auth 인증 상태 감지 및 자동 동기화
   useEffect(() => {
-    if (!auth) { setUser(null); return; }
+    if (!auth) {
+      setUser(null);
+      return;
+    }
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
@@ -137,132 +145,156 @@ export const App: React.FC = () => {
   const showSidebar = currentView.type !== 'study';
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex font-sans">
-      {/* 1. 글로벌 좌측 접이식 사이드바 */}
-      {showSidebar && (
-        <Sidebar
-          currentView={currentView}
-          isCollapsed={isSidebarCollapsed}
-          isMobileOpen={isMobileSidebarOpen}
-          onToggleCollapse={toggleSidebar}
-          onCloseMobile={() => setIsMobileSidebarOpen(false)}
-          onNavigateHome={navigateHome}
-          onNavigateAllFolders={navigateAllFolders}
-          onNavigateAllDecks={navigateAllDecks}
-          onNavigateFolder={navigateFolder}
-          onNavigateDeck={navigateDeck}
-          onCreateDeck={() => navigateEditDeck()}
-          onCreateFolder={openNewFolderModal}
-        />
-      )}
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-screen bg-background text-foreground flex font-sans">
+        <a href="#main-content" className="skip-link">
+          본문으로 바로가기
+        </a>
+        {/* 1. 글로벌 좌측 접이식 사이드바 */}
+        {showSidebar && (
+          <Sidebar
+            currentView={currentView}
+            isCollapsed={isSidebarCollapsed}
+            isMobileOpen={isMobileSidebarOpen}
+            onToggleCollapse={toggleSidebar}
+            onCloseMobile={() => setIsMobileSidebarOpen(false)}
+            onNavigateHome={navigateHome}
+            onNavigateAllFolders={navigateAllFolders}
+            onNavigateAllDecks={navigateAllDecks}
+            onNavigateFolder={navigateFolder}
+            onNavigateDeck={navigateDeck}
+            onCreateDeck={() => navigateEditDeck()}
+            onCreateFolder={openNewFolderModal}
+          />
+        )}
 
-      {/* 2. 메인 화면 영역 (Navbar + 콘텐츠) */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <Navbar
-          currentView={currentView}
-          isSidebarCollapsed={isSidebarCollapsed}
-          onToggleSidebar={toggleSidebar}
-          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-          onNavigateHome={navigateHome}
-          onNavigateFolder={navigateFolder}
-          onNavigateDeck={navigateDeck}
-        />
+        {/* 2. 메인 화면 영역 (Navbar + 콘텐츠) */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <Navbar
+            currentView={currentView}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+            onNavigateHome={navigateHome}
+            onNavigateFolder={navigateFolder}
+            onNavigateDeck={navigateDeck}
+          />
 
-        {/* 메인 뷰 컨테이너 */}
-        <Suspense fallback={<div role="status" className="p-6">화면을 불러오는 중…</div>}>
-        <main key={user?.uid || 'guest'} className="flex-1 pb-16">
-          {currentView.type === 'dashboard' && (
-            <DashboardView
-              lastStudiedDeckId={lastStudiedDeckId}
-              onNavigateDeck={navigateDeck}
-              onNavigateAllDecks={navigateAllDecks}
-              onStartStudy={(deckId) => navigateStudy(deckId)}
-              onCreateDeck={() => navigateEditDeck()}
-              onCreateFolder={openNewFolderModal}
+          {/* 메인 뷰 컨테이너 */}
+          <main
+            id="main-content"
+            tabIndex={-1}
+            key={user?.uid || 'guest'}
+            className="flex-1 pb-8 outline-none"
+          >
+            <Suspense
+              fallback={
+                <div role="status" className="page-container space-y-5">
+                  <span className="sr-only">화면을 불러오는 중…</span>
+                  <div className="h-9 w-48 animate-pulse rounded-lg bg-muted" />
+                  <div className="h-64 animate-pulse rounded-3xl bg-muted" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="h-36 animate-pulse rounded-2xl bg-muted" />
+                    <div className="h-36 animate-pulse rounded-2xl bg-muted" />
+                  </div>
+                </div>
+              }
+            >
+              {currentView.type === 'dashboard' && (
+                <DashboardView
+                  lastStudiedDeckId={lastStudiedDeckId}
+                  onNavigateDeck={navigateDeck}
+                  onNavigateAllDecks={navigateAllDecks}
+                  onStartStudy={(deckId) => navigateStudy(deckId)}
+                  onCreateDeck={() => navigateEditDeck()}
+                  onCreateFolder={openNewFolderModal}
+                />
+              )}
+
+              {currentView.type === 'all-folders' && (
+                <AllFoldersView
+                  onNavigateFolder={navigateFolder}
+                  onCreateFolder={openNewFolderModal}
+                  onBack={navigateHome}
+                />
+              )}
+
+              {currentView.type === 'all-decks' && (
+                <AllDecksView
+                  onNavigateDeck={navigateDeck}
+                  onStartStudy={(deckId) => navigateStudy(deckId)}
+                  onCreateDeck={() => navigateEditDeck()}
+                  onBack={navigateHome}
+                />
+              )}
+
+              {currentView.type === 'folder' && (
+                <FolderDetailView
+                  folderId={currentView.folderId}
+                  onNavigateDeck={navigateDeck}
+                  onStartStudy={(deckId) => navigateStudy(deckId)}
+                  onCreateDeckInFolder={(folderId) => navigateEditDeck(undefined, folderId)}
+                  onBack={navigateHome}
+                />
+              )}
+
+              {currentView.type === 'deck' && (
+                <DeckDetailView
+                  deckId={currentView.deckId}
+                  onStartStudy={(deckId, shuffle) => navigateStudy(deckId, false, shuffle)}
+                  onEditDeck={(deckId, focusCardId) =>
+                    navigateEditDeck(deckId, undefined, focusCardId)
+                  }
+                  onNavigateFolder={navigateFolder}
+                  onBack={navigateHome}
+                />
+              )}
+
+              {currentView.type === 'edit-deck' && (
+                <DeckEditor
+                  key={`${user?.uid || 'guest'}:${currentView.deckId || 'new'}:${currentView.folderId || 'root'}`}
+                  deckId={currentView.deckId}
+                  initialFolderId={currentView.folderId}
+                  focusCardId={currentView.focusCardId}
+                  onClose={() => {
+                    if (currentView.deckId) {
+                      navigateDeck(currentView.deckId);
+                    } else if (currentView.folderId) {
+                      navigateFolder(currentView.folderId);
+                    } else {
+                      navigateHome();
+                    }
+                  }}
+                  onSaved={(savedDeckId) => navigateDeck(savedDeckId)}
+                />
+              )}
+
+              {currentView.type === 'study' && (
+                <StudyView
+                  deckId={currentView.deckId}
+                  onlyDifficult={currentView.onlyDifficult}
+                  shuffle={currentView.shuffle}
+                  onExit={() => navigateDeck(currentView.deckId)}
+                  onEditDeck={(deckId) => navigateEditDeck(deckId)}
+                />
+              )}
+            </Suspense>
+          </main>
+
+          {/* 글로벌 폴더 생성/수정 모달 */}
+          {folderModalState.isOpen && (
+            <FolderModal
+              folderId={folderModalState.folderId}
+              onClose={closeFolderModal}
+              onSaved={(newFolderId) => {
+                closeFolderModal();
+                navigateFolder(newFolderId);
+              }}
             />
           )}
-
-        {currentView.type === 'all-folders' && (
-          <AllFoldersView
-            onNavigateFolder={navigateFolder}
-            onCreateFolder={openNewFolderModal}
-            onBack={navigateHome}
-          />
-        )}
-
-        {currentView.type === 'all-decks' && (
-          <AllDecksView
-            onNavigateDeck={navigateDeck}
-            onStartStudy={(deckId) => navigateStudy(deckId)}
-            onCreateDeck={() => navigateEditDeck()}
-            onBack={navigateHome}
-          />
-        )}
-
-        {currentView.type === 'folder' && (
-          <FolderDetailView
-            folderId={currentView.folderId}
-            onNavigateDeck={navigateDeck}
-            onStartStudy={(deckId) => navigateStudy(deckId)}
-            onCreateDeckInFolder={(folderId) => navigateEditDeck(undefined, folderId)}
-            onBack={navigateHome}
-          />
-        )}
-
-        {currentView.type === 'deck' && (
-          <DeckDetailView
-            deckId={currentView.deckId}
-            onStartStudy={(deckId, shuffle) => navigateStudy(deckId, false, shuffle)}
-            onEditDeck={(deckId, focusCardId) => navigateEditDeck(deckId, undefined, focusCardId)}
-            onNavigateFolder={navigateFolder}
-            onBack={navigateHome}
-          />
-        )}
-
-        {currentView.type === 'edit-deck' && (
-          <DeckEditor
-            key={`${user?.uid || 'guest'}:${currentView.deckId || 'new'}:${currentView.folderId || 'root'}`}
-            deckId={currentView.deckId}
-            initialFolderId={currentView.folderId}
-            focusCardId={currentView.focusCardId}
-            onClose={() => {
-              if (currentView.deckId) {
-                navigateDeck(currentView.deckId);
-              } else if (currentView.folderId) {
-                navigateFolder(currentView.folderId);
-              } else {
-                navigateHome();
-              }
-            }}
-            onSaved={(savedDeckId) => navigateDeck(savedDeckId)}
-          />
-        )}
-
-        {currentView.type === 'study' && (
-          <StudyView
-            deckId={currentView.deckId}
-            onlyDifficult={currentView.onlyDifficult}
-            shuffle={currentView.shuffle}
-            onExit={() => navigateDeck(currentView.deckId)}
-            onEditDeck={(deckId) => navigateEditDeck(deckId)}
-          />
-        )}
-      </main>
-        </Suspense>
-
-      {/* 글로벌 폴더 생성/수정 모달 */}
-      {folderModalState.isOpen && (
-        <FolderModal
-          folderId={folderModalState.folderId}
-          onClose={closeFolderModal}
-          onSaved={(newFolderId) => {
-            closeFolderModal();
-            navigateFolder(newFolderId);
-          }}
-        />
-      )}
+        </div>
       </div>
-    </div>
+    </MotionConfig>
   );
 };
 

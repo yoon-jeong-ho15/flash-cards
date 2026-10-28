@@ -41,7 +41,7 @@ function createHarness(service = {}, storage = new Map(), overrides = {}) {
     return module.exports;
   }
   const store = load(path.join(root,'store/useFlashcardStore.ts')).useFlashcardStore;
-  return {store,storage,localStorage,navigator,load,root};
+  return {store,storage,localStorage,navigator,window,load,root};
 }
 const deferred = () => { let resolve; const promise = new Promise(r=>{resolve=r}); return {promise,resolve}; };
 const tick = () => new Promise(resolve=>setImmediate(resolve));
