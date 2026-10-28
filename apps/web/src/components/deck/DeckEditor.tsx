@@ -333,6 +333,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         {/* 하단 카드 추가 큰 버튼 */}
         <button
           type="button"
+          tabIndex={-1}
           onClick={handleAddCard}
           className="w-full py-4 rounded-xl border border-dashed border-border hover:border-primary/50 bg-card hover:bg-muted/30 text-primary font-semibold flex items-center justify-center gap-2 transition-all shadow-2xs text-sm cursor-pointer"
         >

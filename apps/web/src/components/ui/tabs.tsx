@@ -50,7 +50,7 @@ export interface TabsTriggerProps
 }
 
 export const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
-  ({ className, value, children, ...props }, ref) => {
+  ({ className, value, children, tabIndex = -1, ...props }, ref) => {
     const context = React.useContext(TabsContext);
     const isSelected = context?.value === value;
 
@@ -59,6 +59,7 @@ export const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>
         ref={ref}
         type="button"
         role="tab"
+        tabIndex={tabIndex}
         aria-selected={isSelected}
         onClick={() => context?.onValueChange(value)}
         className={cn(

@@ -185,6 +185,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                 {folder && (
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => onNavigateFolder(folder.id)}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors mb-2.5 cursor-pointer"
                   >
@@ -274,6 +275,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                   <div className="grid grid-cols-3 gap-1 p-1 bg-muted/60 rounded-lg">
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setCardFilter('all')}
                       aria-pressed={cardFilter === 'all'}
                       className={cn(
@@ -287,6 +289,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     </button>
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setCardFilter('unlearned')}
                       aria-pressed={cardFilter === 'unlearned'}
                       className={cn(
@@ -300,6 +303,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     </button>
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setCardFilter('learned')}
                       aria-pressed={cardFilter === 'learned'}
                       className={cn(

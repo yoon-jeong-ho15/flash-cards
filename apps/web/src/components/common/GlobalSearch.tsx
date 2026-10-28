@@ -73,6 +73,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
         {query && (
           <button
             type="button"
+            tabIndex={-1}
             onClick={() => setQuery('')}
             aria-label="검색어 지우기"
             className="absolute right-2 top-2 rounded-lg p-2 text-muted-foreground hover:bg-muted"
@@ -107,6 +108,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
           <button
             key={deck.id}
             type="button"
+            tabIndex={-1}
             onClick={() => navigate(() => onNavigateDeck(deck.id))}
             className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-secondary focus-visible:bg-secondary"
           >
@@ -131,6 +133,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
           <button
             key={folder.id}
             type="button"
+            tabIndex={-1}
             onClick={() => navigate(() => onNavigateFolder(folder.id))}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-secondary"
           >
