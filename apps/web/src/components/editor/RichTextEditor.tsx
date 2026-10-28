@@ -294,7 +294,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }) => (
     <button
       type="button"
-      tabIndex={title === '굵게 (Ctrl+B)' ? 0 : -1}
+      tabIndex={-1}
       aria-label={title}
       aria-pressed={isActive}
       onClick={(e) => {
@@ -349,8 +349,6 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         if (index < 0) return;
         event.preventDefault();
         const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
-        buttons[index].tabIndex = -1;
-        buttons[nextIndex].tabIndex = 0;
         buttons[nextIndex].focus();
       }} className="flex items-center justify-between px-2 py-1.5 bg-muted/40 border-b border-border select-none overflow-x-auto gap-2">
         <div className="flex items-center gap-1 shrink-0">
@@ -453,6 +451,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <span>{uploadError}</span>
           <button
             type="button"
+            tabIndex={-1}
             onClick={() => setUploadError(null)}
             className="text-muted-foreground hover:text-foreground text-[10px] ml-2 cursor-pointer"
           >

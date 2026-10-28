@@ -149,6 +149,7 @@ const DeckEditorOutlineItem: React.FC<DeckEditorOutlineItemProps> = React.memo((
       {canRemove && (
         <button
           type="button"
+          tabIndex={-1}
           onClick={(e) => {
             e.stopPropagation();
             onRemoveCard(index);
@@ -213,6 +214,7 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(({
             <br />
             <button
               type="button"
+              tabIndex={-1}
               onClick={onAddCard}
               className="text-primary hover:underline font-semibold mt-1 inline-block cursor-pointer"
             >
@@ -254,6 +256,7 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(({
       <div className="pt-2 border-t border-border/70 shrink-0">
         <button
           type="button"
+          tabIndex={-1}
           onClick={onAddCard}
           className="w-full py-2 rounded-lg border border-dashed border-border hover:border-primary/50 text-xs font-semibold text-primary hover:bg-primary/5 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >

@@ -53,6 +53,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       children,
       disabled,
       type = 'button',
+      tabIndex = -1,
       ...props
     },
     ref
@@ -61,6 +62,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         type={type}
+        tabIndex={tabIndex}
         className={buttonVariants({ variant, size, className })}
         disabled={disabled || isLoading}
         {...props}

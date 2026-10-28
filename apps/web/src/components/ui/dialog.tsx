@@ -73,6 +73,7 @@ export const DialogContent = React.forwardRef<
       {showClose && onClose && (
         <button
           type="button"
+          tabIndex={-1}
           onClick={onClose}
           className="absolute right-4 top-4 rounded-md p-1 text-muted-foreground transition-opacity hover:opacity-100 hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
           aria-label="닫기"

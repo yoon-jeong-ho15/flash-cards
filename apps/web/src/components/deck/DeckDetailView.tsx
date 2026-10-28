@@ -85,6 +85,15 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
     return result;
   }, [deckCards, cardFilter, searchQuery]);
 
+  // 원본 덱 내에서의 카드 순번(0-based 인덱스) 매핑 (검색/필터 시에도 원래 번호 유지)
+  const cardIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    deckCards.forEach((c, index) => {
+      map.set(c.id, index);
+    });
+    return map;
+  }, [deckCards]);
+
   if (!deck) {
     return (
       <div className="max-w-xl mx-auto py-16 text-center">
@@ -176,6 +185,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                 {folder && (
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => onNavigateFolder(folder.id)}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors mb-2.5 cursor-pointer"
                   >
@@ -265,6 +275,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                   <div className="grid grid-cols-3 gap-1 p-1 bg-muted/60 rounded-lg">
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setCardFilter('all')}
                       aria-pressed={cardFilter === 'all'}
                       className={cn(
@@ -278,6 +289,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     </button>
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setCardFilter('unlearned')}
                       aria-pressed={cardFilter === 'unlearned'}
                       className={cn(
@@ -291,6 +303,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                     </button>
                     <button
                       type="button"
+                      tabIndex={-1}
                       onClick={() => setCardFilter('learned')}
                       aria-pressed={cardFilter === 'learned'}
                       className={cn(
@@ -385,7 +398,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
                   <DeckCardPreviewItem
                     key={card.id}
                     card={card}
-                    index={index}
+                    index={cardIndexMap.get(card.id) ?? index}
                     onEdit={(cardId) => onEditDeck(deck.id, cardId)}
                   />
                 ))}
