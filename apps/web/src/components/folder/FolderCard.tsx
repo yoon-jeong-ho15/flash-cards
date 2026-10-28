@@ -16,7 +16,7 @@ export const FolderCard: React.FC<FolderCardProps> = memo(({
 }) => {
   return (
     <Card className="group overflow-hidden hover:border-primary/40 hover:shadow-md transition-all">
-    <button type="button" tabIndex={-1} onClick={onClick} aria-label={`${folder.title} 폴더 열기`} className="flex h-full w-full flex-col justify-between p-5 text-left">
+    <button type="button" onClick={onClick} aria-label={`${folder.title} 폴더 열기`} className="flex h-full w-full flex-col justify-between p-5 text-left">
       <div className="flex items-start gap-3.5 mb-3">
         <div className="w-11 h-11 rounded-xl bg-[#f5eddb] text-[#947031] flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
           <FolderIcon className="w-5 h-5" />

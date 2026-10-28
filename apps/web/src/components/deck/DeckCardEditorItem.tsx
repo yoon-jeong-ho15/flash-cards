@@ -132,6 +132,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onMoveUp(index)}
             disabled={index === 0}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -143,6 +144,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onMoveDown(index)}
             disabled={index === totalCards - 1}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -154,6 +156,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onDuplicate(index)}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
             title="카드 복제"
@@ -164,6 +167,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
+            tabIndex={-1}
             onClick={() => onRemove(index)}
             disabled={totalCards <= 1}
             className="h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"

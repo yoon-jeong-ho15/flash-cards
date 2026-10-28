@@ -71,20 +71,6 @@ export const App: React.FC = () => {
     };
   }, [initCloudSync, setSyncStatus, user]);
 
-  // 입력창을 제외한 모든 버튼의 tabIndex를 -1로 유지 (키보드 Tab 네비게이션 시 입력창만 순회)
-  useEffect(() => {
-    if (typeof document === 'undefined' || !document.querySelectorAll) return;
-    const applyButtonTabIndex = () => {
-      document.querySelectorAll('button:not([tabindex="-1"])').forEach((btn) => {
-        btn.setAttribute('tabindex', '-1');
-      });
-    };
-    applyButtonTabIndex();
-    const observer = new MutationObserver(applyButtonTabIndex);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
-
   const [currentView, setCurrentView] = useState<ViewMode>({ type: 'dashboard' });
   const [lastStudiedDeckId, setLastStudiedDeckId] = useState<string | null>(() => {
     try {

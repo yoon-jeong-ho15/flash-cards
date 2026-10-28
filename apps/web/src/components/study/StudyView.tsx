@@ -312,7 +312,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
           {/* 1. 이전 카드 버튼 (왼쪽 화살표) */}
           <button
             type="button"
-            tabIndex={-1}
             onClick={handlePrevious}
             disabled={!canGoPrevious}
             className={cn(
@@ -345,7 +344,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
           {/* 2. 알아요 토글 버튼 (Enter) */}
           <button
             type="button"
-            tabIndex={-1}
             onClick={handleToggleKnow}
             className={cn(
               'flex-1 group flex items-center justify-center gap-2.5 sm:gap-3 py-3.5 px-3 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
@@ -397,7 +395,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
           {/* 3. 다음 카드 버튼 (오른쪽 화살표) */}
           <button
             type="button"
-            tabIndex={-1}
             onClick={handleNext}
             className={cn(
               'flex-1 group flex items-center justify-center gap-2.5 sm:gap-3 py-3.5 px-3 sm:px-4 rounded-xl border transition-all font-semibold shadow-2xs cursor-pointer select-none',
