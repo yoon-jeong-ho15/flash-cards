@@ -132,7 +132,6 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onMoveUp(index)}
             disabled={index === 0}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -144,7 +143,6 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onMoveDown(index)}
             disabled={index === totalCards - 1}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
@@ -156,7 +154,6 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onDuplicate(index)}
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
             title="카드 복제"
@@ -167,7 +164,6 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
           <Button
             variant="ghost"
             size="icon"
-            tabIndex={-1}
             onClick={() => onRemove(index)}
             disabled={totalCards <= 1}
             className="h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"
@@ -187,6 +183,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             <Badge variant="secondary" className="text-[10px] font-medium py-0">단어</Badge>
           </div>
           <RichTextEditor
+            ariaLabel={`카드 ${index + 1} 앞면`}
             value={card.termRichText}
             onChange={(html) => onUpdate(index, 'termRichText', html)}
             placeholder="단어, 질문 또는 핵심 키워드를 입력하세요..."
@@ -202,6 +199,7 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
             <Badge variant="warning" className="text-[10px] font-medium py-0">정의</Badge>
           </div>
           <RichTextEditor
+            ariaLabel={`카드 ${index + 1} 뒷면`}
             value={card.definitionRichText}
             onChange={(html) => onUpdate(index, 'definitionRichText', html)}
             placeholder="상세 설명, 해설, 예시 코드를 입력하세요..."

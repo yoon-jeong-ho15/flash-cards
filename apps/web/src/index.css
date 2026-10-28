@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 40 25% 97%;
+    --foreground: 170 19% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 170 19% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 243 75% 59%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --popover-foreground: 170 19% 15%;
+    --primary: 167 47% 28%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 155 24% 93%;
+    --secondary-foreground: 167 40% 25%;
+    --muted: 40 16% 94%;
+    --muted-foreground: 160 6% 43%;
+    --accent: 155 24% 93%;
+    --accent-foreground: 167 40% 25%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 243 75% 59%;
-    --radius: 0.75rem;
+    --border: 40 13% 88%;
+    --input: 40 13% 85%;
+    --ring: 167 47% 28%;
+    --radius: 0.875rem;
   }
 
   * {
@@ -38,6 +38,55 @@
     @apply bg-background text-foreground antialiased selection:bg-primary/15 selection:text-primary;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     min-height: 100vh;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 4px;
+  }
+
+  button, input, textarea, select, a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input, textarea, select {
+    scroll-margin-top: 10rem;
+  }
+}
+
+@layer components {
+  .page-container {
+    @apply mx-auto w-full max-w-6xl px-5 py-7 sm:px-8 sm:py-10 lg:px-10;
+  }
+
+  .section-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
+  }
+
+  .study-hero {
+    background: #e8eee5;
+    background-image: radial-gradient(ellipse at 95% 0%, #f5edcf 0%, transparent 58%);
+  }
+
+  .deck-illustration {
+    @apply pointer-events-none relative h-44 w-44 shrink-0;
+  }
+
+  .deck-illustration > div {
+    @apply absolute flex h-36 w-28 flex-col justify-between rounded-2xl border p-4 shadow-sm;
+  }
+
+  .skip-link {
+    @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-lg bg-primary px-4 py-3 text-sm text-white focus:translate-y-0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -144,7 +193,7 @@
 
 .rich-content blockquote,
 .ProseMirror blockquote {
-  border-left: 3px solid #6366f1;
+  border-left: 3px solid hsl(var(--primary));
   padding-left: 0.75rem;
   font-style: italic;
   color: #475569;
@@ -152,6 +201,11 @@
 }
 
 /* Custom modern sleek scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -165,4 +219,13 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Hide scrollbar while preserving scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

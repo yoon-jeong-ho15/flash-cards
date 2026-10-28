@@ -1,4 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage, isFirebaseConfigured } from '../lib/firebase';
 
 /**
@@ -19,7 +19,7 @@ export function fileToBase64(file: File): Promise<string> {
  */
 export async function uploadCardImage(file: File, userId?: string): Promise<string> {
   // 1. Firebase 미구성 환경 감지 시 로컬 WebP Base64로 즉시 반환 (무한 대기 방지)
-  if (!storage || !isFirebaseConfigured) {
+  if (!storage || !isFirebaseConfigured || !userId || !navigator.onLine) {
     console.info('[Storage] Firebase 미설정 환경 감지: 최적화된 로컬 Base64 이미지로 즉시 변환합니다.');
     return await fileToBase64(file);
   }
@@ -32,25 +32,26 @@ export async function uploadCardImage(file: File, userId?: string): Promise<stri
 
   const storageRef = ref(storage, filePath);
 
+  const task = uploadBytesResumable(storageRef, file, {
+    contentType: file.type || 'image/webp', cacheControl: 'public, max-age=31536000',
+  });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    // 5초 타임아웃 프로미스 레이스
-    const uploadTask = (async () => {
-      const snapshot = await uploadBytes(storageRef, file, {
-        contentType: file.type || 'image/webp',
-        cacheControl: 'public, max-age=31536000', // 1년 캐시
-      });
-      return await getDownloadURL(snapshot.ref);
-    })();
-
-    const timeoutTask = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('스토리지 업로드 타임아웃 (네트워크 지연)')), 6000)
-    );
-
-    return await Promise.race([uploadTask, timeoutTask]);
-  } catch (error: any) {
-    console.warn('[Storage] Firebase 업로드 실패 또는 시간 초과, 로컬 이미지로 안전하게 대체합니다:', error?.message || error);
-    // 업로드 실패 시 에러로 에디터를 멈추지 않고 Base64로 즉시 표시
-    return await fileToBase64(file);
+    return await Promise.race([
+      (async () => getDownloadURL((await task).ref))(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          task.cancel();
+          reject(new Error('이미지 업로드 시간 초과'));
+        }, 6000);
+      }),
+    ]);
+  } catch (error) {
+    task.cancel();
+    console.warn('[Storage] 업로드 실패: 로컬 이미지로 보관합니다.', error);
+    return fileToBase64(file);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
@@ -63,49 +64,8 @@ export function isFirebaseStorageUrl(url: string): boolean {
   return url.includes('firebasestorage.googleapis.com') || url.includes('/v0/b/');
 }
 
-/**
- * Firebase Storage 다운로드 URL을 받아 해당 파일을 스토리지에서 영구 삭제합니다.
- * 외부 URL이나 base64 데이터, 이미 삭제된 파일은 안전하게 무시합니다.
- */
-export async function deleteImageByUrl(downloadUrl: string): Promise<void> {
-  if (!storage || !isFirebaseConfigured || !downloadUrl) {
-    return;
-  }
-
-  // Firebase Storage에 업로드된 URL인 경우에만 삭제 시도
-  if (!isFirebaseStorageUrl(downloadUrl)) {
-    return;
-  }
-
-  try {
-    const { deleteObject } = await import('firebase/storage');
-    const storageRef = ref(storage, downloadUrl);
-    await deleteObject(storageRef);
-    console.log('[Storage] 이미지 삭제 성공:', downloadUrl);
-  } catch (error: any) {
-    // 이미 삭제되었거나 없는 파일(object-not-found)은 에러로 중단되지 않게 경고만 기록
-    if (error?.code === 'storage/object-not-found') {
-      console.warn('[Storage] 이미 삭제되었거나 존재하지 않는 이미지입니다:', downloadUrl);
-      return;
-    }
-    console.warn('[Storage] 이미지 삭제 중 경고 발생:', error?.message || error);
-  }
-}
-
-/**
- * 여러 개의 이미지 URL을 받아 Firebase Storage에서 일괄 삭제합니다.
- */
-export async function deleteImagesByUrls(urls: (string | undefined | null)[]): Promise<void> {
-  const validUrls = Array.from(
-    new Set(
-      urls.filter((url): url is string => Boolean(url && isFirebaseStorageUrl(url)))
-    )
-  );
-
-  if (validUrls.length === 0) return;
-
-  await Promise.allSettled(validUrls.map((url) => deleteImageByUrl(url)));
-}
+// Files can be shared by duplicated cards and drafts on other devices. The web client
+// intentionally retains detached assets. Permanent cleanup requires server-side reference checks.
 
 /**
  * HTML 문자열에서 모든 <img src="..."> URL을 추출합니다.

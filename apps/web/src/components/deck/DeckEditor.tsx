@@ -40,6 +40,8 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
 }) => {
   const {
     folders,
+    hasExternalChanges,
+    reloadOriginal,
     title,
     setTitle,
     description,
@@ -190,7 +192,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
       />
 
       {/* 본문 콘텐츠 컨테이너 (데스크탑: 좌측 목차 + 우측 폼 2열 배치) */}
-      <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6">
+      <div className="page-container">
         <div className="lg:flex lg:gap-8 lg:items-start">
           {/* 좌측 카드 목차 사이드바 (데스크탑 고정 사이드바) */}
           <div className="hidden lg:block shrink-0 sticky top-[8.75rem] self-start z-20">
@@ -218,8 +220,12 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
       {/* 덱 메타데이터 설정 (제목, 설명, 폴더) */}
       <Card className="p-5 sm:p-6 space-y-4">
         <div>
-          <Label required>덱 제목</Label>
+          <Label htmlFor="deck-title" required>덱 제목</Label>
           <Input
+            id="deck-title"
+            aria-required="true"
+            aria-invalid={Boolean(errors.title)}
+            aria-describedby={errors.title ? 'deck-title-error' : undefined}
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -230,14 +236,15 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             autoFocus={!focusCardId && !deckId}
           />
           {errors.title && (
-            <p className="mt-1 text-xs text-destructive font-medium">{errors.title}</p>
+            <p id="deck-title-error" role="alert" className="mt-1 text-xs text-destructive font-medium">{errors.title}</p>
           )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <Label>설명 (선택)</Label>
+            <Label htmlFor="deck-description">설명 (선택)</Label>
             <Input
+              id="deck-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="덱에 대한 간단한 설명을 입력하세요"
@@ -245,16 +252,17 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
           </div>
 
           <div>
-            <Label className="flex items-center gap-1.5">
+            <Label htmlFor="deck-folder" className="flex items-center gap-1.5">
               <FolderIcon className="w-3.5 h-3.5 text-muted-foreground" />
               소속 폴더 (선택)
             </Label>
             <select
+              id="deck-folder"
               value={selectedFolderId || ''}
               onChange={(e) => setSelectedFolderId(e.target.value ? e.target.value : null)}
-              className="w-full h-9 rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground"
+              className="w-full h-11 rounded-xl border border-input bg-card px-3 py-2 text-base sm:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground"
             >
-              <option value="">미분류 (루트 대시보드)</option>
+              <option value="">미분류</option>
               {folders.map((f) => (
                 <option key={f.id} value={f.id}>
                   📁 {f.title}
@@ -284,6 +292,15 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             <span>카드 추가</span>
           </Button>
         </div>
+
+        {hasExternalChanges && (
+          <div role="status" className="p-3 mb-4 rounded-lg bg-amber-50 text-amber-900 text-sm">
+            다른 곳에서 덱이 변경되었습니다. 작성 중인 내용은 유지됩니다. 저장하면 현재 편집 내용이 반영됩니다.
+            <Button type="button" variant="outline" size="sm" className="ml-2" onClick={() => {
+              if (window.confirm('작성 중인 내용을 버리고 최신 저장 내용을 불러올까요?')) reloadOriginal();
+            }}>최신 내용 불러오기</Button>
+          </div>
+        )}
 
         <Reorder.Group
           axis="y"

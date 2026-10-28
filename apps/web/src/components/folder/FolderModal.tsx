@@ -17,7 +17,9 @@ export const FolderModal: React.FC<FolderModalProps> = ({
   onClose,
   onSaved,
 }) => {
-  const { folders, addFolder, updateFolder } = useFlashcardStore();
+  const folders = useFlashcardStore(state => state.folders);
+  const addFolder = useFlashcardStore(state => state.addFolder);
+  const updateFolder = useFlashcardStore(state => state.updateFolder);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -62,8 +64,12 @@ export const FolderModal: React.FC<FolderModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Label required>폴더 이름</Label>
+          <Label htmlFor="folder-title" required>폴더 이름</Label>
           <Input
+            id="folder-title"
+            required
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'folder-title-error' : undefined}
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -73,12 +79,13 @@ export const FolderModal: React.FC<FolderModalProps> = ({
             autoFocus
             error={error || undefined}
           />
-          {error && <p className="mt-1 text-xs text-destructive font-medium">{error}</p>}
+          {error && <p id="folder-title-error" role="alert" className="mt-1 text-xs text-destructive font-medium">{error}</p>}
         </div>
 
         <div>
-          <Label>설명 (선택)</Label>
+          <Label htmlFor="folder-description">설명 (선택)</Label>
           <Input
+            id="folder-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="폴더에 대한 간단한 설명"

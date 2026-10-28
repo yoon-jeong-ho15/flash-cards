@@ -9,8 +9,10 @@ import {
   where,
   WriteBatch,
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../lib/firebase';
+import { db, auth, isFirebaseConfigured } from '../lib/firebase';
 import { Card, Deck, Folder } from '../types';
+import { AccountData, PendingSync } from '../store/types';
+import { collections } from '../store/syncQueue';
 
 /**
  * Firestore의 WriteBatch 500개 제한을 안전하게 처리하기 위한 청크 커밋 헬퍼
@@ -43,6 +45,35 @@ export function sortCardsByOrder(cards: Card[]): Card[] {
 }
 
 export const flashcardService = {
+  async commitChanges(snapshot: AccountData & { pendingSync: PendingSync }, userId: string,
+    isActive: () => boolean): Promise<void> {
+    if (!db || !isFirebaseConfigured) throw new Error('Firebase is unavailable');
+    const operations: Array<(batch: WriteBatch) => void> = [];
+    const names = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
+    for (const [kind, upserts, deletes] of collections) {
+      for (const id of snapshot.pendingSync[deletes]) {
+        operations.push(batch => batch.delete(doc(db!, names[kind], id)));
+      }
+      const ids = new Set(snapshot.pendingSync[upserts]);
+      for (const item of snapshot[kind]) {
+        if (!ids.has(item.id)) continue;
+        const data: Record<string, unknown> = { ...item, userId };
+        // Explicit nulls clear optional fields in merge writes.
+        for (const key of kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) {
+          data[key] ??= null;
+        }
+        for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
+        operations.push(batch => batch.set(doc(db!, names[kind], item.id), data, { merge: true }));
+      }
+    }
+    for (let i = 0; i < operations.length; i += 400) {
+      if (!isActive() || auth?.currentUser?.uid !== userId) throw new Error('Authentication session changed');
+      const batch = writeBatch(db);
+      operations.slice(i, i + 400).forEach(operation => operation(batch));
+      await batch.commit();
+    }
+  },
+
   /**
    * Firebase Firestore로부터 현재 사용자의 모든 폴더, 덱, 카드 데이터를 조회합니다.
    */
@@ -113,16 +144,6 @@ export const flashcardService = {
         }
       });
 
-      // 2. 삭제된 덱에 속했던 고아(유령) 카드가 있다면 백그라운드에서 Firestore 영구 삭제
-      if (orphanCardIds.length > 0) {
-        console.log(
-          `[flashcardService] 삭제된 덱의 유령(고아) 카드 ${orphanCardIds.length}장 감지. Firestore 영구 정리 실행`
-        );
-        flashcardService.batchDeleteCards(orphanCardIds).catch((err) => {
-          console.warn('[flashcardService] 고아 카드 영구 정리 실패:', err);
-        });
-      }
-
       // 3. 유효 덱의 카드들만 덱별로 묶어서 정렬하고, order가 없는 카드는 index를 부여
       const cardsByDeck = new Map<string, Card[]>();
       validRawCards.forEach((c) => {
@@ -146,14 +167,6 @@ export const flashcardService = {
           }
         });
       });
-
-      // 기존 카드 중 order가 없었던 카드들을 백그라운드에서 Firestore에 일괄 저장
-      if (cardsToMigrate.length > 0) {
-        console.log(`[flashcardService] order 속성이 없는 카드 ${cardsToMigrate.length}장 자동 마이그레이션 실행`);
-        flashcardService.batchUpsertCards(cardsToMigrate, userId).catch((err) => {
-          console.warn('[flashcardService] 카드 order 자동 마이그레이션 실패:', err);
-        });
-      }
 
       return { folders, decks, cards };
     } catch (err) {

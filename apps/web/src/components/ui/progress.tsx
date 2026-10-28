@@ -14,6 +14,7 @@ export const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
       <div
         ref={ref}
         role="progressbar"
+        aria-label="학습 진행률"
         aria-valuenow={clamped}
         aria-valuemin={0}
         aria-valuemax={100}

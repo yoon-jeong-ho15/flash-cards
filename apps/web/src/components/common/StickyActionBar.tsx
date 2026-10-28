@@ -39,7 +39,7 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
     >
       <div
         className={cn(
-          'max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-3.5 flex items-center justify-between gap-3 sm:gap-4',
+          'max-w-6xl mx-auto px-5 sm:px-8 lg:px-10 py-4 sm:py-5 flex items-center justify-between gap-3 sm:gap-4',
           contentClassName
         )}
       >

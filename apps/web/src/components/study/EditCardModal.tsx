@@ -79,6 +79,7 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
               </Badge>
             </div>
             <RichTextEditor
+              ariaLabel="학습 카드 앞면 수정"
               value={term}
               onChange={(html) => {
                 setTerm(html);
@@ -101,6 +102,7 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
               </Badge>
             </div>
             <RichTextEditor
+              ariaLabel="학습 카드 뒷면 수정"
               value={definition}
               onChange={(html) => {
                 setDefinition(html);

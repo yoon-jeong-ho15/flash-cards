@@ -16,7 +16,8 @@ export const MoveDeckModal: React.FC<MoveDeckModalProps> = ({
   currentFolderId,
   onClose,
 }) => {
-  const { folders, moveDeck } = useFlashcardStore();
+  const folders = useFlashcardStore(state => state.folders);
+  const moveDeck = useFlashcardStore(state => state.moveDeck);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId || null);
 
   const handleSave = () => {

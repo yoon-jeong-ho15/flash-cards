@@ -31,7 +31,12 @@ export interface AuthSlice {
   resetUserData: () => void;
 }
 
+export type AccountData = Pick<FlashcardStoreState, 'folders' | 'decks' | 'cards'>;
 export interface SyncSlice {
+  sessionVersion: number;
+  mutationRevision: number;
+  pendingVersions: Record<string, number>;
+  applyChanges: (change: (state: FlashcardStoreState) => Partial<AccountData>) => void;
   syncStatus: SyncStatus;
   lastSyncedAt: number | null;
   syncError: string | null;

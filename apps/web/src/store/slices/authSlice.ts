@@ -1,8 +1,8 @@
 import { StateCreator } from 'zustand';
 import { signInWithPopup, signOut } from 'firebase/auth';
-import { FlashcardStoreState, AuthSlice, EMPTY_PENDING_SYNC } from '../types';
+import { FlashcardStoreState, AuthSlice } from '../types';
 import { auth, googleProvider } from '../../lib/firebase';
-import { UserProfile } from '../../types';
+import { readAccount } from '../accountStorage';
 
 export const createAuthSlice: StateCreator<
   FlashcardStoreState,
@@ -15,7 +15,13 @@ export const createAuthSlice: StateCreator<
   authError: null,
 
   setUser: (user) => {
-    set({ user, isAuthInitialized: true });
+    if (get().user?.uid === user?.uid) {
+      set({ user, isAuthInitialized: true });
+      return;
+    }
+    const data = readAccount(user?.uid);
+    set({ ...data, user, isAuthInitialized: true, sessionVersion: get().sessionVersion + 1,
+      syncStatus: 'offline', syncError: null, authError: null, lastSyncedAt: null });
   },
 
   setAuthError: (error) => {
@@ -32,17 +38,9 @@ export const createAuthSlice: StateCreator<
     set({ authError: null });
 
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const userProfile: UserProfile = {
-        uid: result.user.uid,
-        email: result.user.email,
-        displayName: result.user.displayName,
-        photoURL: result.user.photoURL,
-      };
+      await signInWithPopup(auth, googleProvider);
+      // App's auth observer owns account switching and initial synchronization.
 
-      set({ user: userProfile, isAuthInitialized: true, authError: null });
-      // 로그인 완료 후 해당 사용자의 클라우드 데이터 동기화
-      await get().initCloudSync();
     } catch (err: any) {
       console.error('Google 로그인 상세 오류:', err);
       let userFriendlyMessage = `로그인 실패 (${err.code || '알 수 없음'}): ${err.message || err}`;
@@ -65,28 +63,9 @@ export const createAuthSlice: StateCreator<
   },
 
   logout: async () => {
-    try {
-      if (auth) {
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.error('로그아웃 에러:', err);
-    } finally {
-      get().resetUserData();
-    }
+    if (auth) await signOut(auth);
+    get().setUser(null);
   },
 
-  resetUserData: () => {
-    set({
-      user: null,
-      folders: [],
-      decks: [],
-      cards: [],
-      pendingSync: EMPTY_PENDING_SYNC,
-      syncStatus: 'offline',
-      lastSyncedAt: null,
-      syncError: null,
-      authError: null,
-    });
-  },
+  resetUserData: () => get().setUser(null),
 });

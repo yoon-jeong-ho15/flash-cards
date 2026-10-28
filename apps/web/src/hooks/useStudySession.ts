@@ -1,3 +1,4 @@
+import { selectDeckCards } from '../store/cardSelectors';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, Deck } from '../types';
 import { useFlashcardStore } from '../store/useFlashcardStore';
@@ -79,16 +80,17 @@ export const useStudySession = ({
   shuffle = false,
   onExit,
 }: UseStudySessionOptions): StudySessionState => {
-  const { decks, cards, setCardLearned, updateCard, deleteCard } = useFlashcardStore();
+  const deck = useFlashcardStore(state => state.decks.find(item => item.id === deckId));
+  const deckCards = useFlashcardStore(state => selectDeckCards(state, deckId));
+  const setCardLearned = useFlashcardStore(state => state.setCardLearned);
+  const updateCard = useFlashcardStore(state => state.updateCard);
+  const deleteCard = useFlashcardStore(state => state.deleteCard);
 
-  const deck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
-  const deckCards = useMemo(
-    () => sortCardsByOrder(cards.filter((c) => c.deckId === deckId)),
-    [cards, deckId]
-  );
-
-  // 학습 세션 카드 목록 및 현재 상태
-  const [sessionCards, setSessionCards] = useState<Card[]>([]);
+  const [sessionCardIds, setSessionCardIds] = useState<string[]>([]);
+  const sessionCards = useMemo(() => {
+    const byId = new Map(deckCards.map(card => [card.id, card]));
+    return sessionCardIds.map(id => byId.get(id)).filter((card): card is Card => Boolean(card));
+  }, [sessionCardIds, deckCards]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
@@ -126,7 +128,7 @@ export const useStudySession = ({
   // 세션 초기화 (기본적으로 '알아요' 완료 카드는 제외)
   const initSession = useCallback(
     (filterUnlearnedOnly = true, shouldShuffle = shuffle, resetRound = false) => {
-      const rawStoreCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+      const rawStoreCards = selectDeckCards(useFlashcardStore.getState(), deckId);
       const storeCards = sortCardsByOrder(rawStoreCards);
       let targetCards = storeCards;
       if (filterUnlearnedOnly) {
@@ -137,7 +139,7 @@ export const useStudySession = ({
         targetCards = shuffleCards(targetCards);
       }
 
-      setSessionCards(targetCards);
+      setSessionCardIds(targetCards.map(card => card.id));
       setCurrentIndex(0);
       setIsFlipped(false);
       setIsCompleted(false);
@@ -162,6 +164,10 @@ export const useStudySession = ({
       initSession(true, shuffle, true);
     }
   }, [deckId, shuffle, deckCards.length, initSession]);
+
+  useEffect(() => {
+    setCurrentIndex(index => Math.min(index, Math.max(0, sessionCards.length - 1)));
+  }, [sessionCards.length]);
 
   // 카드 뒤집기
   const handleFlip = useCallback(() => {
@@ -199,10 +205,6 @@ export const useStudySession = ({
     // 1. 스토어 상태 반영
     setCardLearned(card.id, newLearned);
 
-    // 2. 세션 카드 목록 상태 반영
-    setSessionCards((prev) =>
-      prev.map((c, i) => (i === currentIndex ? { ...c, learned: newLearned } : c))
-    );
 
     // 3. 토글 피드백
     triggerFeedback(newLearned ? 'know' : null);
@@ -210,7 +212,7 @@ export const useStudySession = ({
 
   // '알아요' 제외하고 다시 학습 (모달에서 재학습 선택 시)
   const handleRestartUnlearned = useCallback(() => {
-    const rawStoreCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+    const rawStoreCards = selectDeckCards(useFlashcardStore.getState(), deckId);
     const storeCards = sortCardsByOrder(rawStoreCards);
     let targetCards = storeCards.filter((c) => !c.learned);
 
@@ -218,7 +220,7 @@ export const useStudySession = ({
       targetCards = shuffleCards(targetCards);
     }
 
-    setSessionCards(targetCards);
+    setSessionCardIds(targetCards.map(card => card.id));
     setCurrentIndex(0);
     setIsFlipped(false);
     setIsFinishModalOpen(false);
@@ -230,7 +232,7 @@ export const useStudySession = ({
 
   // 전체 카드 다시 학습 (모달에서 전체 재학습 선택 시)
   const handleRestartAll = useCallback(() => {
-    const rawStoreCards = useFlashcardStore.getState().cards.filter((c) => c.deckId === deckId);
+    const rawStoreCards = selectDeckCards(useFlashcardStore.getState(), deckId);
     const storeCards = sortCardsByOrder(rawStoreCards);
     let targetCards = storeCards;
 
@@ -238,7 +240,7 @@ export const useStudySession = ({
       targetCards = shuffleCards(targetCards);
     }
 
-    setSessionCards(targetCards);
+    setSessionCardIds(targetCards.map(card => card.id));
     setCurrentIndex(0);
     setIsFlipped(false);
     setIsFinishModalOpen(false);
@@ -285,10 +287,6 @@ export const useStudySession = ({
       // 1. 스토어 갱신
       updateCard(currentCard.id, updates);
 
-      // 2. 현재 세션 내 카드 목록 갱신
-      setSessionCards((prev) =>
-        prev.map((c) => (c.id === currentCard.id ? { ...c, ...updates } : c))
-      );
 
       closeEditModal();
     },
@@ -305,7 +303,7 @@ export const useStudySession = ({
     deleteCard(cardIdToDelete);
 
     // 2. 세션 카드 목록에서 제거
-    setSessionCards((prev) => prev.filter((c) => c.id !== cardIdToDelete));
+    setSessionCardIds((prev) => prev.filter(id => id !== cardIdToDelete));
 
     // 3. 인덱스 보정
     setCurrentIndex((prevIndex) => {
@@ -327,6 +325,7 @@ export const useStudySession = ({
   // 키보드 단축키 이벤트 핸들러
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing) return;
       // 모달이 열려있는 동안에는 모달 외 단축키 동작 차단 (Esc는 해당 모달 닫기)
       if (isFinishModalOpen) {
         if (e.key === 'Escape') {
@@ -354,11 +353,14 @@ export const useStudySession = ({
 
       // input이나 textarea 포커스 중에는 단축키 무시
       if (
-        ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) ||
         (e.target as HTMLElement)?.isContentEditable
       ) {
         return;
       }
+
+      // Let focused controls keep their native Enter/Space activation.
+      if ((e.key === 'Enter' || e.key === ' ') && (e.target as HTMLElement)?.closest('button, a, [role="button"]')) return;
 
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
