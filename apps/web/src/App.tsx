@@ -19,7 +19,7 @@ export const App: React.FC = () => {
 
   // Firebase Auth 인증 상태 감지 및 자동 동기화
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) { setUser(null); return; }
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
@@ -103,6 +103,11 @@ export const App: React.FC = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [currentView]);
 
+  useEffect(() => {
+    setCurrentView({ type: 'dashboard' });
+    setFolderModalState({ isOpen: false });
+  }, [user?.uid]);
+
   // 네비게이션 헬퍼
   const navigateHome = () => setCurrentView({ type: 'dashboard' });
   const navigateAllFolders = () => setCurrentView({ type: 'all-folders' });
@@ -160,7 +165,7 @@ export const App: React.FC = () => {
         />
 
         {/* 메인 뷰 컨테이너 */}
-        <main className="flex-1 pb-16">
+        <main key={user?.uid || 'guest'} className="flex-1 pb-16">
           {currentView.type === 'dashboard' && (
             <DashboardView
               lastStudiedDeckId={lastStudiedDeckId}

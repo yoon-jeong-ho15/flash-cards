@@ -1,290 +1,54 @@
 import { StateCreator } from 'zustand';
 import { FlashcardStoreState, CardSlice } from '../types';
 import { Card, Deck } from '../../types';
-import { flashcardService } from '../../services/flashcardService';
-import { isFirebaseConfigured } from '../../lib/firebase';
-import {
-  extractAllFirebaseImageUrlsFromCard,
-  deleteImagesByUrls,
-} from '../../services/storageService';
+import { extractAllFirebaseImageUrlsFromCard, deleteImagesByUrls } from '../../services/storageService';
 
-export const createCardSlice: StateCreator<
-  FlashcardStoreState,
-  [],
-  [],
-  CardSlice
-> = (set, get) => ({
+const touchDeck = (decks: Deck[], id: string) => decks.map(deck =>
+  deck.id === id ? { ...deck, updatedAt: Date.now() } : deck);
+
+export const createCardSlice: StateCreator<FlashcardStoreState, [], [], CardSlice> = (_set, get) => ({
   cards: [],
-
-  addCard: (cardData) => {
-    const id = `card-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    const { user, cards } = get();
-    const existingDeckCards = cards.filter((c) => c.deckId === cardData.deckId);
-    const maxOrder = existingDeckCards.reduce(
-      (max, c) => (c.order !== undefined && c.order > max ? c.order : max),
-      -1
-    );
-    const calculatedOrder = cardData.order !== undefined ? cardData.order : maxOrder + 1;
-
-    const newCard: Card = {
-      ...cardData,
-      id,
-      userId: user?.uid,
-      order: calculatedOrder,
-    };
-
-    const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
-
-    set((state) => ({
-      cards: [...state.cards, newCard],
-      decks: state.decks.map((d) =>
-        d.id === cardData.deckId ? { ...d, updatedAt: Date.now() } : d
-      ),
-      syncStatus: isOnline ? 'syncing' : 'offline',
-      pendingSync: {
-        ...state.pendingSync,
-        cardIds: isOnline ? state.pendingSync.cardIds : [...state.pendingSync.cardIds, id],
-      },
+  addCard: data => {
+    const id = `card-${crypto.randomUUID()}`;
+    get().applyChanges(state => ({
+      cards: [...state.cards, { ...data, id, userId: state.user?.uid,
+        order: data.order ?? Math.max(-1, ...state.cards.filter(c => c.deckId === data.deckId).map(c => c.order ?? -1)) + 1 }],
+      decks: touchDeck(state.decks, data.deckId),
     }));
-
-    if (isOnline && user) {
-      flashcardService.upsertCard(newCard, user.uid)
-        .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
-        .catch(() => {
-          set((s) => ({
-            syncStatus: 'offline',
-            pendingSync: { ...s.pendingSync, cardIds: [...s.pendingSync.cardIds, id] },
-          }));
-        });
-    }
-
     return id;
   },
-
-  updateCard: (id, updates) => {
-    let targetCard: Card | undefined;
-    const { user } = get();
-    const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
-
-    set((state) => {
-      let deckId: string | undefined;
-      const updatedCards = state.cards.map((card) => {
-        if (card.id === id) {
-          deckId = card.deckId;
-          targetCard = { ...card, ...updates, userId: card.userId || user?.uid };
-          return targetCard;
-        }
-        return card;
-      });
-
-      return {
-        cards: updatedCards,
-        decks: deckId
-          ? state.decks.map((d) => (d.id === deckId ? { ...d, updatedAt: Date.now() } : d))
-          : state.decks,
-        syncStatus: isOnline ? 'syncing' : 'offline',
-        pendingSync: {
-          ...state.pendingSync,
-          cardIds: isOnline
-            ? state.pendingSync.cardIds
-            : Array.from(new Set([...state.pendingSync.cardIds, id])),
-        },
-      };
+  updateCard: (id, updates) => get().applyChanges(state => {
+    const card = state.cards.find(c => c.id === id);
+    return { cards: state.cards.map(c => c.id === id ? { ...c, ...updates } : c),
+      decks: card ? touchDeck(state.decks, card.deckId) : state.decks };
+  }),
+  deleteCard: id => {
+    const card = get().cards.find(c => c.id === id);
+    if (card) void deleteImagesByUrls(extractAllFirebaseImageUrlsFromCard(card));
+    get().applyChanges(state => ({ cards: state.cards.filter(c => c.id !== id),
+      decks: card ? touchDeck(state.decks, card.deckId) : state.decks }));
+  },
+  saveDeckWithCards: (deckId, data, items) => {
+    const id = deckId || `deck-${crypto.randomUUID()}`;
+    if (deckId && !get().decks.some(deck => deck.id === deckId)) throw new Error('덱을 찾을 수 없습니다.');
+    get().applyChanges(state => {
+      const now = Date.now();
+      const previous = state.decks.find(deck => deck.id === id);
+      const deck: Deck = { ...previous, id, userId: state.user?.uid, title: data.title.trim(),
+        description: data.description?.trim(), folderId: data.folderId || null,
+        createdAt: previous?.createdAt ?? now, updatedAt: now };
+      const cards: Card[] = items.map((item, index) => ({ ...item, id: item.id || `card-${crypto.randomUUID()}`,
+        deckId: id, userId: state.user?.uid, order: index, learned: item.learned ?? false,
+        backImageUrl: item.backImageUrl || item.imageUrl, imageUrl: item.backImageUrl || item.imageUrl }));
+      return { decks: previous ? state.decks.map(d => d.id === id ? deck : d) : [deck, ...state.decks],
+        cards: [...state.cards.filter(c => c.deckId !== id), ...cards] };
     });
-
-    if (isOnline && targetCard && user) {
-      flashcardService.upsertCard(targetCard, user.uid)
-        .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
-        .catch(() => set({ syncStatus: 'offline' }));
-    }
+    return id;
   },
-
-  deleteCard: (id) => {
-    const { user, cards } = get();
-    const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
-
-    const cardToDelete = cards.find((c) => c.id === id);
-    if (cardToDelete) {
-      const urls = extractAllFirebaseImageUrlsFromCard(cardToDelete);
-      if (urls.length > 0) {
-        deleteImagesByUrls(urls).catch((err) =>
-          console.warn('[cardSlice] 삭제된 카드의 이미지 정리 실패:', err)
-        );
-      }
-    }
-
-    set((state) => {
-      const remainingCards = state.cards.filter((c) => c.id !== id);
-      return {
-        cards: remainingCards,
-        decks: cardToDelete
-          ? state.decks.map((d) =>
-              d.id === cardToDelete.deckId ? { ...d, updatedAt: Date.now() } : d
-            )
-          : state.decks,
-        syncStatus: isOnline ? 'syncing' : 'offline',
-        pendingSync: {
-          ...state.pendingSync,
-          cardIds: state.pendingSync.cardIds.filter((cid) => cid !== id),
-          deletedCardIds: Array.from(new Set([...state.pendingSync.deletedCardIds, id])),
-        },
-      };
-    });
-
-    if (isOnline) {
-      flashcardService.deleteCard(id)
-        .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
-        .catch(() => set({ syncStatus: 'offline' }));
-    }
-  },
-
-  saveDeckWithCards: (deckId, deckData, cardsData) => {
-    const now = Date.now();
-    const targetDeckId = deckId || `deck-${now}-${Math.random().toString(36).substr(2, 6)}`;
-    const { user } = get();
-    let savedDeck: Deck;
-
-    const synchronizedCards: Card[] = cardsData.map((item, index) => ({
-      id: item.id || `card-${now}-${index}-${Math.random().toString(36).substr(2, 6)}`,
-      deckId: targetDeckId,
-      userId: user?.uid,
-      order: item.order !== undefined ? item.order : index,
-      termRichText: item.termRichText,
-      definitionRichText: item.definitionRichText,
-      frontImageUrl: item.frontImageUrl,
-      backImageUrl: item.backImageUrl || item.imageUrl,
-      imageUrl: item.imageUrl || item.backImageUrl,
-      learned: item.learned ?? false,
-    }));
-
-    const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
-
-    set((state) => {
-      let updatedDecks = [...state.decks];
-      if (deckId) {
-        updatedDecks = updatedDecks.map((d) => {
-          if (d.id === deckId) {
-            savedDeck = {
-              ...d,
-              userId: d.userId || user?.uid,
-              title: deckData.title.trim(),
-              description: deckData.description?.trim(),
-              folderId: deckData.folderId || null,
-              updatedAt: now,
-            };
-            return savedDeck;
-          }
-          return d;
-        });
-      } else {
-        savedDeck = {
-          id: targetDeckId,
-          userId: user?.uid,
-          title: deckData.title.trim(),
-          description: deckData.description?.trim(),
-          folderId: deckData.folderId || null,
-          createdAt: now,
-          updatedAt: now,
-        };
-        updatedDecks = [savedDeck, ...updatedDecks];
-      }
-
-      const otherCards = state.cards.filter((c) => c.deckId !== targetDeckId);
-
-      return {
-        decks: updatedDecks,
-        cards: [...otherCards, ...synchronizedCards],
-        syncStatus: isOnline ? 'syncing' : 'offline',
-        pendingSync: {
-          ...state.pendingSync,
-          deckIds: isOnline
-            ? state.pendingSync.deckIds
-            : Array.from(new Set([...state.pendingSync.deckIds, targetDeckId])),
-          cardIds: isOnline
-            ? state.pendingSync.cardIds
-            : Array.from(new Set([...state.pendingSync.cardIds, ...synchronizedCards.map((c) => c.id)])),
-        },
-      };
-    });
-
-    const deckToSync =
-      savedDeck! || {
-        id: targetDeckId,
-        userId: user?.uid,
-        title: deckData.title.trim(),
-        description: deckData.description?.trim(),
-        folderId: deckData.folderId || null,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-    if (isOnline && user) {
-      Promise.all([
-        flashcardService.upsertDeck(deckToSync, user.uid),
-        flashcardService.syncDeckCards(targetDeckId, synchronizedCards, user.uid),
-      ])
-        .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
-        .catch(() => {
-          set((s) => ({
-            syncStatus: 'offline',
-            pendingSync: {
-              ...s.pendingSync,
-              deckIds: Array.from(new Set([...s.pendingSync.deckIds, targetDeckId])),
-              cardIds: Array.from(new Set([...s.pendingSync.cardIds, ...synchronizedCards.map((c) => c.id)])),
-            },
-          }));
-        });
-    }
-
-    return targetDeckId;
-  },
-
-  setCardLearned: (id, learned) => {
-    let cardToUpdate: Card | undefined;
-    const { user } = get();
-    const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
-
-    set((state) => {
-      const cards = state.cards.map((c) => {
-        if (c.id === id) {
-          cardToUpdate = { ...c, learned, userId: c.userId || user?.uid };
-          return cardToUpdate;
-        }
-        return c;
-      });
-      return {
-        cards,
-        syncStatus: isOnline ? 'syncing' : 'offline',
-        pendingSync: {
-          ...state.pendingSync,
-          cardIds: isOnline
-            ? state.pendingSync.cardIds
-            : Array.from(new Set([...state.pendingSync.cardIds, id])),
-        },
-      };
-    });
-
-    if (isOnline && cardToUpdate && user) {
-      flashcardService.upsertCard(cardToUpdate, user.uid)
-        .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
-        .catch(() => set({ syncStatus: 'offline' }));
-    }
-  },
-
-  resetDeckProgress: (deckId) => {
-    const { user } = get();
-    const isOnline = isFirebaseConfigured && navigator.onLine && Boolean(user);
-
-    set((state) => ({
-      cards: state.cards.map((c) => (c.deckId === deckId ? { ...c, learned: false } : c)),
-      syncStatus: isOnline ? 'syncing' : 'offline',
-    }));
-
-    const currentDeckCards = get().cards.filter((c) => c.deckId === deckId);
-    if (isOnline && user) {
-      flashcardService.syncDeckCards(deckId, currentDeckCards, user.uid)
-        .then(() => set({ syncStatus: 'synced', lastSyncedAt: Date.now() }))
-        .catch(() => set({ syncStatus: 'offline' }));
-    }
-  },
+  setCardLearned: (id, learned) => get().applyChanges(state => ({
+    cards: state.cards.map(card => card.id === id ? { ...card, learned } : card),
+  })),
+  resetDeckProgress: deckId => get().applyChanges(state => ({
+    cards: state.cards.map(card => card.deckId === deckId ? { ...card, learned: false } : card),
+  })),
 });
