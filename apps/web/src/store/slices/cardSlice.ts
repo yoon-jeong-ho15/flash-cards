@@ -1,7 +1,6 @@
 import { StateCreator } from 'zustand';
 import { FlashcardStoreState, CardSlice } from '../types';
 import { Card, Deck } from '../../types';
-import { extractAllFirebaseImageUrlsFromCard, deleteImagesByUrls } from '../../services/storageService';
 
 const touchDeck = (decks: Deck[], id: string) => decks.map(deck =>
   deck.id === id ? { ...deck, updatedAt: Date.now() } : deck);
@@ -24,7 +23,6 @@ export const createCardSlice: StateCreator<FlashcardStoreState, [], [], CardSlic
   }),
   deleteCard: id => {
     const card = get().cards.find(c => c.id === id);
-    if (card) void deleteImagesByUrls(extractAllFirebaseImageUrlsFromCard(card));
     get().applyChanges(state => ({ cards: state.cards.filter(c => c.id !== id),
       decks: card ? touchDeck(state.decks, card.deckId) : state.decks }));
   },

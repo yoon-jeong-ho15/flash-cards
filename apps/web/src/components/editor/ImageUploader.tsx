@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Image as ImageIcon, Trash2, RefreshCw, UploadCloud, AlertCircle, Loader2 } from 'lucide-react';
 import { compressImage } from '../../utils/imageCompressor';
 import { uploadCardImage } from '../../services/storageService';
@@ -20,6 +20,10 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   compact = false,
 }) => {
   const { user } = useFlashcardStore();
+  const mounted = useRef(true);
+  const onImageChangeRef = useRef(onImageChange);
+  onImageChangeRef.current = onImageChange;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +32,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const isProcessing = uploadStep !== null;
 
   const handleProcessFile = async (file: File) => {
+    const session = useFlashcardStore.getState().sessionVersion;
     setError(null);
 
     if (!file.type.startsWith('image/')) {
@@ -52,7 +57,9 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
       setUploadStep('uploading');
       const publicUrl = await uploadCardImage(compressedFile, user?.uid);
 
-      onImageChange(publicUrl);
+      if (mounted.current && useFlashcardStore.getState().sessionVersion === session) {
+        onImageChangeRef.current(publicUrl);
+      }
     } catch (err: any) {
       console.error('이미지 업로드 실패:', err);
       setError(err?.message || '이미지 처리 중 오류가 발생했습니다.');

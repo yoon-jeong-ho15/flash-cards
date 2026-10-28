@@ -2,10 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { CardFormItem } from '../components/deck/DeckCardEditorItem';
 import { sortCardsByOrder } from '../services/flashcardService';
-import {
-  extractAllFirebaseImageUrlsFromCard,
-  deleteImagesByUrls,
-} from '../services/storageService';
 import { isCardItemEmpty } from '../utils/cardValidation';
 
 interface UseDeckEditorOptions {
@@ -20,48 +16,7 @@ export interface DeckEditorErrors {
   general?: string;
 }
 
-export interface DeckDraftData {
-  deckId?: string;
-  title: string;
-  description: string;
-  selectedFolderId: string | null;
-  cardItems: CardFormItem[];
-  savedAt: number;
-}
-
-const getDraftStorageKey = (deckId?: string) => {
-  return deckId ? `flashcards_deck_draft_${deckId}` : `flashcards_deck_draft_new`;
-};
-
-export const loadDeckDraft = (deckId?: string): DeckDraftData | null => {
-  try {
-    const key = getDraftStorageKey(deckId);
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as DeckDraftData;
-  } catch (e) {
-    console.error('Failed to load deck draft:', e);
-    return null;
-  }
-};
-
-export const saveDeckDraft = (draft: DeckDraftData): void => {
-  try {
-    const key = getDraftStorageKey(draft.deckId);
-    localStorage.setItem(key, JSON.stringify(draft));
-  } catch (e) {
-    console.error('Failed to save deck draft:', e);
-  }
-};
-
-export const removeDeckDraft = (deckId?: string): void => {
-  try {
-    const key = getDraftStorageKey(deckId);
-    localStorage.removeItem(key);
-  } catch (e) {
-    console.error('Failed to remove deck draft:', e);
-  }
-};
+import { DeckDraftData, loadDeckDraft, saveDeckDraft, removeDeckDraft } from '../services/deckDraftStorage';
 
 const isDraftMeaningful = (
   title: string,
@@ -127,7 +82,7 @@ export const useDeckEditor = ({
   focusCardId,
   onSaved,
 }: UseDeckEditorOptions) => {
-  const { decks, cards, folders, saveDeckWithCards } = useFlashcardStore();
+  const { decks, cards, folders, saveDeckWithCards, user } = useFlashcardStore();
 
   const [title, setTitle] = useState(() => {
     if (deckId) {
@@ -175,27 +130,13 @@ export const useDeckEditor = ({
   const [draftToRestore, setDraftToRestore] = useState<DeckDraftData | null>(null);
   const [showDraftRestoreModal, setShowDraftRestoreModal] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const isReadyForAutoSaveRef = useRef(false);
+  const [isReadyForAutoSave, setReadyForAutoSave] = useState(false);
+  const skipDraftFlushRef = useRef(false);
   const lastSavedJsonRef = useRef<string>('');
-
-  // 수정 전 덱/카드에 존재하던 이미지 URL들을 기억하여, 저장 시 삭제된 이미지를 정리
-  const initialImageUrlsRef = useRef<Set<string>>(new Set());
-
-  // 초기 렌더링 시 기존 카드들의 이미지 URL 기억
-  useEffect(() => {
-    if (deckId) {
-      const existingCards = cards.filter((c) => c.deckId === deckId);
-      const urls = new Set<string>();
-      existingCards.forEach((c) => {
-        extractAllFirebaseImageUrlsFromCard(c).forEach((u) => urls.add(u));
-      });
-      initialImageUrlsRef.current = urls;
-    }
-  }, [deckId]);
 
   // 마운트 시 로컬 임시 저장본(Draft) 확인
   useEffect(() => {
-    const draft = loadDeckDraft(deckId);
+    const draft = loadDeckDraft(user?.uid, deckId);
     if (draft && isDraftMeaningful(draft.title, draft.description, draft.cardItems)) {
       let origTitle = '';
       let origDesc = '';
@@ -227,12 +168,12 @@ export const useDeckEditor = ({
         // 복원 여부 결정을 기다리는 동안 자동 저장 보류
         return;
       } else {
-        removeDeckDraft(deckId);
+        removeDeckDraft(user?.uid, deckId);
       }
     }
 
-    isReadyForAutoSaveRef.current = true;
-  }, [deckId]);
+    setReadyForAutoSave(true);
+  }, [deckId, user?.uid]);
 
   // 임시 저장본 복원 실행
   const handleRestoreDraft = useCallback(() => {
@@ -251,26 +192,27 @@ export const useDeckEditor = ({
     }
     setDraftToRestore(null);
     setShowDraftRestoreModal(false);
-    isReadyForAutoSaveRef.current = true;
+    setReadyForAutoSave(true);
   }, [draftToRestore]);
 
   // 임시 저장본 삭제하고 원본/초기 상태 유지
   const handleDiscardDraft = useCallback(() => {
-    removeDeckDraft(deckId);
+    removeDeckDraft(user?.uid, deckId);
     setDraftToRestore(null);
     setShowDraftRestoreModal(false);
-    isReadyForAutoSaveRef.current = true;
-  }, [deckId]);
+    setReadyForAutoSave(true);
+  }, [deckId, user?.uid]);
 
   // 임시 저장본 완전 제거 (정식 저장 성공 또는 취소 확인 시)
   const clearDraft = useCallback(() => {
-    removeDeckDraft(deckId);
+    skipDraftFlushRef.current = true;
+    removeDeckDraft(user?.uid, deckId);
     setLastSavedAt(null);
-  }, [deckId]);
+  }, [deckId, user?.uid]);
 
   // 주기적 로컬 임시 저장 (디바운스 2초 + 내용 변경 감지)
   useEffect(() => {
-    if (!isReadyForAutoSaveRef.current) return;
+    if (!isReadyForAutoSave) return;
 
     if (!isDraftMeaningful(title, description, cardItems)) {
       return;
@@ -290,7 +232,7 @@ export const useDeckEditor = ({
 
     const timer = setTimeout(() => {
       const now = Date.now();
-      saveDeckDraft({
+      const saved = saveDeckDraft(user?.uid, {
         deckId,
         title,
         description,
@@ -298,42 +240,48 @@ export const useDeckEditor = ({
         cardItems,
         savedAt: now,
       });
-      lastSavedJsonRef.current = currentJson;
-      setLastSavedAt(now);
+      if (saved) {
+        lastSavedJsonRef.current = currentJson;
+        setLastSavedAt(now);
+      } else {
+        setLastSavedAt(null);
+        setErrors(previous => ({ ...previous, general: '임시 저장 공간이 부족합니다. 내용을 복사하거나 공간을 확보해 주세요.' }));
+      }
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [title, description, selectedFolderId, cardItems, deckId]);
+  }, [title, description, selectedFolderId, cardItems, deckId, user?.uid, isReadyForAutoSave]);
 
-  // 기존 덱 수정 시 데이터 로드 (외부 상태 변경 동기화용)
+  // Track the original independently of the editable draft. Remote refreshes must not reset inputs.
+  const fingerprint = JSON.stringify({ deck: decks.find(d => d.id === deckId),
+    cards: cards.filter(c => c.deckId === deckId) });
+  const [baseline, setBaseline] = useState(fingerprint);
+  const hasExternalChanges = Boolean(deckId && baseline !== fingerprint);
+  const reloadOriginal = useCallback(() => {
+    const deck = decks.find(d => d.id === deckId);
+    if (!deck) return;
+    setTitle(deck.title);
+    setDescription(deck.description || '');
+    setSelectedFolderId(deck.folderId || null);
+    setCardItems(sortCardsByOrder(cards.filter(c => c.deckId === deckId)));
+    setBaseline(fingerprint);
+  }, [decks, cards, deckId, fingerprint]);
+
+  // Flush the latest draft on navigation and page close, preserving the account at mount time.
+  const latestDraftRef = useRef<DeckDraftData | null>(null);
+  latestDraftRef.current = isReadyForAutoSave ? {
+    deckId, title, description, selectedFolderId, cardItems, savedAt: Date.now(),
+  } : null;
   useEffect(() => {
-    if (deckId) {
-      const existingDeck = decks.find((d) => d.id === deckId);
-      if (existingDeck) {
-        setTitle(existingDeck.title);
-        setDescription(existingDeck.description || '');
-        setSelectedFolderId(existingDeck.folderId || null);
-
-        const existingCards = sortCardsByOrder(cards.filter((c) => c.deckId === deckId));
-        if (existingCards.length > 0) {
-          setCardItems(
-            existingCards.map((c) => ({
-              id: c.id,
-              order: c.order,
-              termRichText: c.termRichText,
-              definitionRichText: c.definitionRichText,
-              frontImageUrl: c.frontImageUrl,
-              backImageUrl: c.backImageUrl || c.imageUrl,
-              imageUrl: c.imageUrl || c.backImageUrl,
-              learned: c.learned,
-            }))
-          );
-        }
+    const flush = () => {
+      const draft = latestDraftRef.current;
+      if (!skipDraftFlushRef.current && draft && isDraftMeaningful(draft.title, draft.description, draft.cardItems)) {
+        saveDeckDraft(user?.uid, draft);
       }
-    } else if (initialFolderId) {
-      setSelectedFolderId(initialFolderId);
-    }
-  }, [deckId, initialFolderId, decks, cards]);
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => { window.removeEventListener('beforeunload', flush); flush(); };
+  }, [user?.uid, deckId]);
 
   // 카드 추가
   const handleAddCard = useCallback(() => {
@@ -450,25 +398,6 @@ export const useDeckEditor = ({
     }
 
     try {
-      // 1) 수정 전 이미지 URL 목록 수집
-      const beforeUrls = new Set<string>(initialImageUrlsRef.current);
-      if (deckId) {
-        cards
-          .filter((c) => c.deckId === deckId)
-          .forEach((c) => {
-            extractAllFirebaseImageUrlsFromCard(c).forEach((u) => beforeUrls.add(u));
-          });
-      }
-
-      // 2) 현재 카드들(새로 저장될 유효한 카드들)의 이미지 URL 목록 수집
-      const afterUrls = new Set<string>();
-      validCards.forEach((c) => {
-        extractAllFirebaseImageUrlsFromCard(c).forEach((u) => afterUrls.add(u));
-      });
-
-      // 3) 차집합 계산 (수정 전에는 있었으나 현재 사라진 이미지들)
-      const removedUrls = Array.from(beforeUrls).filter((url) => !afterUrls.has(url));
-
       // 빈 카드가 삭제되었으므로 화면 상태도 동기화
       if (validCards.length !== cardItems.length) {
         setCardItems(validCards);
@@ -489,20 +418,13 @@ export const useDeckEditor = ({
           frontImageUrl: c.frontImageUrl,
           backImageUrl: c.backImageUrl || c.imageUrl,
           imageUrl: c.imageUrl || c.backImageUrl,
-          learned: c.learned ?? false,
+          learned: cards.find(saved => saved.id === c.id)?.learned ?? c.learned ?? false,
         }))
       );
 
-      // 4) 저장 성공 시 사라진 기존 이미지들을 Firebase Storage에서 안전하게 삭제
-      if (removedUrls.length > 0) {
-        console.log('[DeckEditor] 카드 수정으로 제거된 이미지 삭제 중:', removedUrls);
-        deleteImagesByUrls(removedUrls).catch((err) => {
-          console.warn('[DeckEditor] 이미지 정리 실패:', err);
-        });
-      }
-
-      // 5) 정식 저장 성공 시 임시 저장본(draft) 정리
-      removeDeckDraft(deckId);
+      // saveDeckWithCards returns only after both data and outbox are durable locally.
+      skipDraftFlushRef.current = true;
+      removeDeckDraft(user?.uid, deckId);
       setLastSavedAt(null);
 
       onSaved(savedDeckId);
@@ -519,10 +441,13 @@ export const useDeckEditor = ({
     cards,
     saveDeckWithCards,
     onSaved,
+    user?.uid,
   ]);
 
   return {
     folders,
+    hasExternalChanges,
+    reloadOriginal,
     title,
     setTitle,
     description,

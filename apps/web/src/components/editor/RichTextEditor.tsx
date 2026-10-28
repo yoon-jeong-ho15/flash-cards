@@ -106,6 +106,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   const uploadAndInsertImage = useCallback(
     async (file: File) => {
+      const session = useFlashcardStore.getState().sessionVersion;
       if (!file.type.startsWith('image/')) {
         alert('이미지 파일만 업로드할 수 있습니다.');
         return;
@@ -129,6 +130,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
         const downloadUrl = await uploadCardImage(compressedFile, user?.uid);
 
+        if (useFlashcardStore.getState().sessionVersion !== session) return;
         const currentEditor = editorRef.current;
         if (currentEditor && !currentEditor.isDestroyed) {
           const success = currentEditor.commands.setImage({

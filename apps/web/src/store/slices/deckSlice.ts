@@ -1,6 +1,5 @@
 import { StateCreator } from 'zustand';
 import { FlashcardStoreState, DeckSlice } from '../types';
-import { extractAllFirebaseImageUrlsFromCard, deleteImagesByUrls } from '../../services/storageService';
 
 export const createDeckSlice: StateCreator<FlashcardStoreState, [], [], DeckSlice> = (_set, get) => ({
   decks: [],
@@ -10,8 +9,6 @@ export const createDeckSlice: StateCreator<FlashcardStoreState, [], [], DeckSlic
   })),
   moveDeck: (id, folderId) => get().updateDeck(id, { folderId }),
   deleteDeck: id => {
-    const urls = get().cards.filter(card => card.deckId === id).flatMap(extractAllFirebaseImageUrlsFromCard);
-    void deleteImagesByUrls(urls);
     get().applyChanges(state => ({
       decks: state.decks.filter(deck => deck.id !== id),
       cards: state.cards.filter(card => card.deckId !== id),

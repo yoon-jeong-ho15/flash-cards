@@ -40,6 +40,8 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
 }) => {
   const {
     folders,
+    hasExternalChanges,
+    reloadOriginal,
     title,
     setTitle,
     description,
@@ -284,6 +286,15 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             <span>카드 추가</span>
           </Button>
         </div>
+
+        {hasExternalChanges && (
+          <div role="status" className="p-3 mb-4 rounded-lg bg-amber-50 text-amber-900 text-sm">
+            다른 곳에서 덱이 변경되었습니다. 작성 중인 내용은 유지됩니다. 저장하면 현재 편집 내용이 반영됩니다.
+            <Button type="button" variant="outline" size="sm" className="ml-2" onClick={() => {
+              if (window.confirm('작성 중인 내용을 버리고 최신 저장 내용을 불러올까요?')) reloadOriginal();
+            }}>최신 내용 불러오기</Button>
+          </div>
+        )}
 
         <Reorder.Group
           axis="y"

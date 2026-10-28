@@ -216,6 +216,7 @@ export const App: React.FC = () => {
 
         {currentView.type === 'edit-deck' && (
           <DeckEditor
+            key={`${user?.uid || 'guest'}:${currentView.deckId || 'new'}:${currentView.folderId || 'root'}`}
             deckId={currentView.deckId}
             initialFolderId={currentView.folderId}
             focusCardId={currentView.focusCardId}
