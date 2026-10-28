@@ -69,29 +69,37 @@ window.nativeReceive = data => {
   }
   if (data.type === 'image' && data.url && safeImage(data.url)) editor?.chain().focus().setImage({ src: data.url }).run();
 };
-let touch: { x: number; y: number; moved: boolean } | null = null;
+let touch: { x: number; y: number; moved: boolean; dragging: boolean } | null = null;
 let suppressClickUntil = 0;
 const studyViewer = () => !editor && /\bstudy-(front|back)\b/.test(document.body.className);
+const pointX = (point: Touch) => point.screenX ?? point.clientX;
+const pointY = (point: Touch) => point.screenY ?? point.clientY;
+const cancelDrag = () => { if (touch?.dragging) send({ type: 'card-drag', phase: 'cancel', dx: 0, dy: 0 }); touch = null; suppressClickUntil = Date.now() + 500; };
 root.addEventListener('touchstart', event => {
-  touch = studyViewer() && event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY, moved: false } : null;
+  if (touch?.dragging) cancelDrag();
+  // A fresh tap is a new intent, even immediately after a swipe. Only the
+  // synthetic click from the moved/cancelled gesture should be suppressed.
+  if (studyViewer() && event.touches.length === 1) suppressClickUntil = 0;
+  touch = studyViewer() && event.touches.length === 1 ? { x: pointX(event.touches[0]), y: pointY(event.touches[0]), moved: false, dragging: false } : null;
 }, { passive: true });
 root.addEventListener('touchmove', event => {
   if (!touch) return;
-  if (event.touches.length !== 1) { touch = null; suppressClickUntil = Date.now() + 500; return; }
-  const dx = event.touches[0].clientX - touch.x;
-  const dy = event.touches[0].clientY - touch.y;
+  if (event.touches.length !== 1) { cancelDrag(); return; }
+  const dx = pointX(event.touches[0]) - touch.x;
+  const dy = pointY(event.touches[0]) - touch.y;
   if (Math.abs(dx) > 10 || Math.abs(dy) > 10) touch.moved = true;
-  if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.4) event.preventDefault();
+  if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.4) touch.dragging = true;
+  if (touch.dragging) { event.preventDefault(); send({ type: 'card-drag', phase: 'move', dx, dy }); }
 }, { passive: false });
 root.addEventListener('touchend', event => {
   const start = touch; touch = null;
   if (!start || !event.changedTouches.length) return;
-  const dx = event.changedTouches[0].clientX - start.x;
-  const dy = event.changedTouches[0].clientY - start.y;
+  const dx = pointX(event.changedTouches[0]) - start.x;
+  const dy = pointY(event.changedTouches[0]) - start.y;
   if (start.moved || Math.abs(dx) > 10 || Math.abs(dy) > 10) suppressClickUntil = Date.now() + 500;
-  if (Math.abs(dx) >= 55 && Math.abs(dx) > Math.abs(dy) * 1.4) send({ type: 'swipe', delta: dx < 0 ? 1 : -1 });
+  if (start.dragging) send({ type: 'card-drag', phase: 'end', dx, dy });
 }, { passive: true });
-root.addEventListener('touchcancel', () => { touch = null; suppressClickUntil = Date.now() + 500; });
+root.addEventListener('touchcancel', cancelDrag);
 root.addEventListener('click', event => {
   if (Date.now() < suppressClickUntil) { event.preventDefault(); return; }
   const image = (event.target as Element).closest('img');

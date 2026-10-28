@@ -3,9 +3,10 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { editorDocument } from './document.generated';
 import { plainText } from '../core/content';
+import type { CardDrag } from '../ui/useSwipeMotion';
 
 export interface RichTextHandle { getHTML(): Promise<string>; insertImage(url: string): void }
-interface Props { html: string; editable?: boolean; label?: string; presentation?: 'default' | 'study-front' | 'study-back'; onChange?: (html: string) => void; onImage?: (url: string) => void; onFlip?: () => void; onSwipe?: (delta: -1 | 1) => void; onPickImage?: () => void }
+interface Props { html: string; editable?: boolean; label?: string; presentation?: 'default' | 'study-front' | 'study-back'; onChange?: (html: string) => void; onImage?: (url: string) => void; onFlip?: () => void; onCardDrag?: (event: CardDrag) => void; onPickImage?: () => void }
 export const RichText = forwardRef<RichTextHandle, Props>(function RichText(props, ref) {
   const web = useRef<WebView>(null);
   const latest = useRef(props); latest.current = props;
@@ -46,7 +47,7 @@ export const RichText = forwardRef<RichTextHandle, Props>(function RichText(prop
           if (data.type === 'value' && typeof data.html === 'string') { requests.current.get(data.id)?.(data.html); requests.current.delete(data.id); }
           if (data.type === 'image' && typeof data.url === 'string') latest.current.onImage?.(data.url);
           if (data.type === 'flip') latest.current.onFlip?.();
-          if (data.type === 'swipe' && (data.delta === -1 || data.delta === 1)) latest.current.onSwipe?.(data.delta);
+          if (data.type === 'card-drag' && ['move', 'end', 'cancel'].includes(data.phase) && Number.isFinite(data.dx) && Number.isFinite(data.dy)) latest.current.onCardDrag?.({ phase: data.phase, dx: data.dx, dy: data.dy });
           if (data.type === 'pick-image') latest.current.onPickImage?.();
         } catch { /* Ignore malformed messages from the isolated document. */ }
       }} />

@@ -73,15 +73,24 @@ test('study swipes navigate in both directions without flipping, while vertical 
     const drag = (x, y) => { touch('touchstart', 150, 150); touch('touchmove', x, y); touch('touchend', x, y); content.click(); };
     messages.length = 0;
     drag(40, 155);
-    assert.deepEqual(messages, [{ type: 'swipe', delta: 1 }]);
+    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: -110, dy: 5 }, { type: 'card-drag', phase: 'end', dx: -110, dy: 5 }]);
+    messages.length = 0;
+    touch('touchstart', 150, 150); touch('touchend', 150, 150); content.click();
+    assert.deepEqual(messages, [{ type: 'flip' }], 'a fresh tap immediately after a swipe must flip without waiting for the suppression timeout');
     now += 1000; messages.length = 0;
     drag(260, 155);
-    assert.deepEqual(messages, [{ type: 'swipe', delta: -1 }]);
-    for (const [x, y] of [[150, 300], [130, 152], [220, 260]]) {
+    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: 110, dy: 5 }, { type: 'card-drag', phase: 'end', dx: 110, dy: 5 }]);
+    for (const [x, y] of [[150, 300], [220, 260]]) {
       now += 1000; messages.length = 0;
       drag(x, y);
-      assert.deepEqual(messages, [], 'scrolls, short drags and mostly vertical gestures must not navigate or flip');
+      assert.deepEqual(messages, [], 'vertical gestures must not move or flip the card');
     }
+    now += 1000; messages.length = 0;
+    drag(130, 152);
+    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: -20, dy: 2 }, { type: 'card-drag', phase: 'end', dx: -20, dy: 2 }], 'short horizontal drags must report the offset so the native card can spring back');
+    now += 1000; messages.length = 0;
+    touch('touchstart', 150, 150); touch('touchmove', 90, 150); touch('touchcancel', 90, 150);
+    assert.deepEqual(messages.at(-1), { type: 'card-drag', phase: 'cancel', dx: 0, dy: 0 });
     now += 1000; messages.length = 0;
     touch('touchstart', 150, 150); touch('touchcancel', 150, 150); touch('touchend', 40, 150); content.click();
     assert.deepEqual(messages, []);
