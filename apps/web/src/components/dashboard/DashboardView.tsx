@@ -1,105 +1,115 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
-import { DeckCard } from '../deck/DeckCard';
-import { FolderCard } from '../folder/FolderCard';
-import { EmptyState } from '../common/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/common/EmptyState';
+import { ProgressBar } from '@/components/common/ProgressBar';
 import {
-  Folder as FolderIcon,
-  Search,
   BookOpen,
-  FolderPlus,
-  Plus,
-  CheckCircle2,
-  Layers,
-  TrendingUp,
   ChevronRight,
+  FolderPlus,
+  Layers,
+  Play,
+  Plus,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react';
 
 interface DashboardViewProps {
-  onNavigateFolder: (folderId: string) => void;
-  onNavigateDeck: (deckId: string) => void;
-  onNavigateAllFolders: () => void;
-  onNavigateAllDecks: () => void;
-  onStartStudy: (deckId: string) => void;
+  lastStudiedDeckId: string | null;
   onCreateDeck: () => void;
   onCreateFolder: () => void;
+  onNavigateDeck: (deckId: string) => void;
+  onNavigateAllDecks: () => void;
+  onStartStudy: (deckId: string) => void;
+}
+
+interface DeckSummary {
+  id: string;
+  title: string;
+  totalCards: number;
+  learnedCards: number;
+  progress: number;
+  updatedAt: number;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
-  onNavigateFolder,
-  onNavigateDeck,
-  onNavigateAllFolders,
-  onNavigateAllDecks,
-  onStartStudy,
+  lastStudiedDeckId,
   onCreateDeck,
   onCreateFolder,
+  onNavigateDeck,
+  onNavigateAllDecks,
+  onStartStudy,
 }) => {
-  const { folders, decks, cards } = useFlashcardStore();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'all' | 'root'>('all');
+  const { decks, cards } = useFlashcardStore();
 
-  // 유효한 덱에 속한 실제 활성 카드만 필터링 (과거 삭제된 덱의 고아 카드 배제)
-  const validDeckIds = useMemo(() => new Set(decks.map((d) => d.id)), [decks]);
-  const activeCards = useMemo(
-    () => cards.filter((c) => validDeckIds.has(c.deckId)),
-    [cards, validDeckIds]
-  );
+  const deckSummaries = useMemo<DeckSummary[]>(() => {
+    const cardsByDeck = new Map<string, { total: number; learned: number }>();
 
-  // 통계 계산
-  const totalCards = activeCards.length;
-  const masteredCards = activeCards.filter((c) => c.learned).length;
-  const overallProgress = totalCards > 0 ? Math.round((masteredCards / totalCards) * 100) : 0;
-
-  // 이름순으로 정렬된 폴더 목록
-  const sortedFolders = useMemo(() => {
-    return [...folders].sort((a, b) => {
-      const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
-      return diff !== 0 ? diff : (b.createdAt || 0) - (a.createdAt || 0);
-    });
-  }, [folders]);
-
-  // 검색 필터링
-  const filteredDecks = useMemo(() => {
-    let result = decks;
-
-    if (activeTab === 'root') {
-      result = result.filter((d) => !d.folderId);
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((d) => {
-        const titleMatch = d.title.toLowerCase().includes(q);
-        const descMatch = d.description?.toLowerCase().includes(q);
-        const cardMatch = cards
-          .filter((c) => c.deckId === d.id)
-          .some(
-            (c) =>
-              c.termRichText.toLowerCase().includes(q) ||
-              c.definitionRichText.toLowerCase().includes(q)
-          );
-        return titleMatch || descMatch || cardMatch;
+    cards.forEach((card) => {
+      const current = cardsByDeck.get(card.deckId) ?? { total: 0, learned: 0 };
+      cardsByDeck.set(card.deckId, {
+        total: current.total + 1,
+        learned: current.learned + (card.learned ? 1 : 0),
       });
-    }
+    });
 
-    return result;
-  }, [decks, cards, searchQuery, activeTab]);
+    return decks
+      .map((deck) => {
+        const deckCards = cardsByDeck.get(deck.id) ?? { total: 0, learned: 0 };
+        const progress = deckCards.total > 0
+          ? Math.round((deckCards.learned / deckCards.total) * 100)
+          : 0;
+
+        return {
+          id: deck.id,
+          title: deck.title,
+          totalCards: deckCards.total,
+          learnedCards: deckCards.learned,
+          progress,
+          updatedAt: deck.updatedAt,
+        };
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }, [cards, decks]);
+
+  const totalCards = useMemo(
+    () => deckSummaries.reduce((sum, deck) => sum + deck.totalCards, 0),
+    [deckSummaries]
+  );
+  const masteredCards = useMemo(
+    () => deckSummaries.reduce((sum, deck) => sum + deck.learnedCards, 0),
+    [deckSummaries]
+  );
+  const remainingCards = totalCards - masteredCards;
+  const overallProgress = totalCards > 0 ? Math.round((masteredCards / totalCards) * 100) : 0;
+  const inProgressDecks = useMemo(
+    () => deckSummaries.filter((deck) => deck.totalCards > 0 && deck.learnedCards < deck.totalCards),
+    [deckSummaries]
+  );
+  const mostRecentStudyableDeck = useMemo(
+    () => inProgressDecks.find((deck) => deck.id === lastStudiedDeckId),
+    [inProgressDecks, lastStudiedDeckId]
+  );
+  const featuredDeck = mostRecentStudyableDeck ?? inProgressDecks[0];
+  const progressDecks = inProgressDecks.slice(0, 3);
+
+  const handleStudy = (deckId: string) => {
+    onStartStudy(deckId);
+  };
+
+  const hasStudyableDeck = Boolean(featuredDeck);
+  const hasCompletedAllCards = totalCards > 0 && inProgressDecks.length === 0;
 
   return (
-    <div className="max-w-6xl mx-auto py-6 sm:py-8 px-4 sm:px-6 space-y-8">
-      {/* 상단 페이지 타이틀 & 퀵 액션 */}
+    <div className="max-w-6xl mx-auto py-6 sm:py-8 px-4 sm:px-6 space-y-7 sm:space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             대시보드
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
-            플래시카드 덱과 폴더를 관리하고 3D 반복 학습을 시작하세요.
+          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">
+            오늘 학습할 덱을 선택하고, 흐름을 이어가세요.
           </p>
         </div>
 
@@ -112,7 +122,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           >
             새 폴더
           </Button>
-
           <Button
             variant="default"
             size="sm"
@@ -124,280 +133,170 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* shadcn 시그니처 4열 통계 지표 카드 그리드 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Card 1: 총 카드 */}
-        <Card className="p-3.5 sm:p-5 flex flex-col justify-between">
-          <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
-            <CardTitle className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
-              총 학습 카드
-            </CardTitle>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="text-xl sm:text-2xl font-bold tracking-tight font-mono text-foreground">
-              {totalCards}
-            </div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-              전체 등록 카드
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Card 2: 마스터 완료 */}
-        <Card className="p-3.5 sm:p-5 flex flex-col justify-between">
-          <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
-            <CardTitle className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
-              마스터 완료
-            </CardTitle>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="text-xl sm:text-2xl font-bold tracking-tight font-mono text-emerald-600">
-              {masteredCards}
-            </div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-              학습 완료된 카드
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Card 3: 전체 달성률 */}
-        <Card className="p-3.5 sm:p-5 flex flex-col justify-between">
-          <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
-            <CardTitle className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
-              전체 달성률
-            </CardTitle>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="text-xl sm:text-2xl font-bold tracking-tight font-mono text-foreground">
-              {overallProgress}%
-            </div>
-            <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden mt-1.5">
-              <div
-                className="bg-primary h-full transition-all duration-300 rounded-full"
-                style={{ width: `${overallProgress}%` }}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Card 4: 보관 덱 & 폴더 */}
-        <Card className="p-3.5 sm:p-5 flex flex-col justify-between">
-          <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
-            <CardTitle className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground truncate">
-              학습 덱 & 폴더
-            </CardTitle>
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
-              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="text-xl sm:text-2xl font-bold tracking-tight font-mono text-foreground">
-              {decks.length}
-            </div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-              폴더 {folders.length}개 보관 중
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 검색 바 */}
-      <div className="w-full sm:max-w-md">
-        <Input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="덱 제목, 카드 단어, 개념 검색..."
-          leftIcon={<Search className="w-4 h-4" />}
-          className="h-9"
+      {!hasStudyableDeck ? (
+        <EmptyState
+          icon={<BookOpen className="w-7 h-7 text-primary" />}
+          title={
+            decks.length === 0
+              ? '첫 번째 덱을 만들어 보세요.'
+              : hasCompletedAllCards
+                ? '모든 카드를 익혔어요!'
+                : '학습할 카드가 아직 없습니다.'
+          }
+          description={
+            decks.length === 0
+              ? '덱을 만들고 카드를 추가하면 여기에서 바로 학습을 시작할 수 있습니다.'
+              : hasCompletedAllCards
+                ? '완료한 덱을 다시 복습하거나, 새로운 덱으로 다음 학습을 시작해 보세요.'
+                : '덱에 카드를 추가하면 학습 현황과 바로 시작할 수 있는 덱을 보여드립니다.'
+          }
+          action={
+            <Button
+              variant={hasCompletedAllCards ? 'outline' : 'default'}
+              size="sm"
+              onClick={hasCompletedAllCards ? onNavigateAllDecks : onCreateDeck}
+              leftIcon={hasCompletedAllCards ? <BookOpen className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            >
+              {hasCompletedAllCards ? '완료한 덱 보기' : '새 덱 만들기'}
+            </Button>
+          }
         />
-      </div>
-
-      {/* 섹션 1: 폴더 목록 */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FolderIcon className="w-4 h-4 text-primary" />
-            <h2 className="text-base font-semibold text-foreground tracking-tight">학습 폴더</h2>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {folders.length}
-            </Badge>
-          </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {folders.length > 0 && (
+      ) : (
+        <>
+          <Card className="overflow-hidden border-primary/20 bg-primary text-primary-foreground shadow-sm">
+            <div className="p-5 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-primary-foreground/75 uppercase">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {mostRecentStudyableDeck ? '이어서 학습하기' : '바로 학습하기'}
+                </div>
+                <h2 className="mt-2 text-xl sm:text-2xl font-bold tracking-tight truncate">
+                  {featuredDeck.title}
+                </h2>
+                <p className="mt-1.5 text-sm text-primary-foreground/80">
+                  전체 {featuredDeck.totalCards}장 중 {featuredDeck.learnedCards}장을 익혔어요. {featuredDeck.totalCards - featuredDeck.learnedCards}장을 더 학습해 보세요.
+                </p>
+              </div>
               <Button
-                variant="ghost"
-                size="sm"
-                onClick={onNavigateAllFolders}
-                className="text-xs text-muted-foreground hover:text-foreground h-8 gap-0.5 px-2"
-                title="모든 폴더 보기"
+                variant="secondary"
+                size="lg"
+                onClick={() => handleStudy(featuredDeck.id)}
+                leftIcon={<Play className="w-4 h-4 fill-current" />}
+                className="bg-background text-primary hover:bg-background/90 sm:self-center"
               >
-                <span>더보기</span>
-                <ChevronRight className="w-3.5 h-3.5" />
+                {featuredDeck.totalCards - featuredDeck.learnedCards}장 학습 시작
               </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCreateFolder}
-              className="text-xs text-primary hover:text-primary h-8"
-            >
-              + 폴더 추가
-            </Button>
-          </div>
-        </div>
-
-        {folders.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-muted-foreground text-sm">
-            폴더를 생성하여 관련된 카드 덱을 체계적으로 묶어보세요.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sortedFolders.slice(0, 6).map((f) => {
-                const count = decks.filter((d) => d.folderId === f.id).length;
-                return (
-                  <FolderCard
-                    key={f.id}
-                    folder={f}
-                    decksCount={count}
-                    onClick={() => onNavigateFolder(f.id)}
-                  />
-                );
-              })}
             </div>
+          </Card>
 
-            {folders.length > 6 && (
-              <div className="text-center pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onNavigateAllFolders}
-                  className="text-xs h-8 text-muted-foreground hover:text-foreground"
-                >
-                  <span>전체 폴더 {folders.length}개 모두 보기</span>
-                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <Card className="p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">남은 학습 카드</p>
+                  <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">{remainingCards}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">진행 중인 덱 기준</p>
+                </div>
+                <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Layers className="w-4 h-4" />
+                </span>
+              </div>
+            </Card>
+
+            <Card className="p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-muted-foreground">전체 달성률</p>
+                  <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">{overallProgress}%</p>
+                  <ProgressBar value={overallProgress} className="mt-2.5" />
+                </div>
+                <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-4 h-4" />
+                </span>
+              </div>
+            </Card>
+
+            <Card className="p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">진행 중인 덱</p>
+                  <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">{inProgressDecks.length}개</p>
+                  <p className="mt-1 text-xs text-muted-foreground">바로 이어서 학습 가능</p>
+                </div>
+                <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </span>
+              </div>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_15.5rem] gap-5 sm:gap-6">
+            <section aria-labelledby="in-progress-decks-heading">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h2 id="in-progress-decks-heading" className="text-base font-semibold tracking-tight text-foreground">진행 중인 덱</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">학습을 이어갈 덱을 선택하세요.</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={onNavigateAllDecks} className="text-primary hover:text-primary">
+                  모든 덱 보기
                 </Button>
               </div>
-            )}
+
+              <Card className="overflow-hidden divide-y divide-border">
+                {progressDecks.map((deck) => (
+                  <div key={deck.id} className="flex items-center gap-3 p-3 sm:p-4">
+                    <button
+                      type="button"
+                      onClick={() => onNavigateDeck(deck.id)}
+                      className="min-w-0 flex-1 text-left rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      aria-label={`${deck.title} 덱 열기`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm text-foreground truncate">{deck.title}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {deck.learnedCards} / {deck.totalCards}장 완료
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                      </div>
+                      <ProgressBar value={deck.progress} className="mt-2.5" />
+                    </button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleStudy(deck.id)}
+                      leftIcon={<Play className="w-3.5 h-3.5 fill-current" />}
+                      className="shrink-0"
+                    >
+                      학습
+                    </Button>
+                  </div>
+                ))}
+              </Card>
+            </section>
+
+            <aside aria-labelledby="quick-actions-heading">
+              <Card className="p-4 sm:p-5">
+                <h2 id="quick-actions-heading" className="text-sm font-semibold tracking-tight text-foreground">빠른 작업</h2>
+                <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+                  자료 관리는 필요한 때에만 빠르게 처리하세요.
+                </p>
+                <div className="mt-4 space-y-2">
+                  <Button variant="outline" size="sm" onClick={onCreateDeck} leftIcon={<Plus className="w-4 h-4 text-primary" />} className="w-full justify-start">
+                    새 덱 만들기
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={onCreateFolder} leftIcon={<FolderPlus className="w-4 h-4 text-primary" />} className="w-full justify-start">
+                    새 폴더 만들기
+                  </Button>
+                </div>
+              </Card>
+            </aside>
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      {/* 섹션 2: 카드 덱 목록 */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-primary" />
-              <h2 className="text-base font-semibold text-foreground tracking-tight">학습 덱 목록</h2>
-              <Badge variant="secondary" className="font-mono text-xs">
-                {filteredDecks.length}
-              </Badge>
-            </div>
-
-            {/* 필터 탭 */}
-            <Tabs
-              value={activeTab}
-              onValueChange={(val) => setActiveTab(val as 'all' | 'root')}
-              className="w-auto"
-            >
-              <TabsList className="h-8 p-0.5">
-                <TabsTrigger value="all" className="text-xs px-2.5 py-0.5">전체</TabsTrigger>
-                <TabsTrigger value="root" className="text-xs px-2.5 py-0.5">미분류</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
-            {decks.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onNavigateAllDecks}
-                className="text-xs text-muted-foreground hover:text-foreground h-8 gap-0.5 px-2"
-                title="모든 덱 보기"
-              >
-                <span>더보기</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCreateDeck}
-              className="text-xs text-primary hover:text-primary h-8"
-            >
-              + 새 덱 추가
-            </Button>
-          </div>
-        </div>
-
-        {filteredDecks.length === 0 ? (
-          <EmptyState
-            icon={<BookOpen className="w-6 h-6 text-muted-foreground" />}
-            title={searchQuery ? '검색 결과와 일치하는 덱이 없습니다.' : '등록된 덱이 없습니다.'}
-            description="새로운 카드 덱을 생성하여 플래시카드 학습을 시작해 보세요."
-            action={
-              <Button variant="default" size="sm" onClick={onCreateDeck}>
-                새 덱 만들기
-              </Button>
-            }
-          />
-        ) : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredDecks.slice(0, 6).map((deck) => {
-                const deckCards = cards.filter((c) => c.deckId === deck.id);
-                const learned = deckCards.filter((c) => c.learned).length;
-                const parentFolder = deck.folderId
-                  ? folders.find((f) => f.id === deck.folderId)
-                  : null;
-
-                return (
-                  <DeckCard
-                    key={deck.id}
-                    deck={deck}
-                    cardsCount={deckCards.length}
-                    learnedCount={learned}
-                    parentFolderTitle={parentFolder?.title}
-                    onNavigateDeck={onNavigateDeck}
-                    onStartStudy={onStartStudy}
-                  />
-                );
-              })}
-            </div>
-
-            {filteredDecks.length > 6 && (
-              <div className="text-center pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onNavigateAllDecks}
-                  className="text-xs h-8 text-muted-foreground hover:text-foreground"
-                >
-                  <span>전체 덱 {filteredDecks.length}개 모두 보기</span>
-                  <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 하단 저장 정보 안내 영역 */}
-      <div className="pt-6 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+      <div className="pt-1 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>데이터는 브라우저의 localStorage 및 Firebase 클라우드에 안전하게 보관됩니다.</span>
         <span>FlashCards</span>
       </div>

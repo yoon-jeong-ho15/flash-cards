@@ -60,6 +60,13 @@ export const App: React.FC = () => {
   }, [initCloudSync, setSyncStatus, user]);
 
   const [currentView, setCurrentView] = useState<ViewMode>({ type: 'dashboard' });
+  const [lastStudiedDeckId, setLastStudiedDeckId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('flashcard_last_studied_deck_id');
+    } catch {
+      return null;
+    }
+  });
   const [folderModalState, setFolderModalState] = useState<{
     isOpen: boolean;
     folderId?: string;
@@ -104,8 +111,15 @@ export const App: React.FC = () => {
   const navigateDeck = (deckId: string) => setCurrentView({ type: 'deck', deckId });
   const navigateEditDeck = (deckId?: string, folderId?: string, focusCardId?: string) =>
     setCurrentView({ type: 'edit-deck', deckId, folderId, focusCardId });
-  const navigateStudy = (deckId: string, onlyDifficult = false, shuffle = false) =>
+  const navigateStudy = (deckId: string, onlyDifficult = false, shuffle = false) => {
+    setLastStudiedDeckId(deckId);
+    try {
+      localStorage.setItem('flashcard_last_studied_deck_id', deckId);
+    } catch {
+      // ignore storage error
+    }
     setCurrentView({ type: 'study', deckId, onlyDifficult, shuffle });
+  };
 
   const openNewFolderModal = () => setFolderModalState({ isOpen: true });
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
@@ -149,9 +163,8 @@ export const App: React.FC = () => {
         <main className="flex-1 pb-16">
           {currentView.type === 'dashboard' && (
             <DashboardView
-              onNavigateFolder={navigateFolder}
+              lastStudiedDeckId={lastStudiedDeckId}
               onNavigateDeck={navigateDeck}
-              onNavigateAllFolders={navigateAllFolders}
               onNavigateAllDecks={navigateAllDecks}
               onStartStudy={(deckId) => navigateStudy(deckId)}
               onCreateDeck={() => navigateEditDeck()}
