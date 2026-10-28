@@ -325,7 +325,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </Card>
           <button
             type="button"
-            tabIndex={-1}
             onClick={onCreateFolder}
             className="group flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-5 text-left transition-colors hover:border-primary/40 hover:bg-secondary/30"
           >

@@ -66,7 +66,6 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ label, actions }) => {
             <button
               key={action.label}
               type="button"
-              tabIndex={-1}
               onClick={() => {
                 triggerRef.current?.focus();
                 setOpen(false);

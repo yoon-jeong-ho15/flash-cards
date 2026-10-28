@@ -99,7 +99,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <button
       key={deck.id}
       type="button"
-      tabIndex={-1}
       onClick={() => navigate(() => onNavigateDeck(deck.id))}
       aria-current={isCurrentDeck(deck.id) ? 'page' : undefined}
       className={cn(
@@ -123,7 +122,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {!collapsed && (
           <button
             type="button"
-            tabIndex={-1}
             onClick={() => navigate(onNavigateHome)}
             className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
             aria-label="FlashCards 홈"
@@ -141,7 +139,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
         <button
           type="button"
-          tabIndex={-1}
           onClick={onToggleCollapse}
           className="hidden rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted lg:block"
           title={collapsed ? '사이드바 펼치기' : '사이드바 접기'}
@@ -151,7 +148,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
         <button
           type="button"
-          tabIndex={-1}
           onClick={onCloseMobile}
           className="rounded-lg p-2 text-muted-foreground lg:hidden"
           aria-label="메뉴 닫기"
@@ -191,7 +187,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             key={item.type}
             type="button"
-            tabIndex={-1}
             onClick={() => navigate(item.action)}
             aria-current={currentView.type === item.type ? 'page' : undefined}
             title={item.label}
@@ -228,7 +223,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <h2 className="section-label">내 보관함</h2>
               <button
                 type="button"
-                tabIndex={-1}
                 onClick={() => navigate(onCreateFolder)}
                 aria-label="새 폴더 만들기"
                 title="새 폴더 만들기"
@@ -244,7 +238,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 이곳에 차곡차곡 모아보세요.
                 <button
                   type="button"
-                  tabIndex={-1}
                   onClick={() => navigate(onCreateFolder)}
                   className="mt-3 flex items-center gap-1 text-primary font-medium"
                 >
@@ -274,7 +267,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <button
                       type="button"
-                      tabIndex={-1}
                       className="shrink-0 rounded-lg px-1 py-2 text-muted-foreground hover:text-foreground"
                       onClick={() => setExpanded((prev) => ({ ...prev, [folder.id]: !isExpanded }))}
                       aria-label={`${folder.title} ${isExpanded ? '접기' : '펼치기'}`}
@@ -288,7 +280,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </button>
                     <button
                       type="button"
-                      tabIndex={-1}
                       onClick={() => navigate(() => onNavigateFolder(folder.id))}
                       aria-current={selected ? 'page' : undefined}
                       className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-2 text-left text-xs"
@@ -332,7 +323,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={folder.id}
               type="button"
-              tabIndex={-1}
               onClick={() => navigate(() => onNavigateFolder(folder.id))}
               title={folder.title}
               aria-label={folder.title}
@@ -352,7 +342,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ) : (
               <button
                 type="button"
-                tabIndex={-1}
                 onClick={() => sync()}
                 title={
                   lastSyncedAt
@@ -397,7 +386,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
             <button
               type="button"
-              tabIndex={-1}
               onClick={() => logout()}
               title="로그아웃"
               aria-label="로그아웃"

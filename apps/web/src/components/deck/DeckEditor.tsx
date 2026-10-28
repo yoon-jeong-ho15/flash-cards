@@ -286,6 +286,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
           <Button
             variant="outline"
             size="sm"
+            tabIndex={-1}
             onClick={handleAddCard}
             leftIcon={<Plus className="w-4 h-4 text-primary" />}
           >
@@ -296,7 +297,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         {hasExternalChanges && (
           <div role="status" className="p-3 mb-4 rounded-lg bg-amber-50 text-amber-900 text-sm">
             다른 곳에서 덱이 변경되었습니다. 작성 중인 내용은 유지됩니다. 저장하면 현재 편집 내용이 반영됩니다.
-            <Button type="button" variant="outline" size="sm" className="ml-2" onClick={() => {
+            <Button type="button" variant="outline" size="sm" tabIndex={-1} className="ml-2" onClick={() => {
               if (window.confirm('작성 중인 내용을 버리고 최신 저장 내용을 불러올까요?')) reloadOriginal();
             }}>최신 내용 불러오기</Button>
           </div>
@@ -333,7 +334,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         {/* 하단 카드 추가 큰 버튼 */}
         <button
           type="button"
-          tabIndex={-1}
+          tabIndex={0}
           onClick={handleAddCard}
           className="w-full py-4 rounded-xl border border-dashed border-border hover:border-primary/50 bg-card hover:bg-muted/30 text-primary font-semibold flex items-center justify-center gap-2 transition-all shadow-2xs text-sm cursor-pointer"
         >
@@ -347,6 +348,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         <Button
           variant="outline"
           size="default"
+          tabIndex={-1}
           onClick={handleRequestClose}
         >
           취소
@@ -354,6 +356,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         <Button
           variant="default"
           size="default"
+          tabIndex={-1}
           onClick={handleSave}
           leftIcon={<Save className="w-4 h-4" />}
           className="font-semibold shadow-xs"

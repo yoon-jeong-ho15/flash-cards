@@ -32,7 +32,6 @@ export const DeckCard: React.FC<DeckCardProps> = memo(
       <Card className="group relative flex flex-col overflow-hidden transition-all duration-200 hover:border-primary/35 hover:shadow-md">
         <button
           type="button"
-          tabIndex={-1}
           onClick={() => onNavigateDeck(deck.id)}
           aria-label={`${deck.title} 덱 열기`}
           className="flex flex-1 flex-col p-5 pb-4 text-left after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"

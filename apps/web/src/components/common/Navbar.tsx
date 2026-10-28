@@ -94,7 +94,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             {currentView.type !== 'study' && (
               <button
                 type="button"
-                tabIndex={-1}
                 onClick={onOpenMobileSidebar}
                 aria-label="메뉴 열기"
                 aria-haspopup="dialog"
@@ -109,7 +108,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <button
                 type="button"
-                tabIndex={-1}
                 onClick={onNavigateHome}
                 aria-label="학습 홈으로 이동"
                 className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
@@ -121,7 +119,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <>
                   <button
                     type="button"
-                    tabIndex={-1}
                     onClick={() => onNavigateFolder(folder.id)}
                     className="hidden max-w-28 truncate text-muted-foreground hover:text-primary md:block"
                   >
@@ -139,7 +136,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             {currentView.type !== 'study' && (
               <button
                 type="button"
-                tabIndex={-1}
                 onClick={(event) => {
                   event.currentTarget.focus();
                   setSearchOpen(true);

@@ -41,7 +41,6 @@ export const MoveDeckModal: React.FC<MoveDeckModalProps> = ({
         {/* 미분류 (루트) 옵션 */}
         <button
           type="button"
-          tabIndex={-1}
           onClick={() => setSelectedFolderId(null)}
           className={cn(
             'w-full flex items-center justify-between p-3 rounded-lg border text-sm text-left transition-all cursor-pointer',
@@ -64,7 +63,6 @@ export const MoveDeckModal: React.FC<MoveDeckModalProps> = ({
             <button
               key={f.id}
               type="button"
-              tabIndex={-1}
               onClick={() => setSelectedFolderId(f.id)}
               className={cn(
                 'w-full flex items-center justify-between p-3 rounded-lg border text-sm text-left transition-all cursor-pointer',
