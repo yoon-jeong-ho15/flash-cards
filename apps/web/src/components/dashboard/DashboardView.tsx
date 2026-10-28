@@ -41,7 +41,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateAllDecks,
   onStartStudy,
 }) => {
-  const { decks, cards } = useFlashcardStore();
+  const decks = useFlashcardStore(state => state.decks);
+  const cards = useFlashcardStore(state => state.cards);
 
   const deckSummaries = useMemo<DeckSummary[]>(() => {
     const cardsByDeck = new Map<string, { total: number; learned: number }>();

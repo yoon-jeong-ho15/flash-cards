@@ -1,3 +1,4 @@
+import { indexCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { FolderModal } from './FolderModal';
@@ -35,7 +36,10 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   onCreateDeckInFolder,
   onBack,
 }) => {
-  const { folders, decks, cards, deleteFolder } = useFlashcardStore();
+  const folders = useFlashcardStore(state => state.folders);
+  const decks = useFlashcardStore(state => state.decks);
+  const cards = useFlashcardStore(state => state.cards);
+  const deleteFolder = useFlashcardStore(state => state.deleteFolder);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -250,7 +254,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {sortedDecks.map((deck) => {
-            const deckCards = cards.filter((c) => c.deckId === deck.id);
+            const deckCards = (indexCards(cards).byDeck.get(deck.id) || []);
             const learned = deckCards.filter((c) => c.learned).length;
 
             return (

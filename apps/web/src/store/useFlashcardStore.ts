@@ -16,8 +16,11 @@ export const useFlashcardStore = create<FlashcardStoreState>()((set, get, api) =
     const previous = get();
     const patch = typeof update === 'function' ? update(previous) : update;
     const next = { ...previous, ...patch };
-    if (next.user?.uid !== previous.user?.uid || next.folders !== previous.folders ||
-      next.decks !== previous.decks || next.cards !== previous.cards || next.pendingSync !== previous.pendingSync) {
+    // Switching accounts only loads an existing snapshot. It must also work when
+    // storage is full, so logout never depends on writing another account's cache.
+    const sameAccount = next.user?.uid === previous.user?.uid;
+    if (sameAccount && (next.folders !== previous.folders || next.decks !== previous.decks ||
+      next.cards !== previous.cards || next.pendingSync !== previous.pendingSync)) {
       writeAccount(next);
     }
     set(patch);

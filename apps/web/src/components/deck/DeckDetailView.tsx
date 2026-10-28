@@ -1,3 +1,4 @@
+import { selectDeckCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { DeckCardPreviewItem } from './DeckCardPreviewItem';
@@ -40,8 +41,11 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
   onNavigateFolder,
   onBack,
 }) => {
-  const { decks, cards, folders, deleteDeck, resetDeckProgress } =
-    useFlashcardStore();
+  const decks = useFlashcardStore(state => state.decks);
+
+  const folders = useFlashcardStore(state => state.folders);
+  const deleteDeck = useFlashcardStore(state => state.deleteDeck);
+  const resetDeckProgress = useFlashcardStore(state => state.resetDeckProgress);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -49,10 +53,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
 
   const deck = useMemo(() => decks.find((d) => d.id === deckId), [decks, deckId]);
-  const deckCards = useMemo(
-    () => sortCardsByOrder(cards.filter((c) => c.deckId === deckId)),
-    [cards, deckId]
-  );
+  const deckCards = useFlashcardStore(state => selectDeckCards(state, deckId));
   const folder = useMemo(
     () => (deck?.folderId ? folders.find((f) => f.id === deck.folderId) : null),
     [folders, deck]

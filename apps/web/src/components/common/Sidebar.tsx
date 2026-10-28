@@ -1,3 +1,4 @@
+import { indexCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { ViewMode, Folder, Deck } from '../../types';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
@@ -52,18 +53,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCreateDeck,
   onCreateFolder,
 }) => {
-  const {
-    folders,
-    decks,
-    cards,
-    syncStatus,
-    user,
-    loginWithGoogle,
-    logout,
-    initCloudSync,
-    pendingSync,
-    lastSyncedAt,
-  } = useFlashcardStore();
+  const folders = useFlashcardStore(state => state.folders);
+  const decks = useFlashcardStore(state => state.decks);
+  const cards = useFlashcardStore(state => state.cards);
+  const syncStatus = useFlashcardStore(state => state.syncStatus);
+  const user = useFlashcardStore(state => state.user);
+  const loginWithGoogle = useFlashcardStore(state => state.loginWithGoogle);
+  const logout = useFlashcardStore(state => state.logout);
+  const initCloudSync = useFlashcardStore(state => state.initCloudSync);
+  const pendingSync = useFlashcardStore(state => state.pendingSync);
+  const lastSyncedAt = useFlashcardStore(state => state.lastSyncedAt);
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
@@ -419,7 +418,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         ) : (
                           folderDecks.map((deck) => {
                             const isDeckActive = isCurrentDeck(deck.id);
-                            const deckCardsCount = cards.filter((c) => c.deckId === deck.id).length;
+                            const deckCardsCount = (indexCards(cards).byDeck.get(deck.id) || []).length;
 
                             return (
                               <div
@@ -461,7 +460,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="space-y-0.5">
                     {unassignedDecks.map((deck) => {
                       const isDeckActive = isCurrentDeck(deck.id);
-                      const deckCardsCount = cards.filter((c) => c.deckId === deck.id).length;
+                      const deckCardsCount = (indexCards(cards).byDeck.get(deck.id) || []).length;
 
                       return (
                         <div

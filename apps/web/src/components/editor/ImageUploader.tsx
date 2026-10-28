@@ -19,7 +19,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   onImageChange,
   compact = false,
 }) => {
-  const { user } = useFlashcardStore();
+  const user = useFlashcardStore(state => state.user);
   const mounted = useRef(true);
   const onImageChangeRef = useRef(onImageChange);
   onImageChangeRef.current = onImageChange;

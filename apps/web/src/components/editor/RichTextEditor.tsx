@@ -50,7 +50,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   className = '',
   autoFocus = false,
 }) => {
-  const { user } = useFlashcardStore();
+  const user = useFlashcardStore(state => state.user);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<any>(null);
   const [isUploading, setIsUploading] = useState(false);

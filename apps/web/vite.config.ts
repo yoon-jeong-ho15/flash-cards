@@ -22,13 +22,11 @@ export default defineConfig({
             if (id.includes('@tiptap') || id.includes('prosemirror')) {
               return 'vendor-tiptap';
             }
-            if (id.includes('react') || id.includes('react-dom')) {
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
               return 'vendor-react';
             }
-            if (id.includes('lucide-react')) {
-              return 'vendor-icons';
-            }
-            return 'vendor';
+            if (id.includes('@firebase') || id.includes('/firebase/')) return 'vendor-firebase';
+            // Let Rollup place other dependencies with the screens that use them.
           }
         },
       },

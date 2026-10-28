@@ -1,3 +1,4 @@
+import { indexCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { DeckCard } from './DeckCard';
@@ -29,7 +30,9 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
   onCreateDeck,
   onBack,
 }) => {
-  const { decks, folders, cards } = useFlashcardStore();
+  const decks = useFlashcardStore(state => state.decks);
+  const folders = useFlashcardStore(state => state.folders);
+  const cards = useFlashcardStore(state => state.cards);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'root'>('all');
 
@@ -67,8 +70,7 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
       result = result.filter((d) => {
         const titleMatch = d.title.toLowerCase().includes(q);
         const descMatch = d.description?.toLowerCase().includes(q);
-        const cardMatch = cards
-          .filter((c) => c.deckId === d.id)
+        const cardMatch = (indexCards(cards).byDeck.get(d.id) || [])
           .some(
             (c) =>
               c.termRichText.toLowerCase().includes(q) ||
@@ -217,7 +219,7 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredDecks.map((deck) => {
-              const deckCards = cards.filter((c) => c.deckId === deck.id);
+              const deckCards = (indexCards(cards).byDeck.get(deck.id) || []);
               const learned = deckCards.filter((c) => c.learned).length;
               const parentFolder = deck.folderId
                 ? folders.find((f) => f.id === deck.folderId)

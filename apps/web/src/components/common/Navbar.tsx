@@ -42,20 +42,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateFolder,
   onNavigateDeck,
 }) => {
-  const store = useFlashcardStore();
-  const folders = propFolders ?? store.folders;
-  const decks = propDecks ?? store.decks;
-  const {
-    syncStatus,
-    lastSyncedAt,
-    initCloudSync,
-    pendingSync,
-    user,
-    loginWithGoogle,
-    logout,
-    authError,
-    setAuthError,
-  } = store;
+  const storeFolders = useFlashcardStore(state => state.folders);
+  const folders = propFolders ?? storeFolders;
+  const storeDecks = useFlashcardStore(state => state.decks);
+  const decks = propDecks ?? storeDecks;
+  const syncStatus = useFlashcardStore(state => state.syncStatus);
+  const lastSyncedAt = useFlashcardStore(state => state.lastSyncedAt);
+  const initCloudSync = useFlashcardStore(state => state.initCloudSync);
+  const pendingSync = useFlashcardStore(state => state.pendingSync);
+  const user = useFlashcardStore(state => state.user);
+  const loginWithGoogle = useFlashcardStore(state => state.loginWithGoogle);
+  const logout = useFlashcardStore(state => state.logout);
+  const authError = useFlashcardStore(state => state.authError);
+  const setAuthError = useFlashcardStore(state => state.setAuthError);
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 

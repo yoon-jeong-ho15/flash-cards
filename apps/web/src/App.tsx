@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { ViewMode } from './types';
@@ -9,13 +9,17 @@ import { DashboardView } from './components/dashboard/DashboardView';
 import { FolderDetailView } from './components/folder/FolderDetailView';
 import { FolderModal } from './components/folder/FolderModal';
 import { DeckDetailView } from './components/deck/DeckDetailView';
-import { DeckEditor } from './components/deck/DeckEditor';
-import { StudyView } from './components/study/StudyView';
 import { AllFoldersView } from './components/folder/AllFoldersView';
 import { AllDecksView } from './components/deck/AllDecksView';
 
+const DeckEditor = lazy(() => import('./components/deck/DeckEditor').then(module => ({ default: module.DeckEditor })));
+const StudyView = lazy(() => import('./components/study/StudyView').then(module => ({ default: module.StudyView })));
+
 export const App: React.FC = () => {
-  const { initCloudSync, setSyncStatus, setUser, user } = useFlashcardStore();
+  const initCloudSync = useFlashcardStore(state => state.initCloudSync);
+  const setSyncStatus = useFlashcardStore(state => state.setSyncStatus);
+  const setUser = useFlashcardStore(state => state.setUser);
+  const user = useFlashcardStore(state => state.user);
 
   // Firebase Auth 인증 상태 감지 및 자동 동기화
   useEffect(() => {
@@ -165,6 +169,7 @@ export const App: React.FC = () => {
         />
 
         {/* 메인 뷰 컨테이너 */}
+        <Suspense fallback={<div role="status" className="p-6">화면을 불러오는 중…</div>}>
         <main key={user?.uid || 'guest'} className="flex-1 pb-16">
           {currentView.type === 'dashboard' && (
             <DashboardView
@@ -243,6 +248,7 @@ export const App: React.FC = () => {
           />
         )}
       </main>
+        </Suspense>
 
       {/* 글로벌 폴더 생성/수정 모달 */}
       {folderModalState.isOpen && (

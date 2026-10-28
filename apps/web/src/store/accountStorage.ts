@@ -33,8 +33,21 @@ export function readAccount(uid?: string): AccountSnapshot {
   return snapshot;
 }
 
+const serializedCollections = new WeakMap<object, string>();
+function serializeCollection(value: object): string {
+  let serialized = serializedCollections.get(value);
+  if (serialized === undefined) {
+    serialized = JSON.stringify(value);
+    serializedCollections.set(value, serialized);
+  }
+  return serialized;
+}
+
 export function writeAccount(state: FlashcardStoreState): void {
-  const snapshot: AccountSnapshot = { folders: state.folders, decks: state.decks, cards: state.cards,
-    pendingSync: state.pendingSync, pendingVersions: state.pendingVersions, mutationRevision: state.mutationRevision };
-  localStorage.setItem(accountStorageKey(state.user?.uid), JSON.stringify(snapshot));
+  const metadata = JSON.stringify({ pendingSync: state.pendingSync,
+    pendingVersions: state.pendingVersions, mutationRevision: state.mutationRevision });
+  // One atomic localStorage write. Acknowledgements reuse collection JSON rather than
+  // walking every card (and embedded image) again just to update the outbox.
+  const serialized = `{"folders":${serializeCollection(state.folders)},"decks":${serializeCollection(state.decks)},"cards":${serializeCollection(state.cards)},${metadata.slice(1)}`;
+  localStorage.setItem(accountStorageKey(state.user?.uid), serialized);
 }

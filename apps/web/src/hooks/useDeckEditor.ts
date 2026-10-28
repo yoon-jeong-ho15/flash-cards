@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { selectDeckCards, indexCards } from '../store/cardSelectors';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { CardFormItem } from '../components/deck/DeckCardEditorItem';
 import { sortCardsByOrder } from '../services/flashcardService';
@@ -82,7 +83,11 @@ export const useDeckEditor = ({
   focusCardId,
   onSaved,
 }: UseDeckEditorOptions) => {
-  const { decks, cards, folders, saveDeckWithCards, user } = useFlashcardStore();
+  const decks = useFlashcardStore(state => state.decks);
+  const cards = useFlashcardStore(state => selectDeckCards(state, deckId || ''));
+  const folders = useFlashcardStore(state => state.folders);
+  const saveDeckWithCards = useFlashcardStore(state => state.saveDeckWithCards);
+  const user = useFlashcardStore(state => state.user);
 
   const [title, setTitle] = useState(() => {
     if (deckId) {
@@ -224,13 +229,9 @@ export const useDeckEditor = ({
       selectedFolderId,
       cardItems,
     };
-    const currentJson = JSON.stringify(currentData);
-
-    if (currentJson === lastSavedJsonRef.current) {
-      return;
-    }
-
     const timer = setTimeout(() => {
+      const currentJson = JSON.stringify(currentData);
+      if (currentJson === lastSavedJsonRef.current) return;
       const now = Date.now();
       const saved = saveDeckDraft(user?.uid, {
         deckId,
@@ -253,8 +254,8 @@ export const useDeckEditor = ({
   }, [title, description, selectedFolderId, cardItems, deckId, user?.uid, isReadyForAutoSave]);
 
   // Track the original independently of the editable draft. Remote refreshes must not reset inputs.
-  const fingerprint = JSON.stringify({ deck: decks.find(d => d.id === deckId),
-    cards: cards.filter(c => c.deckId === deckId) });
+  const originalDeck = decks.find(d => d.id === deckId);
+  const fingerprint = useMemo(() => JSON.stringify({ deck: originalDeck, cards }), [originalDeck, cards]);
   const [baseline, setBaseline] = useState(fingerprint);
   const hasExternalChanges = Boolean(deckId && baseline !== fingerprint);
   const reloadOriginal = useCallback(() => {
@@ -418,7 +419,7 @@ export const useDeckEditor = ({
           frontImageUrl: c.frontImageUrl,
           backImageUrl: c.backImageUrl || c.imageUrl,
           imageUrl: c.imageUrl || c.backImageUrl,
-          learned: cards.find(saved => saved.id === c.id)?.learned ?? c.learned ?? false,
+          learned: (c.id ? indexCards(cards).byId.get(c.id)?.learned : undefined) ?? c.learned ?? false,
         }))
       );
 

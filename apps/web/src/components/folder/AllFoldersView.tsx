@@ -19,7 +19,8 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
   onCreateFolder,
   onBack,
 }) => {
-  const { folders, decks } = useFlashcardStore();
+  const folders = useFlashcardStore(state => state.folders);
+  const decks = useFlashcardStore(state => state.decks);
   const [searchQuery, setSearchQuery] = useState('');
 
   // 폴더 검색 필터링 및 이름순 정렬

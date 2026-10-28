@@ -17,7 +17,9 @@ export const FolderModal: React.FC<FolderModalProps> = ({
   onClose,
   onSaved,
 }) => {
-  const { folders, addFolder, updateFolder } = useFlashcardStore();
+  const folders = useFlashcardStore(state => state.folders);
+  const addFolder = useFlashcardStore(state => state.addFolder);
+  const updateFolder = useFlashcardStore(state => state.updateFolder);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
