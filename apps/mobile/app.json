@@ -2,12 +2,9 @@
   "expo": {
     "name": "Flashcards",
     "slug": "flashcards-mobile",
-    "scheme": [
-      "flashcards",
-      "com.googleusercontent.apps.119489560534-4oa737q6ejm5b2h1si2us6snm25ba2hu"
-    ],
+    "scheme": "flashcards",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
@@ -16,7 +13,19 @@
     },
     "android": {
       "package": "com.flashcards.app",
-      "googleServicesFile": "./google-services.json"
-    }
+      "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [],
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "plugins": [
+      "expo-dev-client",
+      "@react-native-google-signin/google-signin",
+      ["expo-image-picker", {
+        "photosPermission": "학습 카드에 첨부할 사진을 선택합니다.",
+        "cameraPermission": "학습 카드에 첨부할 사진을 촬영합니다.",
+        "microphonePermission": false
+      }]
+    ]
   }
 }
