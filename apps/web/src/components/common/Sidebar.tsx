@@ -102,13 +102,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       onClick={() => navigate(() => onNavigateDeck(deck.id))}
       aria-current={isCurrentDeck(deck.id) ? 'page' : undefined}
       className={cn(
-        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2.5 text-left text-xs transition-colors hover:bg-muted',
+        'group flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted',
         isCurrentDeck(deck.id) ? 'bg-secondary font-semibold text-primary' : 'text-muted-foreground'
       )}
     >
       <FileText className="h-3.5 w-3.5 shrink-0 opacity-65" />
       <span className="min-w-0 flex-1 truncate">{deck.title}</span>
-      <span className="tabular-nums text-[10px]">{counts.get(deck.id)?.length ?? 0}</span>
+      <span className="shrink-0 tabular-nums text-[10px] opacity-75">{counts.get(deck.id)?.length ?? 0}</span>
     </button>
   );
   const content = (collapsed: boolean) => (
@@ -213,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
       <div
         className={cn(
-          'mt-6 min-h-0 flex-1 overflow-y-auto border-t border-border/70 px-4 pt-5 pb-4',
+          'mt-6 min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t border-border/70 px-4 pt-5 pb-4 no-scrollbar',
           collapsed && 'px-2'
         )}
       >
@@ -248,22 +248,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
             {sortedFolders.map((folder) => {
               const folderDecks = sortedDecks.filter((deck) => deck.folderId === folder.id);
+              const folderCardCount = folderDecks.reduce(
+                (sum, deck) => sum + (counts.get(deck.id)?.length ?? 0),
+                0
+              );
               const isExpanded =
                 expanded[folder.id] ??
                 ((currentView.type === 'folder' && currentView.folderId === folder.id) ||
                   folderDecks.some((deck) => isCurrentDeck(deck.id)));
               const selected = currentView.type === 'folder' && currentView.folderId === folder.id;
               return (
-                <div key={folder.id} className="mb-1">
+                <div key={folder.id} className="mb-0.5">
                   <div
                     className={cn(
-                      'flex items-center rounded-lg hover:bg-muted',
+                      'flex min-w-0 items-center rounded-lg hover:bg-muted',
                       selected && 'bg-secondary'
                     )}
                   >
                     <button
                       type="button"
-                      className="shrink-0 rounded-lg px-1 py-3 text-muted-foreground"
+                      className="shrink-0 rounded-lg px-1 py-2 text-muted-foreground hover:text-foreground"
                       onClick={() => setExpanded((prev) => ({ ...prev, [folder.id]: !isExpanded }))}
                       aria-label={`${folder.title} ${isExpanded ? '접기' : '펼치기'}`}
                       aria-expanded={isExpanded}
@@ -278,21 +282,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       type="button"
                       onClick={() => navigate(() => onNavigateFolder(folder.id))}
                       aria-current={selected ? 'page' : undefined}
-                      className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pr-2 text-left text-xs"
+                      className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-2 text-left text-xs"
                     >
                       <Folder className="h-4 w-4 shrink-0 text-[#a58b4e]" />
-                      <span className="flex-1 truncate">{folder.title}</span>
-                      <span className="text-[10px] tabular-nums text-muted-foreground">
-                        {folderDecks.length}
+                      <span className="min-w-0 flex-1 truncate">{folder.title}</span>
+                      <span
+                        className="flex shrink-0 items-baseline gap-1 tabular-nums text-muted-foreground"
+                        title={`덱 ${folderDecks.length}개 · 총 카드 ${folderCardCount}장`}
+                      >
+                        <span className="text-[10px]">{folderDecks.length}</span>
+                        <span className="text-[9px] text-muted-foreground/60">
+                          ({folderCardCount}장)
+                        </span>
                       </span>
                     </button>
                   </div>
                   {isExpanded && (
-                    <div className="ml-3 border-l border-border pl-2">
+                    <div className="ml-3 min-w-0 space-y-0.5 border-l border-border pl-2 py-0.5">
                       {folderDecks.length ? (
                         folderDecks.map(renderDeck)
                       ) : (
-                        <p className="p-3 text-xs text-muted-foreground">아직 덱이 없어요.</p>
+                        <p className="p-2 text-xs text-muted-foreground">아직 덱이 없어요.</p>
                       )}
                     </div>
                   )}
@@ -302,7 +312,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {sortedDecks.some((deck) => !deck.folderId) && (
               <div className="mt-4">
                 <p className="mb-2 px-2 text-[10px] text-muted-foreground">미분류 덱</p>
-                {sortedDecks.filter((deck) => !deck.folderId).map(renderDeck)}
+                <div className="space-y-0.5">
+                  {sortedDecks.filter((deck) => !deck.folderId).map(renderDeck)}
+                </div>
               </div>
             )}
           </>
