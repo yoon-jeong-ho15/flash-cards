@@ -1,7 +1,7 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Card, CardInput } from '../core/types';
-import { orderedCards } from '../core/content';
+import { folderCards, orderedCards } from '../core/content';
 import { reconcileSession, startSession, stepSession } from '../core/study';
 import { RichText } from '../editor/RichText';
 import { store, useStore } from '../platform/runtime';
@@ -23,11 +23,12 @@ function EditCard({ card, onClose }: { card: Card; onClose: () => void }) {
     <Button title="카드 삭제" tone="danger" disabled={busy} onPress={() => confirm('현재 카드를 삭제할까요?', '덱에서도 이 카드가 삭제됩니다.', async () => { await store.deleteCard(card.id); onClose(); })} />
   </Sheet>;
 }
-export function Study({ deckId, shuffle = false, onExit }: { deckId: string; shuffle?: boolean; onExit: () => void }) {
-  const { decks, cards } = useStore();
+export function Study({ deckId, folderId, shuffle = folderId !== undefined, onExit }: { deckId?: string; folderId?: string; shuffle?: boolean; onExit: () => void }) {
+  const { decks, cards, folders } = useStore();
   const deck = decks.find(d => d.id === deckId);
-  const own = orderedCards(cards, deckId);
-  const [session, setSession] = useState(() => startSession(own, shuffle));
+  const source = folderId !== undefined ? folders.find(f => f.id === folderId) : deck;
+  const own = useMemo(() => folderId !== undefined ? folderCards(cards, decks, folderId) : orderedCards(cards, deckId ?? ''), [cards, decks, deckId, folderId]);
+  const [session, setSession] = useState(() => startSession(own, shuffle, folderId === undefined));
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -39,14 +40,15 @@ export function Study({ deckId, shuffle = false, onExit }: { deckId: string; shu
   const frontScroll = useRef<ScrollView>(null);
   const backScroll = useRef<ScrollView>(null);
   const openImage = useImage();
-  useEffect(() => { void store.setPreferences({ lastStudiedDeckId: deckId }).catch(showError); }, [deckId]);
+  useEffect(() => { if (deckId !== undefined) void store.setPreferences({ lastStudiedDeckId: deckId }).catch(showError); }, [deckId]);
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
     const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
     return () => listener.remove();
   }, []);
-  useEffect(() => { setSession(previous => reconcileSession(previous, cards.filter(c => c.deckId === deckId))); }, [cards, deckId]);
+  useEffect(() => { setSession(previous => reconcileSession(previous, own)); }, [own]);
   const current = own.find(c => c.id === session.ids[session.index]);
+  const currentDeck = decks.find(d => d.id === current?.deckId);
   const learned = own.filter(c => c.learned).length;
   const swipe = useSwipeMotion({ cardId: current?.id, round: session.round, finished: session.finished, first: session.index === 0,
     disabled: busy || editing || turning, reduceMotion,
@@ -80,15 +82,20 @@ export function Study({ deckId, shuffle = false, onExit }: { deckId: string; shu
     });
   };
   flipReady.current = flip;
-  if (!deck) return <View style={s.page}><Empty title="덱을 찾을 수 없어요" /><Button title="학습 나가기" onPress={onExit} /></View>;
-  const restart = (unlearned: boolean) => setSession(startSession(orderedCards(store.getState().cards, deckId), shuffle, unlearned, unlearned ? session.round + 1 : 1));
+  if (!source) return <View style={s.page}><Empty title={folderId !== undefined ? '폴더를 찾을 수 없어요' : '덱을 찾을 수 없어요'} /><Button title="학습 나가기" onPress={onExit} /></View>;
+  if (!own.length) return <View style={s.page}><Empty title="학습할 카드가 없어요" detail={`'${source.title}' ${folderId !== undefined ? '폴더 안의 덱에' : '덱에'} 카드를 추가해 주세요.`} /><Button title={folderId !== undefined ? '폴더로 돌아가기' : '덱으로 돌아가기'} onPress={onExit} /></View>;
+  const restart = (unlearned: boolean) => {
+    const latest = store.getState();
+    const target = folderId !== undefined ? folderCards(latest.cards, latest.decks, folderId) : orderedCards(latest.cards, deckId ?? '');
+    setSession(startSession(target, shuffle, unlearned, unlearned ? session.round + 1 : 1));
+  };
   if (session.finished || !current) return <ScrollView contentContainerStyle={s.page}>
-    <Text style={s.label}>{deck.title} · {session.round}회차</Text><Text style={s.title}>{learned === own.length && own.length ? '모두 익혔어요!' : '이번 학습을 마쳤어요'}</Text>
+    <Text style={s.label}>{source.title} · {session.round}회차</Text><Text style={s.title}>{learned === own.length && own.length ? '모두 익혔어요!' : '이번 학습을 마쳤어요'}</Text>
     <View style={s.box}><Text style={s.text}>전체 {own.length}장 · 익힌 카드 {learned}장 · 남은 카드 {own.length - learned}장</Text><Progress learned={learned} total={own.length} /></View>
     <Button title="미학습 카드 다시 학습" disabled={learned === own.length} onPress={() => restart(true)} />
     <Button title="전체 카드 다시 학습" tone="secondary" disabled={!own.length} onPress={() => restart(false)} />
     {Boolean(current) && <Button title="현재 카드로 돌아가기" tone="secondary" onPress={() => setSession(previous => ({ ...previous, finished: false }))} />}
-    <Button title="덱으로 돌아가기" tone="secondary" onPress={onExit} />
+    <Button title={folderId !== undefined ? '폴더로 돌아가기' : '덱으로 돌아가기'} tone="secondary" onPress={onExit} />
   </ScrollView>;
   const percentage = own.length ? Math.round(learned / own.length * 100) : 0;
   const last = session.index === session.ids.length - 1;
@@ -118,17 +125,18 @@ export function Study({ deckId, shuffle = false, onExit }: { deckId: string; shu
   return <><View style={study.bar}>
     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 }}>
       <Pressable accessibilityRole="button" accessibilityLabel="학습 나가기" onPress={onExit} style={study.smallButton}><Icon name="back" size={20} color={colors.muted} /></Pressable>
-      <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 14, lineHeight: 20, fontWeight: '600', flexShrink: 1 }}>{deck.title}</Text>
+      <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 14, lineHeight: 20, fontWeight: '600', flexShrink: 1 }}>{source.title}</Text>
     </View>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
       {session.round > 1 && <Text style={[study.badge, { color: colors.green }]}>{session.round}R</Text>}
       {shuffle && <Text accessibilityLabel="랜덤 학습" style={study.badge}>⤨</Text>}
-      <Text accessibilityLiveRegion="polite" style={study.badge}><Text style={{ color: colors.muted }}>카드 </Text>{session.index + 1}/{own.length}</Text>
+      <Text accessibilityLiveRegion="polite" style={study.badge}><Text style={{ color: colors.muted }}>카드 </Text>{session.index + 1}/{session.ids.length}</Text>
       <View style={[study.badge, { flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}><Icon name="check" size={12} color="#047857" /><Text style={{ fontSize: 12, fontWeight: '600', color: '#047857' }}>{learned}/{own.length}</Text></View>
       <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>{percentage}%</Text>
     </View>
   </View>
   <ScrollView contentContainerStyle={study.page} keyboardShouldPersistTaps="handled">
+    {folderId !== undefined && currentDeck && <Text numberOfLines={1} style={[s.muted, { marginBottom: 12 }]}>현재 덱: {currentDeck.title}</Text>}
     <View style={{ gap: 8, marginBottom: 20 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}><Text style={[s.muted, { flex: 1, fontSize: 12 }]}>{session.flipped ? '정답을 확인하고, 기억했는지 표시해 보세요.' : '먼저 떠올려 보고, 카드를 뒤집어 보세요.'}</Text><Text style={s.muted}>{learned} / {own.length}장</Text></View><Progress learned={learned} total={own.length} compact /></View>
     <View {...swipe.panHandlers} pointerEvents={turning ? 'none' : 'auto'} style={{ height: 420 }} accessible={false}>
     <Animated.View style={[{ height: 420 }, swipe.style]} accessible={false}>

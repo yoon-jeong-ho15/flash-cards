@@ -1,4 +1,4 @@
-import { indexCards } from '../../store/cardSelectors';
+import { indexCards, selectFolderCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { FolderModal } from './FolderModal';
@@ -18,6 +18,7 @@ import {
   Calendar,
   ArrowUpDown,
   ChevronDown,
+  Shuffle,
 } from 'lucide-react';
 import { DeckSortOption } from '../../types';
 
@@ -25,6 +26,7 @@ interface FolderDetailViewProps {
   folderId: string;
   onNavigateDeck: (deckId: string) => void;
   onStartStudy: (deckId: string) => void;
+  onStartFolderStudy: (folderId: string) => void;
   onCreateDeckInFolder: (folderId: string) => void;
   onBack: () => void;
 }
@@ -33,6 +35,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   folderId,
   onNavigateDeck,
   onStartStudy,
+  onStartFolderStudy,
   onCreateDeckInFolder,
   onBack,
 }) => {
@@ -45,6 +48,10 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
 
   const folder = useMemo(() => folders.find((f) => f.id === folderId), [folders, folderId]);
   const folderDecks = useMemo(() => decks.filter((d) => d.folderId === folderId), [decks, folderId]);
+  const folderCardsCount = useMemo(
+    () => selectFolderCards({ decks, cards }, folderId).length,
+    [decks, cards, folderId]
+  );
 
   const [sortBy, setSortBy] = useState<DeckSortOption>(() => {
     try {
@@ -189,15 +196,32 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
           </p>
         )}
 
-        <div className="flex items-center gap-4 mt-6 pt-4 border-t border-border text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-4 mt-6 pt-4 border-t border-border text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5 font-medium text-foreground">
             <Layers className="w-3.5 h-3.5 text-primary" />
             덱 {folderDecks.length}개
           </span>
+          <span>카드 {folderCardsCount}개</span>
           <span className="flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
             생성일: {new Date(folder.createdAt).toLocaleDateString()}
           </span>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          <Button
+            onClick={() => onStartFolderStudy(folder.id)}
+            disabled={folderCardsCount === 0}
+            leftIcon={<Shuffle className="w-4 h-4" />}
+            className="w-full sm:w-auto"
+          >
+            폴더 전체 랜덤 학습
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            {folderCardsCount > 0
+              ? `이 폴더의 모든 카드 ${folderCardsCount}개를 덱 구분 없이 섞어서 학습합니다. '알아요' 카드도 포함됩니다.`
+              : '폴더 안의 덱에 카드를 추가하면 랜덤 학습을 시작할 수 있습니다.'}
+          </p>
         </div>
       </Card>
 

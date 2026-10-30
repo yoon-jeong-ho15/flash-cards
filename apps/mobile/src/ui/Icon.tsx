@@ -5,7 +5,8 @@ import { colors } from './kit';
 export type IconName = 'menu' | 'search' | 'home' | 'layers' | 'folder' | 'plus' | 'arrow' | 'back' | 'close' | 'check' | 'book' | 'target' | 'sparkles' | 'pencil' | 'trash' | 'rotate' | 'thumb';
 // Native strokes keep the navigation icons crisp without loading a remote font.
 export function Icon({ name, size = 20, color = colors.green }: { name: IconName; size?: number; color?: string }) {
-  const line = (x: number, y: number, width: number, angle = 0, key = `${x}:${y}`) => <View key={key} style={{ position: 'absolute', left: x, top: y, width, height: 1.6, backgroundColor: color, borderRadius: 1, transform: [{ rotate: `${angle}deg` }] }} />;
+  let lineIndex = 0;
+  const line = (x: number, y: number, width: number, angle = 0, key?: string) => <View key={key ?? `line-${lineIndex++}`} style={{ position: 'absolute', left: x, top: y, width, height: 1.6, backgroundColor: color, borderRadius: 1, transform: [{ rotate: `${angle}deg` }] }} />;
   const rect = (x: number, y: number, width: number, height: number, radius = 2) => <View style={{ position: 'absolute', left: x, top: y, width, height, borderWidth: 1.6, borderColor: color, borderRadius: radius }} />;
   let drawing: React.ReactNode;
   switch (name) {

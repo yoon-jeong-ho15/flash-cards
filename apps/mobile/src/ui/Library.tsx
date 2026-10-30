@@ -1,7 +1,7 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import type { Deck, DeckSortOption } from '../core/types';
-import { cardMatches, matches, sortDecks } from '../core/content';
+import { cardMatches, folderCards, matches, sortDecks } from '../core/content';
 import { store, useStore } from '../platform/runtime';
 import { Button, Chips, Empty, Field, Progress, ProgressRing, Select, attempt, colors, confirm, s } from './kit';
 import { Icon, type IconName } from './Icon';
@@ -60,6 +60,9 @@ export function DeckLibrary({ nav, folderId }: { nav: Navigation; folderId?: str
   const [filter, setFilter] = useState<'all' | 'unlearned' | 'completed'>('all');
   const [editFolder, setEditFolder] = useState(false);
   const folder = state.folders.find(f => f.id === folderId);
+  const folderCardsCount = useMemo(() => folderId !== undefined
+    ? folderCards(state.cards, state.decks, folderId).length : 0,
+  [state.cards, state.decks, folderId]);
   const sort = (folderId ? state.preferences.folderDeckSort : state.preferences.deckSort) || 'date-desc';
   const decks = useMemo(() => sortDecks(state.decks.filter(d => {
     if (folderId && d.folderId !== folderId) return false;
@@ -75,6 +78,13 @@ export function DeckLibrary({ nav, folderId }: { nav: Navigation; folderId?: str
     ListHeaderComponent={<View style={{ gap: 24 }}><View style={{ gap: 12 }}><Text style={s.title}>{folder?.title || '모든 덱'}</Text><Text style={s.muted}>{folder?.description || '전체 플래시카드 덱을 조회하고 학습을 시작하세요.'}</Text>
       <View style={s.row}><Button title="＋ 새 덱 만들기" onPress={() => nav.go({ type: 'edit-deck', folderId })} />{folder && <><Button title="폴더 수정" tone="secondary" onPress={() => setEditFolder(true)} />
         <Button title="폴더 삭제" tone="danger" onPress={() => confirm('폴더를 삭제할까요?', '안에 있는 덱은 미분류로 이동하며 카드는 유지됩니다.', async () => { await store.deleteFolder(folder.id); nav.back(); })} /></>}</View>
+      {folder && <View style={[s.box, { padding: 16 }]}>
+        <Text style={s.text}>폴더 전체 카드 {folderCardsCount}장</Text>
+        <Button title="폴더 전체 랜덤 학습" disabled={!folderCardsCount} onPress={() => nav.go({ type: 'folder-study', folderId: folder.id })} />
+        <Text style={s.muted}>{folderCardsCount
+          ? `이 폴더의 모든 카드 ${folderCardsCount}장을 덱 구분 없이 섞어서 학습합니다. '알아요' 카드도 포함됩니다.`
+          : '폴더 안의 덱에 카드를 추가하면 랜덤 학습을 시작할 수 있습니다.'}</Text>
+      </View>}
       </View><View style={[s.box, { padding: 16, gap: 16 }]}><View style={s.row}><Icon name="book" size={16} /><Text style={s.text}>학습 덱</Text><Text style={{ color: colors.green, backgroundColor: colors.pale, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, fontSize: 12 }}>{decks.length}</Text></View>
       {!folderId && <Chips value={tab} options={[[ 'all', '전체' ], ['root', '미분류']]} onChange={setTab} />}
       <Field label="덱 제목·카드 내용 검색" placeholder="덱 제목, 카드 내용 검색…" value={query} onChangeText={setQuery} returnKeyType="search" />

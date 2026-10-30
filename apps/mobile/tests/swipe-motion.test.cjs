@@ -108,9 +108,9 @@ test('a tap immediately interrupts entrance or spring-back and leaves the card c
   h.motion.style.transform[0].translateX.setValue(100);
   assert.equal(h.motion.prepareFlip(), true);
   assert.equal(h.x, 0); assert.equal(h.motion.isMoving(), false);
-  h.motion.onDrag({ phase: 'move', dx: -30, dy: 0 }, 'b');
+  h.motion.onDrag({ phase: 'move', dx: -25, dy: 0 }, 'b');
   assert.equal(h.motion.prepareFlip(), false, 'an active swipe is not a tap');
-  h.motion.onDrag({ phase: 'end', dx: -30, dy: 0 }, 'b');
+  h.motion.onDrag({ phase: 'end', dx: -25, dy: 0 }, 'b');
   assert.equal(h.motion.prepareFlip(), true);
   assert.equal(h.x, 0); assert.deepEqual(h.calls, [[1, 'a']]);
 });

@@ -41,6 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const setAuthError = useFlashcardStore((state) => state.setAuthError);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const isStudying = currentView.type === 'study' || currentView.type === 'folder-study';
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
@@ -48,19 +49,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         event.key.toLowerCase() === 'k' &&
         !event.isComposing
       ) {
-        if (currentView.type === 'study' || document.querySelector('[role="dialog"]')) return;
+        if (isStudying || document.querySelector('[role="dialog"]')) return;
         event.preventDefault();
         setSearchOpen(true);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentView.type]);
+  }, [isStudying]);
   useEffect(() => setSearchOpen(false), [user?.uid]);
   const deck =
     'deckId' in currentView ? decks.find((item) => item.id === currentView.deckId) : undefined;
   const folderId =
-    currentView.type === 'folder'
+    currentView.type === 'folder' || currentView.type === 'folder-study'
       ? currentView.folderId
       : (deck?.folderId ?? (currentView.type === 'edit-deck' ? currentView.folderId : undefined));
   const folder = folders.find((item) => item.id === folderId);
@@ -73,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           ? deck
             ? '덱 편집'
             : '새 덱 만들기'
-          : currentView.type === 'study'
+          : isStudying
             ? '학습 중'
             : (deck?.title ?? folder?.title ?? '학습 홈');
   const handleLogin = async () => {
@@ -91,7 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <header className="sticky top-0 z-40 h-14 sm:h-16 shrink-0 border-b border-border/70 bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-8 lg:px-10">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            {currentView.type !== 'study' && (
+            {!isStudying && (
               <button
                 type="button"
                 onClick={onOpenMobileSidebar}
@@ -115,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Home className="h-4 w-4" />
               </button>
               <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" />
-              {folder && deck && (
+              {folder && (deck || currentView.type === 'folder-study') && (
                 <>
                   <button
                     type="button"
@@ -133,7 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-            {currentView.type !== 'study' && (
+            {!isStudying && (
               <button
                 type="button"
                 onClick={(event) => {

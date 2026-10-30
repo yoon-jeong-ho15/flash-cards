@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '../common/EmptyState';
 import { Clock, CheckCircle2, Layers, ThumbsUp, RotateCw, RotateCcw, Trophy, PlusCircle, Shuffle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFlashcardStore } from '../../store/useFlashcardStore';
 
 // 미니멀 푸시 & 컬러 플래시 전환 애니메이션 (옵션 3)
 const cardVariants: Variants = {
@@ -61,7 +62,8 @@ const cardVariants: Variants = {
 };
 
 interface StudyViewProps {
-  deckId: string;
+  deckId?: string;
+  folderId?: string;
   onlyDifficult?: boolean;
   shuffle?: boolean;
   onExit: () => void;
@@ -70,13 +72,15 @@ interface StudyViewProps {
 
 export const StudyView: React.FC<StudyViewProps> = ({
   deckId,
+  folderId,
   onlyDifficult = false,
-  shuffle = false,
+  shuffle = folderId !== undefined,
   onExit,
   onEditDeck,
 }) => {
   const {
     deck,
+    folder,
     deckCards,
     sessionCards,
     currentIndex,
@@ -112,12 +116,15 @@ export const StudyView: React.FC<StudyViewProps> = ({
     closeDeleteModal,
     handleUpdateCurrentCard,
     handleDeleteCurrentCard,
-  } = useStudySession({ deckId, onlyDifficult, shuffle, onExit });
+  } = useStudySession({ deckId, folderId, onlyDifficult, shuffle, onExit });
+  const currentDeck = useFlashcardStore(state => state.decks.find(item => item.id === currentCard?.deckId));
+  const source = folderId !== undefined ? folder : deck;
+  const sourceType = folderId !== undefined ? '폴더' : '덱';
 
-  if (!deck) {
+  if (!source) {
     return (
       <div className="max-w-xl mx-auto py-16 text-center">
-        <p className="text-muted-foreground mb-4">덱을 찾을 수 없습니다.</p>
+        <p className="text-muted-foreground mb-4">{sourceType === '폴더' ? '폴더를' : '덱을'} 찾을 수 없습니다.</p>
         <Button variant="default" onClick={onExit}>
           돌아가기
         </Button>
@@ -132,19 +139,21 @@ export const StudyView: React.FC<StudyViewProps> = ({
         <EmptyState
           icon={<PlusCircle className="w-8 h-8 text-primary" />}
           title="학습할 카드가 없습니다"
-          description={`'${deck.title}' 덱에 카드가 아직 등록되지 않았습니다. 카드를 먼저 추가해 주세요.`}
+          description={`'${source.title}' ${sourceType}에 카드가 아직 등록되지 않았습니다. 카드를 먼저 추가해 주세요.`}
           action={
             <div className="flex justify-center gap-2.5">
               <Button variant="outline" size="sm" onClick={onExit}>
                 돌아가기
               </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => onEditDeck(deck.id)}
-              >
-                카드 추가하기
-              </Button>
+              {deck && folderId === undefined && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => onEditDeck(deck.id)}
+                >
+                  카드 추가하기
+                </Button>
+              )}
             </div>
           }
         />
@@ -159,7 +168,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
         <EmptyState
           icon={<CheckCircle2 className="w-8 h-8 text-emerald-500" />}
           title="모든 카드를 이미 마스터했습니다!"
-          description={`'${deck.title}' 덱의 모든 카드(${deckCards.length}개)가 이미 '알아요' 상태입니다.`}
+          description={`'${source.title}' ${sourceType}의 모든 카드(${deckCards.length}개)가 이미 '알아요' 상태입니다.`}
           action={
             <div className="flex justify-center gap-2.5">
               <Button variant="outline" size="sm" onClick={onExit}>
@@ -185,7 +194,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
     const unlearnedCount = Math.max(0, totalInitialCount - masteredCount);
     return (
       <StudyComplete
-        deck={deck}
+        deck={source}
+        sourceType={sourceType}
         totalCards={totalInitialCount}
         difficultCardsCount={unlearnedCount}
         roundCount={round}
@@ -209,10 +219,10 @@ export const StudyView: React.FC<StudyViewProps> = ({
         backTitle="학습 나가기 (Esc)"
         title={
           <h2 className="font-semibold text-foreground text-sm sm:text-base leading-tight tracking-tight truncate">
-            {deck.title}
+            {source.title}
           </h2>
         }
-        description={isShuffle ? "플래시카드 랜덤 순서 학습" : "플래시카드 순차 학습"}
+        description={folderId !== undefined ? '폴더 내 모든 덱을 섞어 학습' : isShuffle ? '플래시카드 랜덤 순서 학습' : '플래시카드 순차 학습'}
         right={
           <div className="flex items-center gap-1.5 sm:gap-2.5">
             {round > 1 && (
@@ -251,6 +261,11 @@ export const StudyView: React.FC<StudyViewProps> = ({
 
       <div className="max-w-4xl mx-auto py-4 sm:py-6 px-4 sm:px-6 overflow-x-clip">
         <div className="mx-auto mb-5 max-w-2xl">
+          {folderId !== undefined && currentDeck && (
+            <p className="mb-2 truncate text-xs text-muted-foreground" title={currentDeck.title}>
+              현재 덱: <span className="font-medium text-foreground">{currentDeck.title}</span>
+            </p>
+          )}
           <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{isFlipped ? '정답을 확인하고, 기억했는지 표시해 보세요.' : '먼저 떠올려 보고, 카드를 뒤집어 보세요.'}</span><span className="shrink-0 pl-2 tabular-nums">{masteredCount} / {totalInitialCount}장</span></div>
           <ProgressBar value={percentage} />
           <span role="status" className="sr-only">{actionFeedback === 'know' ? '암기 완료 상태를 변경했습니다.' : ''}</span>
@@ -453,7 +468,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
         <div className="space-y-5">
           <p className="text-sm text-muted-foreground leading-relaxed">
             {remainingUnlearnedCount === 0
-              ? `'${deck.title}' 덱의 모든 카드를 성공적으로 암기(알아요) 완료했습니다!`
+              ? `'${source.title}' ${sourceType}의 모든 카드를 성공적으로 암기(알아요) 완료했습니다!`
               : `이번 라운드의 카드를 모두 확인했습니다. '알아요' 완료된 카드를 제외한 남은 미완료 카드(${remainingUnlearnedCount}개)로 다시 학습을 시작하시겠습니까?`}
           </p>
 

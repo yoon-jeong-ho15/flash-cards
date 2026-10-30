@@ -1,11 +1,12 @@
-import { selectDeckCards } from '../store/cardSelectors';
+import { selectDeckCards, selectFolderCards } from '../store/cardSelectors';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Card, Deck } from '../types';
+import { Card, Deck, Folder } from '../types';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { sortCardsByOrder } from '../services/flashcardService';
 
 interface UseStudySessionOptions {
-  deckId: string;
+  deckId?: string;
+  folderId?: string;
   onlyDifficult?: boolean;
   shuffle?: boolean;
   onExit: () => void;
@@ -34,6 +35,7 @@ export interface StudyHistoryEntry {
 
 export interface StudySessionState {
   deck: Deck | undefined;
+  folder: Folder | undefined;
   deckCards: Card[];
   sessionCards: Card[];
   currentIndex: number;
@@ -76,12 +78,22 @@ export interface StudySessionState {
 
 export const useStudySession = ({
   deckId,
+  folderId,
   onlyDifficult = false,
-  shuffle = false,
+  shuffle = folderId !== undefined,
   onExit,
 }: UseStudySessionOptions): StudySessionState => {
   const deck = useFlashcardStore(state => state.decks.find(item => item.id === deckId));
-  const deckCards = useFlashcardStore(state => selectDeckCards(state, deckId));
+  const folder = useFlashcardStore(state => state.folders.find(item => item.id === folderId));
+  const decks = useFlashcardStore(state => state.decks);
+  const cards = useFlashcardStore(state => state.cards);
+  const selectSourceCards = useCallback(
+    (state: { cards: Card[]; decks: Deck[] }) => folderId !== undefined
+      ? selectFolderCards(state, folderId)
+      : selectDeckCards(state, deckId ?? ''),
+    [deckId, folderId]
+  );
+  const deckCards = useMemo(() => selectSourceCards({ cards, decks }), [cards, decks, selectSourceCards]);
   const setCardLearned = useFlashcardStore(state => state.setCardLearned);
   const updateCard = useFlashcardStore(state => state.updateCard);
   const deleteCard = useFlashcardStore(state => state.deleteCard);
@@ -120,15 +132,10 @@ export const useStudySession = ({
     };
   }, []);
 
-  const deckCardsRef = useRef(deckCards);
-  useEffect(() => {
-    deckCardsRef.current = deckCards;
-  }, [deckCards]);
-
-  // 세션 초기화 (기본적으로 '알아요' 완료 카드는 제외)
+  // 폴더 학습은 '알아요' 카드를 포함하고, 기존 덱 학습은 미완료 카드부터 시작합니다.
   const initSession = useCallback(
-    (filterUnlearnedOnly = true, shouldShuffle = shuffle, resetRound = false) => {
-      const rawStoreCards = selectDeckCards(useFlashcardStore.getState(), deckId);
+    (filterUnlearnedOnly = folderId === undefined, shouldShuffle = shuffle, resetRound = false) => {
+      const rawStoreCards = selectSourceCards(useFlashcardStore.getState());
       const storeCards = sortCardsByOrder(rawStoreCards);
       let targetCards = storeCards;
       if (filterUnlearnedOnly) {
@@ -151,19 +158,19 @@ export const useStudySession = ({
         setRound(1);
       }
     },
-    [deckId, shuffle]
+    [folderId, selectSourceCards, shuffle]
   );
 
   // 세션 진입 시 (또는 덱/모드 변경 시) 1회만 초기화하여 학습 중 store 변경으로 인한 리셋 방지
   const lastInitParamsRef = useRef<string>('');
 
   useEffect(() => {
-    const currentParamKey = `${deckId}-${shuffle}`;
+    const currentParamKey = JSON.stringify([deckId, folderId, shuffle]);
     if (deckCards.length > 0 && lastInitParamsRef.current !== currentParamKey) {
       lastInitParamsRef.current = currentParamKey;
-      initSession(true, shuffle, true);
+      initSession(folderId === undefined, shuffle, true);
     }
-  }, [deckId, shuffle, deckCards.length, initSession]);
+  }, [deckId, folderId, shuffle, deckCards.length, initSession]);
 
   useEffect(() => {
     setCurrentIndex(index => Math.min(index, Math.max(0, sessionCards.length - 1)));
@@ -212,43 +219,14 @@ export const useStudySession = ({
 
   // '알아요' 제외하고 다시 학습 (모달에서 재학습 선택 시)
   const handleRestartUnlearned = useCallback(() => {
-    const rawStoreCards = selectDeckCards(useFlashcardStore.getState(), deckId);
-    const storeCards = sortCardsByOrder(rawStoreCards);
-    let targetCards = storeCards.filter((c) => !c.learned);
-
-    if (shuffle) {
-      targetCards = shuffleCards(targetCards);
-    }
-
-    setSessionCardIds(targetCards.map(card => card.id));
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setIsFinishModalOpen(false);
+    initSession(true, shuffle);
     setRound((r) => r + 1);
-    setDirection(0);
-    setActionFeedback(null);
-    setStepCount(0);
-  }, [deckId, shuffle]);
+  }, [initSession, shuffle]);
 
   // 전체 카드 다시 학습 (모달에서 전체 재학습 선택 시)
   const handleRestartAll = useCallback(() => {
-    const rawStoreCards = selectDeckCards(useFlashcardStore.getState(), deckId);
-    const storeCards = sortCardsByOrder(rawStoreCards);
-    let targetCards = storeCards;
-
-    if (shuffle) {
-      targetCards = shuffleCards(targetCards);
-    }
-
-    setSessionCardIds(targetCards.map(card => card.id));
-    setCurrentIndex(0);
-    setIsFlipped(false);
-    setIsFinishModalOpen(false);
-    setRound(1);
-    setDirection(0);
-    setActionFeedback(null);
-    setStepCount(0);
-  }, [deckId, shuffle]);
+    initSession(false, shuffle, true);
+  }, [initSession, shuffle]);
 
   const closeFinishModal = useCallback(() => {
     setIsFinishModalOpen(false);
@@ -412,6 +390,7 @@ export const useStudySession = ({
 
   return {
     deck,
+    folder,
     deckCards,
     sessionCards,
     currentIndex,

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface StudyCompleteProps {
-  deck: Deck;
+  deck: Pick<Deck, 'title'>;
+  sourceType?: '덱' | '폴더';
   totalCards: number;
   difficultCardsCount: number;
   roundCount: number;
@@ -17,6 +18,7 @@ interface StudyCompleteProps {
 
 export const StudyComplete: React.FC<StudyCompleteProps> = ({
   deck,
+  sourceType = '덱',
   totalCards,
   difficultCardsCount,
   roundCount,
@@ -67,7 +69,7 @@ export const StudyComplete: React.FC<StudyCompleteProps> = ({
         학습을 완료했습니다! 🎉
       </h1>
       <p className="text-muted-foreground mb-8 text-sm sm:text-base leading-relaxed">
-        <strong>&lsquo;{deck.title}&rsquo;</strong> 덱의 모든 카드를 성공적으로 마스터했습니다.
+        <strong>&lsquo;{deck.title}&rsquo;</strong> {sourceType}의 모든 카드를 성공적으로 마스터했습니다.
       </p>
 
       {/* 통계 요약 3열 그리드 */}
@@ -137,7 +139,7 @@ export const StudyComplete: React.FC<StudyCompleteProps> = ({
           leftIcon={<ArrowLeft className="w-4 h-4" />}
           className="w-full sm:w-auto"
         >
-          덱으로 돌아가기
+          {sourceType === '폴더' ? '폴더로' : '덱으로'} 돌아가기
         </Button>
       </div>
     </div>

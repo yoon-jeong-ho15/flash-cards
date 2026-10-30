@@ -142,7 +142,7 @@ export const App: React.FC = () => {
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
 
   // 학습 모드일 때는 화면 전체 몰입을 위해 사이드바 숨김
-  const showSidebar = currentView.type !== 'study';
+  const showSidebar = currentView.type !== 'study' && currentView.type !== 'folder-study';
 
   return (
     <MotionConfig reducedMotion="user">
@@ -234,6 +234,7 @@ export const App: React.FC = () => {
                   onNavigateDeck={navigateDeck}
                   onStartStudy={(deckId) => navigateStudy(deckId)}
                   onCreateDeckInFolder={(folderId) => navigateEditDeck(undefined, folderId)}
+                  onStartFolderStudy={(folderId) => setCurrentView({ type: 'folder-study', folderId })}
                   onBack={navigateHome}
                 />
               )}
@@ -275,6 +276,15 @@ export const App: React.FC = () => {
                   onlyDifficult={currentView.onlyDifficult}
                   shuffle={currentView.shuffle}
                   onExit={() => navigateDeck(currentView.deckId)}
+                  onEditDeck={(deckId) => navigateEditDeck(deckId)}
+                />
+              )}
+
+              {currentView.type === 'folder-study' && (
+                <StudyView
+                  folderId={currentView.folderId}
+                  shuffle
+                  onExit={() => navigateFolder(currentView.folderId)}
                   onEditDeck={(deckId) => navigateEditDeck(deckId)}
                 />
               )}
