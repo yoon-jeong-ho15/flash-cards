@@ -2,54 +2,57 @@ import React, { createContext, useContext, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export const colors = { bg: '#F9F8F5', card: '#FFFFFF', ink: '#1F2E2B', muted: '#67746F', green: '#266957', pale: '#E9F1ED', border: '#E4E1DC', red: '#DC3838' };
+import { Icon, type IconName } from './Icon';
+import { colors } from './theme';
+export { colors } from './theme';
 export const s = StyleSheet.create({
-  page: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 40, gap: 24, width: '100%', maxWidth: 850, alignSelf: 'center' },
-  title: { fontSize: 24, lineHeight: 33, letterSpacing: -0.6, fontWeight: '700', color: colors.ink },
-  h2: { fontSize: 18, lineHeight: 26, letterSpacing: -0.3, fontWeight: '600', color: colors.ink },
-  text: { fontSize: 14, lineHeight: 23, color: colors.ink },
-  muted: { fontSize: 12, lineHeight: 20, color: colors.muted },
-  label: { fontSize: 11, lineHeight: 17, fontWeight: '600', color: colors.muted },
+  page: { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 32, gap: 20, width: '100%', maxWidth: 720, alignSelf: 'center' },
+  title: { fontSize: 28, lineHeight: 38, letterSpacing: -0.8, fontWeight: '800', color: colors.ink },
+  h2: { fontSize: 19, lineHeight: 28, letterSpacing: -0.4, fontWeight: '700', color: colors.ink },
+  text: { fontSize: 15, lineHeight: 24, color: colors.ink },
+  muted: { fontSize: 13, lineHeight: 21, color: colors.muted },
+  label: { fontSize: 12, lineHeight: 18, fontWeight: '600', color: colors.muted },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  box: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, padding: 20, borderRadius: 16, gap: 12 },
-  input: { minHeight: 44, borderWidth: 1, borderColor: '#DEDAD4', backgroundColor: colors.card, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, color: colors.ink, fontSize: 14 },
+  box: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, padding: 20, borderRadius: 22, gap: 12 },
+  input: { minHeight: 52, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, color: colors.ink, fontSize: 15 },
+  dock: { paddingHorizontal: 22, paddingVertical: 14, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.card, gap: 10 },
   error: { color: colors.red, fontSize: 14, lineHeight: 22 },
 });
-export function Button({ title, onPress, tone = 'primary', disabled = false, busy = false }: { title: string; onPress: () => void; tone?: 'primary' | 'secondary' | 'danger'; disabled?: boolean; busy?: boolean }) {
+export function Button({ title, onPress, tone = 'primary', disabled = false, busy = false, icon, iconPosition = 'start' }: { title: string; onPress: () => void; tone?: 'primary' | 'secondary' | 'danger'; disabled?: boolean; busy?: boolean; icon?: IconName; iconPosition?: 'start' | 'end' }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled: disabled || busy, busy }} disabled={disabled || busy} onPress={onPress}
-    style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, alignItems: 'center', justifyContent: 'center', opacity: disabled || busy ? 0.45 : pressed ? 0.7 : 1,
-      backgroundColor: tone === 'primary' ? colors.green : tone === 'danger' ? '#FBECE9' : colors.pale })}>
-    {busy ? <ActivityIndicator color={tone === 'primary' ? '#FFF' : colors.green} /> : <Text style={{ color: tone === 'primary' ? '#FFF' : tone === 'danger' ? colors.red : colors.green, fontWeight: '600', fontSize: 14 }}>{title}</Text>}
+    style={({ pressed }) => ({ minHeight: 50, paddingHorizontal: 18, paddingVertical: 13, borderRadius: 15, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', opacity: disabled || busy ? 0.4 : pressed ? 0.75 : 1,
+      backgroundColor: tone === 'primary' ? colors.primary : tone === 'danger' ? '#FCECF0' : colors.pale })}>
+    {busy ? <ActivityIndicator color={tone === 'primary' ? '#FFF' : colors.primary} /> : <>{icon && iconPosition === 'start' && <Icon name={icon} size={17} color={tone === 'primary' ? '#FFF' : tone === 'danger' ? colors.red : colors.primary} />}<Text style={{ flexShrink: 1, color: tone === 'primary' ? '#FFF' : tone === 'danger' ? colors.red : colors.primary, fontWeight: '700', fontSize: 14, textAlign: 'center' }}>{title}</Text>{icon && iconPosition === 'end' && <Icon name={icon} size={17} color={tone === 'primary' ? '#FFF' : tone === 'danger' ? colors.red : colors.primary} />}</>}
   </Pressable>;
 }
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
   return <View style={{ gap: 7 }}><Text style={s.label}>{label}</Text><TextInput placeholderTextColor={colors.muted} accessibilityLabel={label} {...props} style={[s.input, props.multiline && { minHeight: 80, textAlignVertical: 'top' }, props.style]} /></View>;
 }
 export function Chips<T extends string>({ value, options, onChange }: { value: T; options: Array<[T, string]>; onChange: (value: T) => void }) {
-  return <View style={[s.row, { backgroundColor: '#F1EFEB', padding: 4, borderRadius: 10, alignSelf: 'flex-start', gap: 2 }]}>{options.map(([key, label]) => <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: value === key }} onPress={() => onChange(key)}
-    style={{ minHeight: 40, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 7, backgroundColor: key === value ? colors.card : 'transparent' }}>
-    <Text style={{ fontSize: 12, fontWeight: '500', color: key === value ? colors.ink : colors.muted }}>{label}</Text></Pressable>)}</View>;
+  return <View style={[s.row, { gap: 8 }]}>{options.map(([key, label]) => <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: value === key }} onPress={() => onChange(key)}
+    style={({ pressed }) => ({ minHeight: 44, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 14, backgroundColor: key === value ? colors.ink : colors.card, borderWidth: 1, borderColor: key === value ? colors.ink : colors.border, opacity: pressed ? 0.7 : 1 })}>
+    <Text style={{ fontSize: 13, fontWeight: '600', color: key === value ? '#FFFFFF' : colors.muted }}>{label}</Text></Pressable>)}</View>;
 }
 export function Select<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: Array<[T, string]>; onChange: (value: T) => void }) {
   const [open, setOpen] = useState(false);
-  return <><Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(([key]) => key === value)?.[1]}`} onPress={() => setOpen(true)} style={[s.input, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }]}><Text style={[s.muted, { color: colors.ink, flexShrink: 1 }]}>{options.find(([key]) => key === value)?.[1]}</Text><Text style={s.muted}>⌄</Text></Pressable>
-    <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}><View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#15201966' }}><Pressable accessibilityRole="button" accessibilityLabel="선택 닫기" onPress={() => setOpen(false)} style={{ flex: 1 }} /><SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 8 }}><Text style={[s.h2, { marginBottom: 12 }]}>{label}</Text>{options.map(([key, title]) => <Pressable key={key} accessibilityRole="radio" accessibilityState={{ checked: key === value }} onPress={() => { onChange(key); setOpen(false); }} style={{ padding: 14, borderRadius: 10, backgroundColor: key === value ? colors.pale : colors.card }}><Text style={[s.text, { color: key === value ? colors.green : colors.ink }]}>{key === value ? '✓  ' : ''}{title}</Text></Pressable>)}<Button title="닫기" tone="secondary" onPress={() => setOpen(false)} /></SafeAreaView></View></Modal></>;
+  return <><Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${options.find(([key]) => key === value)?.[1]}`} onPress={() => setOpen(true)} style={[s.input, { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }]}><Text style={[s.muted, { color: colors.ink, flexShrink: 1 }]}>{options.find(([key]) => key === value)?.[1]}</Text><Icon name="chevron-down" size={16} color={colors.muted} /></Pressable>
+    <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}><View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#15201966' }}><Pressable accessibilityRole="button" accessibilityLabel="선택 닫기" onPress={() => setOpen(false)} style={{ flex: 1 }} /><SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 8 }}><Text style={[s.h2, { marginBottom: 12 }]}>{label}</Text>{options.map(([key, title]) => <Pressable key={key} accessibilityRole="radio" accessibilityState={{ checked: key === value }} onPress={() => { onChange(key); setOpen(false); }} style={{ padding: 14, borderRadius: 10, backgroundColor: key === value ? colors.pale : colors.card }}><View style={[s.row, { flexWrap: 'nowrap', justifyContent: 'space-between' }]}><Text style={[s.text, { flex: 1, color: key === value ? colors.primary : colors.ink }]}>{title}</Text>{key === value && <Icon name="check" size={18} />}</View></Pressable>)}<Button title="닫기" tone="secondary" onPress={() => setOpen(false)} /></SafeAreaView></View></Modal></>;
 }
 export function Progress({ learned, total, compact = false }: { learned: number; total: number; compact?: boolean }) {
-  const percent = total ? Math.round(learned / total * 100) : 0;
-  return <View style={{ gap: 8 }}>{!compact && <View style={[s.row, { justifyContent: 'space-between' }]}><Text style={s.muted}>{learned} / {total}장 학습</Text><Text style={[s.label, { color: colors.green }]}>{percent}%</Text></View>}<View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: total || 1, now: learned, text: `${percent}%` }} style={{ height: 6, borderRadius: 4, backgroundColor: colors.pale, overflow: 'hidden' }}>
-    <View style={{ height: 6, width: `${percent}%`, backgroundColor: colors.green }} /></View></View>;
+  const percent = total ? Math.min(100, Math.max(0, Math.round(learned / total * 100))) : 0;
+  return <View style={{ gap: 8 }}>{!compact && <View style={[s.row, { justifyContent: 'space-between' }]}><Text style={s.muted}>{learned} / {total}장 학습</Text><Text style={[s.label, { color: colors.primary }]}>{percent}%</Text></View>}<View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: total || 1, now: learned, text: `${percent}%` }} style={{ height: 6, borderRadius: 4, backgroundColor: colors.pale, overflow: 'hidden' }}>
+    <View style={{ height: 6, borderRadius: 4, width: `${percent}%`, backgroundColor: colors.primary }} /></View></View>;
 }
 export function ProgressRing({ percent }: { percent: number }) {
   return <View accessible accessibilityLabel={`전체 달성률 ${percent}%`} style={{ width: 80, height: 80, alignItems: 'center', justifyContent: 'center' }}>
     {Array.from({ length: 100 }, (_, i) => {
       const angle = i * Math.PI / 50 - Math.PI / 2;
-      return <View key={i} style={{ position: 'absolute', left: 39 + Math.cos(angle) * 36.5, top: 36.5 + Math.sin(angle) * 36.5, width: 2.5, height: 7, backgroundColor: i < percent ? colors.green : colors.pale, transform: [{ rotate: `${i * 3.6}deg` }] }} />;
+      return <View key={i} style={{ position: 'absolute', left: 39 + Math.cos(angle) * 36.5, top: 36.5 + Math.sin(angle) * 36.5, width: 2.5, height: 7, backgroundColor: i < percent ? colors.primary : colors.pale, transform: [{ rotate: `${i * 3.6}deg` }] }} />;
     })}<Text style={s.h2}>{percent}<Text style={s.muted}>%</Text></Text>
   </View>;
 }
 export function Empty({ title = '아직 자료가 없어요', detail = '새로운 학습 자료를 추가해 보세요.' }: { title?: string; detail?: string }) {
-  return <View style={[s.box, { paddingVertical: 36, alignItems: 'center' }]}><Text style={s.h2}>{title}</Text><Text style={s.muted}>{detail}</Text></View>;
+  return <View style={[s.box, { paddingVertical: 36, alignItems: 'center', gap: 10 }]}><View style={{ width: 48, height: 6, backgroundColor: colors.pale, borderRadius: 6, marginBottom: 8 }} /><Text style={[s.h2, { textAlign: 'center' }]}>{title}</Text><Text style={[s.muted, { textAlign: 'center' }]}>{detail}</Text></View>;
 }
 export function Sheet({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return <Modal animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}><SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>

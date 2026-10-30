@@ -77,6 +77,42 @@ test('a new swipe interrupts the incoming animation at its current position with
   assert.deepEqual(h.calls, [[1, 'a'], [1, 'b']]);
   h.render({ cardId: 'c' }); h.complete(); assert.equal(h.x, 0);
 });
+test('the incoming spring does not lock input and rapid swipes interrupt each transition', () => {
+  let starts = 0;
+  const h = harness({ onSwipeStart: () => starts++ });
+  h.motion.onDrag({ phase: 'move', dx: -90, dy: 0 }, 'a');
+  h.motion.onDrag({ phase: 'end', dx: -90, dy: 0 }, 'a');
+  assert.equal(h.render().transitioning, true);
+  h.complete();
+  h.render({ cardId: 'b' });
+  assert.equal(h.render().transitioning, false, 'input unlocks before the entrance spring completes');
+  assert.equal(h.motion.isMoving(), true, 'the entrance animation is still running');
+  h.motion.panHandlers.onPanResponderGrant(null, { dx: -70, dy: 0 });
+  h.motion.panHandlers.onPanResponderRelease(null, { dx: -70, dy: 0 });
+  // Start a third swipe before the second exit finishes, without waiting.
+  h.motion.panHandlers.onPanResponderGrant(null, { dx: -80, dy: 0 });
+  h.motion.panHandlers.onPanResponderRelease(null, { dx: -80, dy: 0 });
+  h.render({ cardId: 'c' });
+  h.complete();
+  assert.deepEqual(h.calls, [[1, 'a'], [1, 'b'], [1, 'c']]);
+  assert.ok(starts >= 3);
+  assert.equal(h.motion.panHandlers.onPanResponderTerminationRequest(), false, 'a parent scroll view cannot steal an active horizontal swipe');
+});
+test('renders preserve the native responder and it still reads the current card and disabled state', () => {
+  const h = harness();
+  const handlers = h.motion.panHandlers;
+  h.render({ disabled: true });
+  assert.equal(h.motion.panHandlers, handlers);
+  assert.equal(handlers.onMoveShouldSetPanResponderCapture(null, { dx: -80, dy: 0 }), false);
+  h.render({ disabled: false, cardId: 'b' });
+  assert.equal(h.motion.panHandlers, handlers);
+  assert.equal(handlers.onMoveShouldSetPanResponderCapture(null, { dx: -80, dy: 0 }), true);
+  handlers.onPanResponderGrant(null, { dx: -80, dy: 0 });
+  h.render();
+  handlers.onPanResponderRelease(null, { dx: -80, dy: 0 });
+  h.complete();
+  assert.deepEqual(h.calls, [[1, 'b']]);
+});
 test('a second swipe during exit is replayed once on the next card, even if released before render', () => {
   const h = harness();
   h.motion.onDrag({ phase: 'move', dx: -90, dy: 0 }, 'a');

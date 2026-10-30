@@ -6,10 +6,11 @@ type Owner = 'native' | 'web';
 type Phase = 'idle' | 'drag' | 'return' | 'exit' | 'enter';
 const horizontal = (dx: number, dy: number) => Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.4;
 
-export function useSwipeMotion({ cardId, round, finished, first, disabled, reduceMotion, onNavigate, onFlipReady }: {
+export function useSwipeMotion({ cardId, round, finished, first, disabled, reduceMotion, onNavigate, onFlipReady, onSwipeStart }: {
   cardId?: string; round: number; finished: boolean; first: boolean; disabled: boolean; reduceMotion: boolean;
   onNavigate: (delta: -1 | 1, sourceId: string) => void;
   onFlipReady?: () => void;
+  onSwipeStart?: () => void;
 }) {
   const { width } = useWindowDimensions();
   const distance = Math.min(width - 32, 688) + 40;
@@ -24,8 +25,8 @@ export function useSwipeMotion({ cardId, round, finished, first, disabled, reduc
   const lastDrag = useRef<CardDrag>({ phase: 'move', dx: 0, dy: 0 });
   const flipQueued = useRef(false);
   const [transitioning, setTransitioning] = useState(false);
-  const latest = useRef({ cardId, first, disabled, reduceMotion, onNavigate, onFlipReady, distance });
-  latest.current = { cardId, first, disabled, reduceMotion, onNavigate, onFlipReady, distance };
+  const latest = useRef({ cardId, first, disabled, reduceMotion, onNavigate, onFlipReady, onSwipeStart, distance });
+  latest.current = { cardId, first, disabled, reduceMotion, onNavigate, onFlipReady, onSwipeStart, distance };
 
   const reset = () => {
     version.current++;
@@ -75,6 +76,7 @@ export function useSwipeMotion({ cardId, round, finished, first, disabled, reduc
       // against the incoming card after React commits, rather than discarding it.
       if (queued.current?.owner === 'native' && input === 'web') return;
       if (event.phase === 'move' && horizontal(event.dx, event.dy)) {
+        if (!queued.current) state.onSwipeStart?.();
         flipQueued.current = false;
         queued.current = { move: event, owner: input };
         version.current++; x.stopAnimation(); commitExit();
@@ -87,6 +89,7 @@ export function useSwipeMotion({ cardId, round, finished, first, disabled, reduc
       if (phase.current !== 'drag' && !horizontal(event.dx, event.dy)) return;
       lastDrag.current = event;
       if (phase.current !== 'drag') {
+        state.onSwipeStart?.();
         const token = ++version.current;
         phase.current = 'drag'; origin.current = null; setTransitioning(false);
         x.stopAnimation(value => {
@@ -134,7 +137,10 @@ export function useSwipeMotion({ cardId, round, finished, first, disabled, reduc
       const token = ++version.current;
       x.stopAnimation(); x.setValue(next.delta * distance);
       phase.current = 'enter';
-      Animated.spring(x, { toValue: 0, stiffness: 240, damping: 28, mass: 0.8, useNativeDriver: true }).start(() => {
+      // The new card is interactive as soon as it is mounted. Its entrance is
+      // visual only; neither the spring's duration nor settling blocks input.
+      setTransitioning(false);
+      Animated.spring(x, { toValue: 0, stiffness: 240, damping: 28, mass: 0.8, useNativeDriver: true, isInteraction: false }).start(() => {
         if (token !== version.current) return;
         phase.current = 'idle'; owner.current = null; setTransitioning(false);
       });
@@ -146,16 +152,20 @@ export function useSwipeMotion({ cardId, round, finished, first, disabled, reduc
     return () => { version.current++; x.stopAnimation(); };
   }, [cardId, round, finished, reduceMotion, distance]);
 
-  const responder = PanResponder.create({
+  // Keep the responder's native gesture state across renders during a swipe.
+  // Callbacks read current props through latest rather than replacing it.
+  const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
+  if (!responder.current) responder.current = PanResponder.create({
     onMoveShouldSetPanResponderCapture: (_, movement) => !latest.current.disabled && horizontal(movement.dx, movement.dy),
     onPanResponderGrant: (_, movement) => drag({ phase: 'move', dx: movement.dx, dy: movement.dy }, latest.current.cardId, 'native'),
     onPanResponderMove: (_, movement) => drag({ phase: 'move', dx: movement.dx, dy: movement.dy }, latest.current.cardId, 'native'),
     onPanResponderRelease: (_, movement) => drag({ phase: 'end', dx: movement.dx, dy: movement.dy }, latest.current.cardId, 'native'),
     onPanResponderTerminate: () => drag({ phase: 'cancel', dx: 0, dy: 0 }, latest.current.cardId, 'native'),
+    onPanResponderTerminationRequest: () => false,
     onShouldBlockNativeResponder: () => true,
   });
   return {
-    panHandlers: responder.panHandlers, transitioning, navigate, prepareFlip,
+    panHandlers: responder.current.panHandlers, transitioning, navigate, prepareFlip,
     isMoving: () => phase.current !== 'idle',
     onDrag: (event: CardDrag, sourceId: string) => drag(event, sourceId, 'web'),
     style: { transform: [{ translateX: x }, { rotateZ: reduceMotion ? '0deg' : x.interpolate({ inputRange: [-distance, 0, distance], outputRange: ['-7deg', '0deg', '7deg'], extrapolate: 'clamp' }) }] },

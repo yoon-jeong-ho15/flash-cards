@@ -1,0 +1,1 @@
+export const colors = { bg: '#F7F8FC', card: '#FFFFFF', ink: '#20233D', muted: '#73768C', primary: '#6155E8', pale: '#EEECFF', border: '#E9EAF2', red: '#D84D65', success: '#21856F', mint: '#E6F5EF', peach: '#FFF0E7' };

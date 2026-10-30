@@ -35,7 +35,7 @@ function screenHarness(store, screen) {
     useEffect: effect, useLayoutEffect: effect, useDeferredValue: value => value,
   };
   class Value { setValue() {} stopAnimation() {} interpolate() { return 0; } }
-  const native = { StyleSheet: { create: value => value }, Animated: { Value, View: 'Animated.View' }, Easing: {},
+  const native = { StyleSheet: { create: value => value }, Animated: { Value, View: 'Animated.View', timing: () => ({ start() {} }) }, Easing: { inOut: value => value, cubic: 'cubic' },
     AccessibilityInfo: { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }) },
     ...Object.fromEntries(['View', 'Text', 'Pressable', 'ScrollView', 'FlatList', 'ActivityIndicator'].map(name => [name, name])),
   };
@@ -46,7 +46,7 @@ function screenHarness(store, screen) {
     './kit': { colors: {}, s: {}, useImage: () => () => {}, showError: error => { throw error; },
       ...Object.fromEntries(['Attachment', 'Button', 'Empty', 'Progress', 'Chips', 'Field', 'Select', 'ProgressRing', 'Sheet'].map(name => [name, name])),
     },
-    './useSwipeMotion': { useSwipeMotion: props => { swipeProps = props; return { panHandlers: {}, style: {}, transitioning: false }; } },
+    './useSwipeMotion': { useSwipeMotion: props => { swipeProps = props; return { panHandlers: {}, style: {}, transitioning: false, prepareFlip: () => true }; } },
   };
   const module = { exports: {} };
   const deterministicMath = Object.assign(Object.create(Math), { random: () => 0 });
@@ -67,6 +67,8 @@ function screenHarness(store, screen) {
     },
     next: () => swipeProps.onNavigate(1, swipeProps.cardId),
     currentId: () => swipeProps.cardId,
+    swipeDisabled: () => swipeProps.disabled,
+    startSwipe: () => swipeProps.onSwipeStart?.(),
     cleanup: () => slots.forEach(slot => slot?.cleanup?.()),
   };
 }
@@ -182,5 +184,69 @@ test('deck study still excludes learned cards and keeps the original ordering', 
     button(tree, '전체 카드 다시 학습').onPress();
     screen.render({ deckId: f.first, onExit() {} });
     assert.equal(screen.currentId(), f.ids[0]);
+  } finally { screen.cleanup(); }
+});
+
+test('rating saves progress before advancing and ignores repeated taps while saving', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'Study');
+  const props = { deckId: f.first, onExit() {} };
+  const original = f.store.setLearned.bind(f.store);
+  let finishSave, calls = 0;
+  f.store.setLearned = async (...args) => {
+    calls++;
+    await new Promise(resolve => { finishSave = resolve; });
+    return original(...args);
+  };
+  try {
+    const tree = screen.render(props);
+    const id = screen.currentId();
+    const rate = button(tree, '알아요');
+    rate.onPress(); rate.onPress();
+    assert.equal(calls, 1);
+    screen.render(props);
+    assert.equal(screen.currentId(), id, 'the card stays visible until durable storage succeeds');
+    finishSave();
+    await new Promise(resolve => setImmediate(resolve));
+    const finished = screen.render(props);
+    assert.equal(f.store.getState().cards.find(card => card.id === id).learned, true);
+    assert.ok(text(finished).includes('모두 기억했어요!'));
+    assert.ok(button(finished, '미학습 카드 다시 학습').disabled);
+  } finally { screen.cleanup(); }
+});
+
+test('review starts immediately for an already mastered deck and Again clears the learned flag', async () => {
+  const f = await fixture();
+  await f.store.setLearned(f.ids[1], true);
+  const screen = screenHarness(f.store, 'Study');
+  const props = { deckId: f.first, onExit() {} };
+  try {
+    const tree = screen.render(props);
+    assert.equal(screen.currentId(), f.ids[0], 'all learned cards are included in a new review');
+    button(tree, '다시 볼게요').onPress();
+    await new Promise(resolve => setImmediate(resolve));
+    screen.render(props);
+    assert.equal(f.store.getState().cards.find(card => card.id === f.ids[0]).learned, false);
+    assert.equal(screen.currentId(), f.ids[1], 'the next card follows automatically');
+  } finally { screen.cleanup(); }
+});
+
+test('a swipe interrupts card flipping instead of waiting for the flip animation', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'Study');
+  const props = { deckId: f.first, onExit() {} };
+  const flipControl = tree => nodes(tree).find(node => node.type === 'Pressable'
+    && node.props.accessibilityLabel === '카드 뒤집기' && typeof node.props.disabled === 'boolean');
+  try {
+    let tree = screen.render(props);
+    flipControl(tree).props.onPress();
+    tree = screen.render(props);
+    assert.equal(flipControl(tree).props.disabled, true, 'the flip animation is in progress');
+    assert.equal(screen.swipeDisabled(), false, 'flipping must not block a new swipe');
+    screen.startSwipe();
+    tree = screen.render(props);
+    assert.equal(flipControl(tree).props.disabled, false, 'the new swipe immediately cancels the flip');
+    screen.next();
+    assert.ok(button(screen.render(props), '전체 카드 다시 학습'));
   } finally { screen.cleanup(); }
 });
