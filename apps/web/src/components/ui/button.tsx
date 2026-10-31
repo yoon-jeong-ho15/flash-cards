@@ -20,7 +20,7 @@ export const buttonVariants = ({
   className?: string;
 } = {}) => {
   const base =
-    'inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer active:scale-[0.98] shrink-0';
+    'inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-40 select-none cursor-pointer active:scale-[0.98] shrink-0';
 
   const variants = {
     default: 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90',
@@ -33,8 +33,8 @@ export const buttonVariants = ({
 
   const sizes = {
     default: 'h-11 px-4 py-2',
-    sm: 'h-10 rounded-lg px-3.5 text-sm',
-    lg: 'h-12 rounded-xl px-5 text-sm font-semibold',
+    sm: 'h-10 rounded-xl px-3.5 text-sm',
+    lg: 'h-12 rounded-2xl px-5 text-sm font-semibold',
     icon: 'h-11 w-11 p-0',
   };
 
@@ -68,7 +68,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
         ) : (
-          leftIcon && <span className="inline-flex items-center justify-center shrink-0">{leftIcon}</span>
+          leftIcon && (
+            <span className="inline-flex items-center justify-center shrink-0">{leftIcon}</span>
+          )
         )}
         {children}
         {!isLoading && rightIcon && (

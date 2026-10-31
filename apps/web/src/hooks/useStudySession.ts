@@ -61,9 +61,14 @@ export interface StudySessionState {
   handlePrevious: () => void;
   handleNext: () => void;
   handleToggleKnow: () => void;
+  handleRate: (known: boolean) => void;
   handleUnknown: () => void;
   handleKnow: () => void;
-  initSession: (filterUnlearnedOnly?: boolean, shouldShuffle?: boolean, resetRound?: boolean) => void;
+  initSession: (
+    filterUnlearnedOnly?: boolean,
+    shouldShuffle?: boolean,
+    resetRound?: boolean
+  ) => void;
   handleRestartUnlearned: () => void;
   handleRestartAll: () => void;
   closeFinishModal: () => void;
@@ -83,25 +88,29 @@ export const useStudySession = ({
   shuffle = folderId !== undefined,
   onExit,
 }: UseStudySessionOptions): StudySessionState => {
-  const deck = useFlashcardStore(state => state.decks.find(item => item.id === deckId));
-  const folder = useFlashcardStore(state => state.folders.find(item => item.id === folderId));
-  const decks = useFlashcardStore(state => state.decks);
-  const cards = useFlashcardStore(state => state.cards);
+  const deck = useFlashcardStore((state) => state.decks.find((item) => item.id === deckId));
+  const folder = useFlashcardStore((state) => state.folders.find((item) => item.id === folderId));
+  const decks = useFlashcardStore((state) => state.decks);
+  const cards = useFlashcardStore((state) => state.cards);
   const selectSourceCards = useCallback(
-    (state: { cards: Card[]; decks: Deck[] }) => folderId !== undefined
-      ? selectFolderCards(state, folderId)
-      : selectDeckCards(state, deckId ?? ''),
+    (state: { cards: Card[]; decks: Deck[] }) =>
+      folderId !== undefined
+        ? selectFolderCards(state, folderId)
+        : selectDeckCards(state, deckId ?? ''),
     [deckId, folderId]
   );
-  const deckCards = useMemo(() => selectSourceCards({ cards, decks }), [cards, decks, selectSourceCards]);
-  const setCardLearned = useFlashcardStore(state => state.setCardLearned);
-  const updateCard = useFlashcardStore(state => state.updateCard);
-  const deleteCard = useFlashcardStore(state => state.deleteCard);
+  const deckCards = useMemo(
+    () => selectSourceCards({ cards, decks }),
+    [cards, decks, selectSourceCards]
+  );
+  const setCardLearned = useFlashcardStore((state) => state.setCardLearned);
+  const updateCard = useFlashcardStore((state) => state.updateCard);
+  const deleteCard = useFlashcardStore((state) => state.deleteCard);
 
   const [sessionCardIds, setSessionCardIds] = useState<string[]>([]);
   const sessionCards = useMemo(() => {
-    const byId = new Map(deckCards.map(card => [card.id, card]));
-    return sessionCardIds.map(id => byId.get(id)).filter((card): card is Card => Boolean(card));
+    const byId = new Map(deckCards.map((card) => [card.id, card]));
+    return sessionCardIds.map((id) => byId.get(id)).filter((card): card is Card => Boolean(card));
   }, [sessionCardIds, deckCards]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
@@ -114,6 +123,7 @@ export const useStudySession = ({
   const [direction, setDirection] = useState<number>(0);
   const [stepCount, setStepCount] = useState<number>(0);
 
+  const lastRatingRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerFeedback = useCallback((type: StudyActionType) => {
@@ -146,7 +156,7 @@ export const useStudySession = ({
         targetCards = shuffleCards(targetCards);
       }
 
-      setSessionCardIds(targetCards.map(card => card.id));
+      setSessionCardIds(targetCards.map((card) => card.id));
       setCurrentIndex(0);
       setIsFlipped(false);
       setIsCompleted(false);
@@ -154,6 +164,7 @@ export const useStudySession = ({
       setDirection(0);
       setActionFeedback(null);
       setStepCount(0);
+      lastRatingRef.current = null;
       if (resetRound) {
         setRound(1);
       }
@@ -168,12 +179,12 @@ export const useStudySession = ({
     const currentParamKey = JSON.stringify([deckId, folderId, shuffle]);
     if (deckCards.length > 0 && lastInitParamsRef.current !== currentParamKey) {
       lastInitParamsRef.current = currentParamKey;
-      initSession(folderId === undefined, shuffle, true);
+      initSession(folderId === undefined && deckCards.some((card) => !card.learned), shuffle, true);
     }
   }, [deckId, folderId, shuffle, deckCards.length, initSession]);
 
   useEffect(() => {
-    setCurrentIndex(index => Math.min(index, Math.max(0, sessionCards.length - 1)));
+    setCurrentIndex((index) => Math.min(index, Math.max(0, sessionCards.length - 1)));
   }, [sessionCards.length]);
 
   // 카드 뒤집기
@@ -203,6 +214,27 @@ export const useStudySession = ({
     setStepCount((c) => c + 1);
   }, [currentIndex, sessionCards.length]);
 
+  const handleRate = useCallback(
+    (known: boolean) => {
+      const card = sessionCards[currentIndex];
+      const key = `${card?.id}:${stepCount}`;
+      if (!card || isFinishModalOpen || lastRatingRef.current === key) return;
+      setCardLearned(card.id, known);
+      lastRatingRef.current = key;
+      triggerFeedback(known ? 'know' : 'unknown');
+      handleNext();
+    },
+    [
+      sessionCards,
+      currentIndex,
+      stepCount,
+      isFinishModalOpen,
+      setCardLearned,
+      triggerFeedback,
+      handleNext,
+    ]
+  );
+
   // "알아요 토글" (Enter 키)
   const handleToggleKnow = useCallback(() => {
     if (sessionCards.length === 0 || currentIndex >= sessionCards.length) return;
@@ -211,7 +243,6 @@ export const useStudySession = ({
 
     // 1. 스토어 상태 반영
     setCardLearned(card.id, newLearned);
-
 
     // 3. 토글 피드백
     triggerFeedback(newLearned ? 'know' : null);
@@ -229,6 +260,7 @@ export const useStudySession = ({
   }, [initSession, shuffle]);
 
   const closeFinishModal = useCallback(() => {
+    lastRatingRef.current = null;
     setIsFinishModalOpen(false);
   }, []);
 
@@ -265,7 +297,6 @@ export const useStudySession = ({
       // 1. 스토어 갱신
       updateCard(currentCard.id, updates);
 
-
       closeEditModal();
     },
     [currentCard, updateCard, closeEditModal]
@@ -281,7 +312,7 @@ export const useStudySession = ({
     deleteCard(cardIdToDelete);
 
     // 2. 세션 카드 목록에서 제거
-    setSessionCardIds((prev) => prev.filter(id => id !== cardIdToDelete));
+    setSessionCardIds((prev) => prev.filter((id) => id !== cardIdToDelete));
 
     // 3. 인덱스 보정
     setCurrentIndex((prevIndex) => {
@@ -338,9 +369,13 @@ export const useStudySession = ({
       }
 
       // Let focused controls keep their native Enter/Space activation.
-      if ((e.key === 'Enter' || e.key === ' ') && (e.target as HTMLElement)?.closest('button, a, [role="button"]')) return;
+      if (
+        (e.key === 'Enter' || e.key === ' ') &&
+        (e.target as HTMLElement)?.closest('button, a, [role="button"]')
+      )
+        return;
 
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         handleFlip();
       } else if (e.key === 'ArrowLeft') {
@@ -349,6 +384,9 @@ export const useStudySession = ({
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleNext();
+      } else if (e.key === '1' || e.key === '2') {
+        e.preventDefault();
+        handleRate(e.key === '2');
       } else if (e.key === 'Enter') {
         e.preventDefault();
         handleToggleKnow();
@@ -374,6 +412,7 @@ export const useStudySession = ({
     handlePrevious,
     handleNext,
     handleToggleKnow,
+    handleRate,
     onExit,
   ]);
 
@@ -416,6 +455,7 @@ export const useStudySession = ({
     handlePrevious,
     handleNext,
     handleToggleKnow,
+    handleRate,
     handleUnknown,
     handleKnow,
     initSession,

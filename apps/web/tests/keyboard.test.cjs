@@ -19,7 +19,9 @@ test('study shortcuts preserve native button activation, select inputs, and hand
   });
   const loader = createHarness({}, h.storage, {
     react: renderer.react,
-    [path.join(h.root, 'store/useFlashcardStore.ts')]: { useFlashcardStore: mockStore },
+    [path.join(h.root, 'store/useFlashcardStore.ts')]: {
+      useFlashcardStore: mockStore,
+    },
   });
   let keydown;
   loader.window.addEventListener = (type, listener) => {
@@ -53,6 +55,10 @@ test('study shortcuts preserve native button activation, select inputs, and hand
     assert.equal(exits, 0, 'Escape already handled by a dialog must not exit study');
     dispatch('Enter', 'DIV', { isComposing: true });
     assert.equal(h.store.getState().cards[0].learned, false, 'IME input must not trigger study');
+    dispatch(' ', 'BUTTON');
+    assert.equal(render().isFlipped, false, 'native button Space is preserved');
+    dispatch(' ');
+    assert.equal(render().isFlipped, true, 'Space flips the study card');
     dispatch('Enter');
     assert.equal(
       h.store.getState().cards[0].learned,
@@ -61,6 +67,9 @@ test('study shortcuts preserve native button activation, select inputs, and hand
     );
     dispatch('ArrowRight');
     assert.equal(render().currentIndex, 1, 'study navigation shortcut still works');
+    dispatch('2');
+    assert.equal(render().isFinishModalOpen, true, 'rating the last card opens the result');
+    assert.equal(h.store.getState().cards[1].learned, true);
   } finally {
     renderer.cleanup();
   }

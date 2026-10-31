@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 40 25% 97%;
-    --foreground: 170 19% 15%;
+    --background: 228 45% 98%;
+    --foreground: 234 31% 18%;
     --card: 0 0% 100%;
-    --card-foreground: 170 19% 15%;
+    --card-foreground: 234 31% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 170 19% 15%;
-    --primary: 167 47% 28%;
+    --popover-foreground: 234 31% 18%;
+    --primary: 245 76% 62%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 155 24% 93%;
-    --secondary-foreground: 167 40% 25%;
-    --muted: 40 16% 94%;
-    --muted-foreground: 160 6% 43%;
-    --accent: 155 24% 93%;
-    --accent-foreground: 167 40% 25%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 40 13% 88%;
-    --input: 40 13% 85%;
-    --ring: 167 47% 28%;
-    --radius: 0.875rem;
+    --secondary: 247 100% 96%;
+    --secondary-foreground: 245 65% 52%;
+    --muted: 230 30% 95%;
+    --muted-foreground: 232 10% 47%;
+    --accent: 247 100% 96%;
+    --accent-foreground: 245 65% 52%;
+    --destructive: 350 65% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 232 26% 92%;
+    --input: 232 22% 88%;
+    --ring: 245 76% 62%;
+    --radius: 1rem;
   }
 
   * {
@@ -36,7 +36,7 @@
 
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/15 selection:text-primary;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     min-height: 100vh;
   }
 
@@ -45,18 +45,64 @@
     outline-offset: 4px;
   }
 
-  button, input, textarea, select, a {
+  button,
+  input,
+  textarea,
+  select,
+  a {
     -webkit-tap-highlight-color: transparent;
   }
 
-  input, textarea, select {
+  input,
+  textarea,
+  select {
     scroll-margin-top: 10rem;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  svg {
+    flex-shrink: 0;
+  }
+  button:disabled {
+    cursor: not-allowed;
   }
 }
 
 @layer components {
   .page-container {
-    @apply mx-auto w-full max-w-6xl px-5 py-7 sm:px-8 sm:py-10 lg:px-10;
+    @apply mx-auto w-full max-w-[1360px] px-5 py-7 sm:px-8 sm:py-9 lg:px-10 xl:px-12;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold leading-tight tracking-tight sm:text-3xl;
+  }
+  .surface {
+    @apply rounded-3xl border border-border bg-card;
+  }
+  .filter-select {
+    @apply h-11 min-w-0 rounded-xl border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring;
+  }
+  .filter-chip {
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary;
+  }
+  .filter-chip[aria-pressed='true'] {
+    @apply border-foreground bg-foreground text-white;
+  }
+  .library-nav {
+    @apply flex gap-7 border-b border-border;
+  }
+  .library-nav button {
+    @apply -mb-px flex min-h-12 items-center gap-2 border-b-2 border-transparent px-1 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary;
+  }
+  .library-nav button[aria-current='page'] {
+    @apply border-primary text-primary;
+  }
+  .mobile-nav {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 
   .section-label {
@@ -64,8 +110,7 @@
   }
 
   .study-hero {
-    background: #e8eee5;
-    background-image: radial-gradient(ellipse at 95% 0%, #f5edcf 0%, transparent 58%);
+    background: #6155e8;
   }
 
   .deck-illustration {
@@ -82,7 +127,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
