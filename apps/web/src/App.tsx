@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { ViewMode } from './types';
 import { useFlashcardStore } from './store/useFlashcardStore';
+import { BottomNavigation } from './components/common/BottomNavigation';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
@@ -14,10 +15,14 @@ import { AllDecksView } from './components/deck/AllDecksView';
 import { MotionConfig } from 'motion/react';
 
 const DeckEditor = lazy(() =>
-  import('./components/deck/DeckEditor').then((module) => ({ default: module.DeckEditor }))
+  import('./components/deck/DeckEditor').then((module) => ({
+    default: module.DeckEditor,
+  }))
 );
 const StudyView = lazy(() =>
-  import('./components/study/StudyView').then((module) => ({ default: module.StudyView }))
+  import('./components/study/StudyView').then((module) => ({
+    default: module.StudyView,
+  }))
 );
 
 export const App: React.FC = () => {
@@ -71,7 +76,9 @@ export const App: React.FC = () => {
     };
   }, [initCloudSync, setSyncStatus, user]);
 
-  const [currentView, setCurrentView] = useState<ViewMode>({ type: 'dashboard' });
+  const [currentView, setCurrentView] = useState<ViewMode>({
+    type: 'dashboard',
+  });
   const [lastStudiedDeckId, setLastStudiedDeckId] = useState<string | null>(() => {
     try {
       return localStorage.getItem('flashcard_last_studied_deck_id');
@@ -142,7 +149,10 @@ export const App: React.FC = () => {
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
 
   // 학습 모드일 때는 화면 전체 몰입을 위해 사이드바 숨김
-  const showSidebar = currentView.type !== 'study';
+  const showSidebar =
+    currentView.type !== 'study' &&
+    currentView.type !== 'folder-study' &&
+    currentView.type !== 'edit-deck';
 
   return (
     <MotionConfig reducedMotion="user">
@@ -170,22 +180,25 @@ export const App: React.FC = () => {
 
         {/* 2. 메인 화면 영역 (Navbar + 콘텐츠) */}
         <div className="flex-1 flex flex-col min-w-0">
-          <Navbar
-            currentView={currentView}
-            isSidebarCollapsed={isSidebarCollapsed}
-            onToggleSidebar={toggleSidebar}
-            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-            onNavigateHome={navigateHome}
-            onNavigateFolder={navigateFolder}
-            onNavigateDeck={navigateDeck}
-          />
+          {showSidebar && (
+            <Navbar
+              currentView={currentView}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={toggleSidebar}
+              onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+              onNavigateHome={navigateHome}
+              onNavigateFolder={navigateFolder}
+              onNavigateDeck={navigateDeck}
+              onCreateDeck={() => navigateEditDeck()}
+            />
+          )}
 
           {/* 메인 뷰 컨테이너 */}
           <main
             id="main-content"
             tabIndex={-1}
             key={user?.uid || 'guest'}
-            className="flex-1 pb-8 outline-none"
+            className={`flex-1 outline-none ${showSidebar ? 'pb-24 lg:pb-10' : ''}`}
           >
             <Suspense
               fallback={
@@ -205,6 +218,8 @@ export const App: React.FC = () => {
                   lastStudiedDeckId={lastStudiedDeckId}
                   onNavigateDeck={navigateDeck}
                   onNavigateAllDecks={navigateAllDecks}
+                  onNavigateFolder={navigateFolder}
+                  onNavigateAllFolders={navigateAllFolders}
                   onStartStudy={(deckId) => navigateStudy(deckId)}
                   onCreateDeck={() => navigateEditDeck()}
                   onCreateFolder={openNewFolderModal}
@@ -213,6 +228,7 @@ export const App: React.FC = () => {
 
               {currentView.type === 'all-folders' && (
                 <AllFoldersView
+                  onNavigateAllDecks={navigateAllDecks}
                   onNavigateFolder={navigateFolder}
                   onCreateFolder={openNewFolderModal}
                   onBack={navigateHome}
@@ -221,6 +237,7 @@ export const App: React.FC = () => {
 
               {currentView.type === 'all-decks' && (
                 <AllDecksView
+                  onNavigateAllFolders={navigateAllFolders}
                   onNavigateDeck={navigateDeck}
                   onStartStudy={(deckId) => navigateStudy(deckId)}
                   onCreateDeck={() => navigateEditDeck()}
@@ -234,6 +251,9 @@ export const App: React.FC = () => {
                   onNavigateDeck={navigateDeck}
                   onStartStudy={(deckId) => navigateStudy(deckId)}
                   onCreateDeckInFolder={(folderId) => navigateEditDeck(undefined, folderId)}
+                  onStartFolderStudy={(folderId) =>
+                    setCurrentView({ type: 'folder-study', folderId })
+                  }
                   onBack={navigateHome}
                 />
               )}
@@ -278,8 +298,27 @@ export const App: React.FC = () => {
                   onEditDeck={(deckId) => navigateEditDeck(deckId)}
                 />
               )}
+
+              {currentView.type === 'folder-study' && (
+                <StudyView
+                  folderId={currentView.folderId}
+                  shuffle
+                  onExit={() => navigateFolder(currentView.folderId)}
+                  onEditDeck={(deckId) => navigateEditDeck(deckId)}
+                />
+              )}
             </Suspense>
           </main>
+
+          {showSidebar && (
+            <BottomNavigation
+              currentView={currentView}
+              onHome={navigateHome}
+              onDecks={navigateAllDecks}
+              onFolders={navigateAllFolders}
+              onCreate={() => navigateEditDeck()}
+            />
+          )}
 
           {/* 글로벌 폴더 생성/수정 모달 */}
           {folderModalState.isOpen && (

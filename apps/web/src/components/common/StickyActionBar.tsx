@@ -33,13 +33,13 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
   return (
     <div
       className={cn(
-        'sticky top-14 sm:top-16 z-30 w-full border-b border-border/80 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 shadow-2xs',
+        'sticky top-16 z-30 w-full border-b border-border/80 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 shadow-2xs',
         className
       )}
     >
       <div
         className={cn(
-          'max-w-6xl mx-auto px-5 sm:px-8 lg:px-10 py-4 sm:py-5 flex items-center justify-between gap-3 sm:gap-4',
+          'max-w-[1360px] mx-auto px-5 sm:px-8 lg:px-10 py-4 sm:py-5 flex items-center justify-between gap-3 sm:gap-4',
           contentClassName
         )}
       >
@@ -59,12 +59,9 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
                   iconOnlyBack && 'h-8 w-8'
                 )}
                 title={backTitle || backLabel}
+                aria-label={backTitle || backLabel}
               >
-                {iconOnlyBack ? (
-                  <ArrowLeft className="w-5 h-5" />
-                ) : (
-                  <span>{backLabel}</span>
-                )}
+                {iconOnlyBack ? <ArrowLeft className="w-5 h-5" /> : <span>{backLabel}</span>}
               </Button>
             )}
 
@@ -77,15 +74,14 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
                 ) : (
                   title
                 )}
-                {description && (
-                  typeof description === 'string' ? (
+                {description &&
+                  (typeof description === 'string' ? (
                     <p className="text-xs text-muted-foreground hidden sm:block truncate">
                       {description}
                     </p>
                   ) : (
                     description
-                  )
-                )}
+                  ))}
               </div>
             )}
           </div>

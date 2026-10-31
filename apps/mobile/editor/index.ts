@@ -4,6 +4,7 @@ import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import Image from '@tiptap/extension-image';
 import DOMPurify from 'dompurify';
+import { createElement, Bold, Italic, Underline as UnderlineIcon, Strikethrough, Highlighter, List, ListOrdered, Heading2, SquareCode, Quote, Undo2, Redo2, ImagePlus, type IconNode } from 'lucide';
 
 declare global { interface Window { ReactNativeWebView?: { postMessage(value: string): void }; nativeReceive: (data: Command) => void } }
 interface Command { type: 'init' | 'set' | 'get' | 'image' | 'appearance'; html?: string; editable?: boolean; label?: string; id?: string; url?: string; presentation?: 'default' | 'study-front' | 'study-back' }
@@ -24,23 +25,25 @@ const root = document.getElementById('content')!;
 const toolbar = document.getElementById('toolbar')!;
 const reportHeight = () => send({ type: 'height', value: Math.ceil(root.getBoundingClientRect().height + (toolbar.hidden ? 0 : toolbar.getBoundingClientRect().height)) });
 const emit = () => { if (editor) send({ type: 'change', html: editor.getHTML() }); reportHeight(); };
-const actions: Array<[string, string, (editor: Editor) => void]> = [
-  ['굵게','B', e => e.chain().focus().toggleBold().run()],
-  ['기울임','I', e => e.chain().focus().toggleItalic().run()],
-  ['밑줄','U', e => e.chain().focus().toggleUnderline().run()],
-  ['취소선','S', e => e.chain().focus().toggleStrike().run()],
-  ['형광펜','▰', e => e.chain().focus().toggleHighlight().run()],
-  ['글머리 목록','•', e => e.chain().focus().toggleBulletList().run()],
-  ['번호 목록','1.', e => e.chain().focus().toggleOrderedList().run()],
-  ['제목','H', e => e.chain().focus().toggleHeading({ level: 2 }).run()],
-  ['코드 블록','</>', e => e.chain().focus().toggleCodeBlock().run()],
-  ['인용','❞', e => e.chain().focus().toggleBlockquote().run()],
-  ['실행 취소','↶', e => e.chain().focus().undo().run()],
-  ['다시 실행','↷', e => e.chain().focus().redo().run()],
-  ['본문 이미지 추가','사진', () => send({ type: 'pick-image' })],
+const actions: Array<[string, IconNode, (editor: Editor) => void]> = [
+  ['굵게',Bold, e => e.chain().focus().toggleBold().run()],
+  ['기울임',Italic, e => e.chain().focus().toggleItalic().run()],
+  ['밑줄',UnderlineIcon, e => e.chain().focus().toggleUnderline().run()],
+  ['취소선',Strikethrough, e => e.chain().focus().toggleStrike().run()],
+  ['형광펜',Highlighter, e => e.chain().focus().toggleHighlight().run()],
+  ['글머리 목록',List, e => e.chain().focus().toggleBulletList().run()],
+  ['번호 목록',ListOrdered, e => e.chain().focus().toggleOrderedList().run()],
+  ['제목',Heading2, e => e.chain().focus().toggleHeading({ level: 2 }).run()],
+  ['코드 블록',SquareCode, e => e.chain().focus().toggleCodeBlock().run()],
+  ['인용',Quote, e => e.chain().focus().toggleBlockquote().run()],
+  ['실행 취소',Undo2, e => e.chain().focus().undo().run()],
+  ['다시 실행',Redo2, e => e.chain().focus().redo().run()],
+  ['본문 이미지 추가',ImagePlus, () => send({ type: 'pick-image' })],
 ];
-actions.forEach(([label, text, action]) => {
-  const button = document.createElement('button'); button.textContent = text; button.setAttribute('aria-label', label); button.title = label;
+actions.forEach(([label, icon, action]) => {
+  const button = document.createElement('button');
+  const svg = createElement(icon, { width: 18, height: 18, 'stroke-width': 2, 'aria-hidden': 'true' });
+  button.append(svg); button.setAttribute('aria-label', label); button.title = label;
   button.addEventListener('pointerdown', event => event.preventDefault());
   button.addEventListener('click', () => { if (editor) action(editor); });
   toolbar.append(button);

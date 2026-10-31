@@ -33,205 +33,217 @@ interface DeckCardEditorItemProps {
   onGrabCardHandle?: (index: number, cardId?: string) => void;
 }
 
-export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(({
-  index,
-  card,
-  totalCards,
-  autoFocusFront,
-  isTargetFocus,
-  onUpdate,
-  onMoveUp,
-  onMoveDown,
-  onDuplicate,
-  onRemove,
-  onInsertAfter,
-  onFocusCard,
-  onGrabCardHandle,
-}) => {
-  const dragControls = useDragControls();
-  const itemRef = useRef<HTMLLIElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isHighlighted, setIsHighlighted] = useState(false);
+export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(
+  ({
+    index,
+    card,
+    totalCards,
+    autoFocusFront,
+    isTargetFocus,
+    onUpdate,
+    onMoveUp,
+    onMoveDown,
+    onDuplicate,
+    onRemove,
+    onInsertAfter,
+    onFocusCard,
+    onGrabCardHandle,
+  }) => {
+    const dragControls = useDragControls();
+    const itemRef = useRef<HTMLLIElement>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [isHighlighted, setIsHighlighted] = useState(false);
 
-  useEffect(() => {
-    if (autoFocusFront && itemRef.current) {
-      if (isTargetFocus) {
-        setIsHighlighted(true);
-        const highlightTimer = setTimeout(() => {
-          setIsHighlighted(false);
-        }, 2200);
-        const scrollTimer = setTimeout(() => {
-          itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 80);
-        return () => {
-          clearTimeout(highlightTimer);
-          clearTimeout(scrollTimer);
-        };
-      } else {
-        const timer = setTimeout(() => {
-          itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 50);
-        return () => clearTimeout(timer);
+    useEffect(() => {
+      if (autoFocusFront && itemRef.current) {
+        if (isTargetFocus) {
+          setIsHighlighted(true);
+          const highlightTimer = setTimeout(() => {
+            setIsHighlighted(false);
+          }, 2200);
+          const scrollTimer = setTimeout(() => {
+            itemRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+            });
+          }, 80);
+          return () => {
+            clearTimeout(highlightTimer);
+            clearTimeout(scrollTimer);
+          };
+        } else {
+          const timer = setTimeout(() => {
+            itemRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+            });
+          }, 50);
+          return () => clearTimeout(timer);
+        }
       }
-    }
-  }, [autoFocusFront, isTargetFocus]);
+    }, [autoFocusFront, isTargetFocus]);
 
-  return (
-    <Reorder.Item
-      ref={itemRef}
-      value={card}
-      id={`card-editor-${index}`}
-      dragListener={false}
-      dragControls={dragControls}
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
-      whileDrag={{
-        scale: 1.015,
-        zIndex: 50,
-      }}
-      onDragStart={() => {
-        setIsDragging(true);
-        onGrabCardHandle?.(index, card.id);
-      }}
-      onDragEnd={() => setIsDragging(false)}
-      transition={{ duration: 0.2 }}
-      className="relative list-none"
-    >
-      <div
-        onFocusCapture={() => onFocusCard?.(index, card.id)}
-        onClick={() => onFocusCard?.(index, card.id)}
-        className={cn(
-          "bg-card rounded-xl border border-border p-4 shadow-xs space-y-3 focus-within:border-primary/50 transition-all duration-300",
-          isDragging && "shadow-xl border-primary/40 ring-1 ring-primary/20",
-          isHighlighted && "ring-2 ring-primary/80 border-primary shadow-md bg-primary/[0.02]"
-        )}
+    return (
+      <Reorder.Item
+        ref={itemRef}
+        value={card}
+        id={`card-editor-${index}`}
+        dragListener={false}
+        dragControls={dragControls}
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
+        whileDrag={{
+          scale: 1.015,
+          zIndex: 50,
+        }}
+        onDragStart={() => {
+          setIsDragging(true);
+          onGrabCardHandle?.(index, card.id);
+        }}
+        onDragEnd={() => setIsDragging(false)}
+        transition={{ duration: 0.2 }}
+        className="relative list-none"
       >
-      {/* 카드 번호 및 액션 툴바 */}
-      <div className="flex items-center justify-between pb-2 border-b border-border/60">
-        <div className="flex items-center gap-2">
-          {/* 드래그 핸들 */}
-          <button
-            type="button"
-            tabIndex={-1}
-            className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground hover:text-foreground rounded transition-colors touch-none"
-            onPointerDown={(e) => {
-              onGrabCardHandle?.(index, card.id);
-              dragControls.start(e);
-            }}
-            title="드래그하여 순서 변경"
-          >
-            <GripVertical className="w-4 h-4" />
-          </button>
-          <span className="font-mono text-xs font-semibold text-muted-foreground">
-            #{index + 1}
-          </span>
-        </div>
+        <div
+          onFocusCapture={() => onFocusCard?.(index, card.id)}
+          onClick={() => onFocusCard?.(index, card.id)}
+          className={cn(
+            'bg-card rounded-3xl border border-border p-5 sm:p-6 shadow-xs space-y-4 focus-within:border-primary/50 transition-all duration-300',
+            isDragging && 'shadow-xl border-primary/40 ring-1 ring-primary/20',
+            isHighlighted && 'ring-2 ring-primary/80 border-primary shadow-md bg-primary/[0.02]'
+          )}
+        >
+          {/* 카드 번호 및 액션 툴바 */}
+          <div className="flex items-center justify-between pb-2 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              {/* 드래그 핸들 */}
+              <button
+                type="button"
+                tabIndex={-1}
+                className="cursor-grab active:cursor-grabbing p-1 -ml-1 text-muted-foreground hover:text-foreground rounded transition-colors touch-none"
+                onPointerDown={(e) => {
+                  onGrabCardHandle?.(index, card.id);
+                  dragControls.start(e);
+                }}
+                title="드래그하여 순서 변경"
+              >
+                <GripVertical className="w-4 h-4" />
+              </button>
+              <span className="font-mono text-xs font-semibold text-muted-foreground">
+                #{index + 1}
+              </span>
+            </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            tabIndex={-1}
-            onClick={() => onMoveUp(index)}
-            disabled={index === 0}
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            title="위로 이동"
-          >
-            <ChevronUp className="w-4 h-4" />
-          </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                tabIndex={-1}
+                onClick={() => onMoveUp(index)}
+                disabled={index === 0}
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title="위로 이동"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            tabIndex={-1}
-            onClick={() => onMoveDown(index)}
-            disabled={index === totalCards - 1}
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            title="아래로 이동"
-          >
-            <ChevronDown className="w-4 h-4" />
-          </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                tabIndex={-1}
+                onClick={() => onMoveDown(index)}
+                disabled={index === totalCards - 1}
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title="아래로 이동"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            tabIndex={-1}
-            onClick={() => onDuplicate(index)}
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            title="카드 복제"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                tabIndex={-1}
+                onClick={() => onDuplicate(index)}
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title="카드 복제"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            tabIndex={-1}
-            onClick={() => onRemove(index)}
-            disabled={totalCards <= 1}
-            className="h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"
-            title={totalCards <= 1 ? '최소 1장의 카드가 필요합니다' : '카드 삭제'}
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </div>
-
-      {/* 에디터 필드 (2열 반응형 그리드) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* 앞면 에디터 */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-            <span>앞면 (개념 / 키워드)</span>
-            <Badge variant="secondary" className="text-[10px] font-medium py-0">단어</Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                tabIndex={-1}
+                onClick={() => onRemove(index)}
+                disabled={totalCards <= 1}
+                className="h-7 w-7 text-muted-foreground hover:text-destructive transition-colors"
+                title={totalCards <= 1 ? '최소 1장의 카드가 필요합니다' : '카드 삭제'}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            </div>
           </div>
-          <RichTextEditor
-            ariaLabel={`카드 ${index + 1} 앞면`}
-            value={card.termRichText}
-            onChange={(html) => onUpdate(index, 'termRichText', html)}
-            placeholder="단어, 질문 또는 핵심 키워드를 입력하세요..."
-            height="135px"
-            autoFocus={autoFocusFront}
-          />
-        </div>
 
-        {/* 뒷면 에디터 */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-            <span>뒷면 (정의 / 해설)</span>
-            <Badge variant="warning" className="text-[10px] font-medium py-0">정의</Badge>
+          {/* 에디터 필드 (2열 반응형 그리드) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 앞면 에디터 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                <span>질문</span>
+                <Badge variant="secondary" className="text-[10px] font-medium py-0">
+                  앞면
+                </Badge>
+              </div>
+              <RichTextEditor
+                ariaLabel={`카드 ${index + 1} 앞면`}
+                value={card.termRichText}
+                onChange={(html) => onUpdate(index, 'termRichText', html)}
+                placeholder="단어, 질문 또는 핵심 키워드를 입력하세요..."
+                height="135px"
+                autoFocus={autoFocusFront}
+              />
+            </div>
+
+            {/* 뒷면 에디터 */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                <span>뒷면 (정의 / 해설)</span>
+                <Badge variant="warning" className="text-[10px] font-medium py-0">
+                  뒷면
+                </Badge>
+              </div>
+              <RichTextEditor
+                ariaLabel={`카드 ${index + 1} 뒷면`}
+                value={card.definitionRichText}
+                onChange={(html) => onUpdate(index, 'definitionRichText', html)}
+                placeholder="상세 설명, 해설, 예시 코드를 입력하세요..."
+                height="135px"
+              />
+            </div>
           </div>
-          <RichTextEditor
-            ariaLabel={`카드 ${index + 1} 뒷면`}
-            value={card.definitionRichText}
-            onChange={(html) => onUpdate(index, 'definitionRichText', html)}
-            placeholder="상세 설명, 해설, 예시 코드를 입력하세요..."
-            height="135px"
-          />
         </div>
-      </div>
-      </div>
 
-      {/* 카드 간 새 카드 삽입 버튼 (마지막 카드가 아닐 때) */}
-      {index < totalCards - 1 && onInsertAfter && !isDragging && (
-        <div className="py-2 flex items-center justify-center relative group">
-          <div className="flex-1 border-t border-dashed border-border/80 group-hover:border-primary/40 transition-colors" />
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={() => onInsertAfter(index)}
-            className="mx-2 shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium text-muted-foreground hover:text-primary bg-background hover:bg-primary/5 border border-border/80 hover:border-primary/40 shadow-2xs hover:shadow-xs transition-all cursor-pointer select-none active:scale-95"
-            title="이 위치에 새 카드 삽입"
-          >
-            <Plus className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-            <span>카드 삽입</span>
-          </button>
-          <div className="flex-1 border-t border-dashed border-border/80 group-hover:border-primary/40 transition-colors" />
-        </div>
-      )}
-    </Reorder.Item>
-  );
-});
+        {/* 카드 간 새 카드 삽입 버튼 (마지막 카드가 아닐 때) */}
+        {index < totalCards - 1 && onInsertAfter && !isDragging && (
+          <div className="py-2 flex items-center justify-center relative group">
+            <div className="flex-1 border-t border-dashed border-border/80 group-hover:border-primary/40 transition-colors" />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => onInsertAfter(index)}
+              className="mx-2 shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium text-muted-foreground hover:text-primary bg-background hover:bg-primary/5 border border-border/80 hover:border-primary/40 shadow-2xs hover:shadow-xs transition-all cursor-pointer select-none active:scale-95"
+              title="이 위치에 새 카드 삽입"
+            >
+              <Plus className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span>카드 삽입</span>
+            </button>
+            <div className="flex-1 border-t border-dashed border-border/80 group-hover:border-primary/40 transition-colors" />
+          </div>
+        )}
+      </Reorder.Item>
+    );
+  }
+);
 
 DeckCardEditorItem.displayName = 'DeckCardEditorItem';

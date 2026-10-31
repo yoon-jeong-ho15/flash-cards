@@ -34,3 +34,8 @@ export function indexCards(cards: Card[]): CardIndex {
 
 export const selectDeckCards = (state: Pick<AccountData, 'cards'>, deckId: string) =>
   indexCards(state.cards).byDeck.get(deckId) || emptyCards;
+
+export function selectFolderCards(state: Pick<AccountData, 'cards' | 'decks'>, folderId: string): Card[] {
+  const deckIds = new Set(state.decks.filter(deck => deck.folderId === folderId).map(deck => deck.id));
+  return state.cards.filter(card => deckIds.has(card.deckId));
+}

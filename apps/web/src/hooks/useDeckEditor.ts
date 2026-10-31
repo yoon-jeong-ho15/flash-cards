@@ -17,7 +17,12 @@ export interface DeckEditorErrors {
   general?: string;
 }
 
-import { DeckDraftData, loadDeckDraft, saveDeckDraft, removeDeckDraft } from '../services/deckDraftStorage';
+import {
+  DeckDraftData,
+  loadDeckDraft,
+  saveDeckDraft,
+  removeDeckDraft,
+} from '../services/deckDraftStorage';
 
 const isDraftMeaningful = (
   title: string,
@@ -83,11 +88,11 @@ export const useDeckEditor = ({
   focusCardId,
   onSaved,
 }: UseDeckEditorOptions) => {
-  const decks = useFlashcardStore(state => state.decks);
-  const cards = useFlashcardStore(state => selectDeckCards(state, deckId || ''));
-  const folders = useFlashcardStore(state => state.folders);
-  const saveDeckWithCards = useFlashcardStore(state => state.saveDeckWithCards);
-  const user = useFlashcardStore(state => state.user);
+  const decks = useFlashcardStore((state) => state.decks);
+  const cards = useFlashcardStore((state) => selectDeckCards(state, deckId || ''));
+  const folders = useFlashcardStore((state) => state.folders);
+  const saveDeckWithCards = useFlashcardStore((state) => state.saveDeckWithCards);
+  const user = useFlashcardStore((state) => state.user);
 
   const [title, setTitle] = useState(() => {
     if (deckId) {
@@ -246,7 +251,10 @@ export const useDeckEditor = ({
         setLastSavedAt(now);
       } else {
         setLastSavedAt(null);
-        setErrors(previous => ({ ...previous, general: '임시 저장 공간이 부족합니다. 내용을 복사하거나 공간을 확보해 주세요.' }));
+        setErrors((previous) => ({
+          ...previous,
+          general: '임시 저장 공간이 부족합니다. 내용을 복사하거나 공간을 확보해 주세요.',
+        }));
       }
     }, 2000);
 
@@ -254,44 +262,71 @@ export const useDeckEditor = ({
   }, [title, description, selectedFolderId, cardItems, deckId, user?.uid, isReadyForAutoSave]);
 
   // Track the original independently of the editable draft. Remote refreshes must not reset inputs.
-  const originalDeck = decks.find(d => d.id === deckId);
-  const fingerprint = useMemo(() => JSON.stringify({ deck: originalDeck, cards }), [originalDeck, cards]);
+  const originalDeck = decks.find((d) => d.id === deckId);
+  const fingerprint = useMemo(
+    () => JSON.stringify({ deck: originalDeck, cards }),
+    [originalDeck, cards]
+  );
   const [baseline, setBaseline] = useState(fingerprint);
   const hasExternalChanges = Boolean(deckId && baseline !== fingerprint);
   const reloadOriginal = useCallback(() => {
-    const deck = decks.find(d => d.id === deckId);
+    const deck = decks.find((d) => d.id === deckId);
     if (!deck) return;
     setTitle(deck.title);
     setDescription(deck.description || '');
     setSelectedFolderId(deck.folderId || null);
-    setCardItems(sortCardsByOrder(cards.filter(c => c.deckId === deckId)));
+    setCardItems(sortCardsByOrder(cards.filter((c) => c.deckId === deckId)));
     setBaseline(fingerprint);
   }, [decks, cards, deckId, fingerprint]);
 
   // Flush the latest draft on navigation and page close, preserving the account at mount time.
   const latestDraftRef = useRef<DeckDraftData | null>(null);
-  latestDraftRef.current = isReadyForAutoSave ? {
-    deckId, title, description, selectedFolderId, cardItems, savedAt: Date.now(),
-  } : null;
+  latestDraftRef.current = isReadyForAutoSave
+    ? {
+        deckId,
+        title,
+        description,
+        selectedFolderId,
+        cardItems,
+        savedAt: Date.now(),
+      }
+    : null;
   useEffect(() => {
     const flush = () => {
       const draft = latestDraftRef.current;
-      if (!skipDraftFlushRef.current && draft && isDraftMeaningful(draft.title, draft.description, draft.cardItems)) {
+      if (
+        !skipDraftFlushRef.current &&
+        draft &&
+        isDraftMeaningful(draft.title, draft.description, draft.cardItems)
+      ) {
         saveDeckDraft(user?.uid, draft);
       }
     };
     window.addEventListener('beforeunload', flush);
-    return () => { window.removeEventListener('beforeunload', flush); flush(); };
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      flush();
+    };
   }, [user?.uid, deckId]);
+
+  const saveDraftNow = useCallback(() => {
+    const draft = latestDraftRef.current;
+    if (!draft) return false;
+    if (!isDraftMeaningful(draft.title, draft.description, draft.cardItems)) return true;
+    const saved = saveDeckDraft(user?.uid, { ...draft, savedAt: Date.now() });
+    if (!saved)
+      setErrors((previous) => ({
+        ...previous,
+        general: '임시 저장하지 못했어요. 저장 공간을 확인한 뒤 다시 시도해 주세요.',
+      }));
+    return saved;
+  }, [user?.uid]);
 
   // 카드 추가
   const handleAddCard = useCallback(() => {
     const newCard = createEmptyCardItem();
     setNewlyAddedCardId(newCard.id || null);
-    setCardItems((prev) => [
-      ...prev,
-      newCard,
-    ]);
+    setCardItems((prev) => [...prev, newCard]);
   }, []);
 
   // 특정 위치에 카드 삽입
@@ -306,9 +341,12 @@ export const useDeckEditor = ({
   }, []);
 
   // 특정 카드 바로 뒤에 카드 삽입 (메모이제이션 콜백)
-  const handleInsertCardAfter = useCallback((index: number) => {
-    handleInsertCard(index + 1);
-  }, [handleInsertCard]);
+  const handleInsertCardAfter = useCallback(
+    (index: number) => {
+      handleInsertCard(index + 1);
+    },
+    [handleInsertCard]
+  );
 
   // 카드 삭제
   const handleRemoveCard = useCallback((index: number) => {
@@ -372,9 +410,7 @@ export const useDeckEditor = ({
 
   // 개별 카드 업데이트
   const handleUpdateCard = useCallback((index: number, field: keyof CardFormItem, value: any) => {
-    setCardItems((prev) =>
-      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
-    );
+    setCardItems((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
   }, []);
 
   // 저장 처리
@@ -419,7 +455,8 @@ export const useDeckEditor = ({
           frontImageUrl: c.frontImageUrl,
           backImageUrl: c.backImageUrl || c.imageUrl,
           imageUrl: c.imageUrl || c.backImageUrl,
-          learned: (c.id ? indexCards(cards).byId.get(c.id)?.learned : undefined) ?? c.learned ?? false,
+          learned:
+            (c.id ? indexCards(cards).byId.get(c.id)?.learned : undefined) ?? c.learned ?? false,
         }))
       );
 
@@ -431,7 +468,9 @@ export const useDeckEditor = ({
       onSaved(savedDeckId);
     } catch (err: any) {
       console.error('덱 저장 중 오류:', err);
-      setErrors({ general: '덱을 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.' });
+      setErrors({
+        general: '덱을 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.',
+      });
     }
   }, [
     title,
@@ -475,5 +514,6 @@ export const useDeckEditor = ({
     handleRestoreDraft,
     handleDiscardDraft,
     clearDraft,
+    saveDraftNow,
   };
 };

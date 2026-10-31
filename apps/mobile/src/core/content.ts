@@ -22,6 +22,10 @@ export const matches = (text: string, query: string) => text.toLocaleLowerCase('
 export const cardMatches = (card: Card, query: string) => matches(plainText(`${card.termRichText} ${card.definitionRichText}`), query);
 export const orderedCards = (cards: Card[], deckId: string) => cards.filter(c => c.deckId === deckId).sort((a, b) =>
   (a.order ?? Infinity) - (b.order ?? Infinity) || a.id.localeCompare(b.id));
+export function folderCards(cards: Card[], decks: Deck[], folderId: string): Card[] {
+  const deckIds = new Set(decks.filter(deck => deck.folderId === folderId).map(deck => deck.id));
+  return cards.filter(card => deckIds.has(card.deckId));
+}
 export function sortDecks<T extends Pick<Deck, 'title' | 'createdAt'> & { updatedAt?: number }>(items: T[], sort: DeckSortOption): T[] {
   return [...items].sort((a, b) => {
     const name = a.title.localeCompare(b.title, 'ko', { numeric: true });

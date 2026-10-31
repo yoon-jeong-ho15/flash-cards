@@ -103,16 +103,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       aria-current={isCurrentDeck(deck.id) ? 'page' : undefined}
       className={cn(
         'group flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted',
-        isCurrentDeck(deck.id) ? 'bg-secondary font-semibold text-primary' : 'text-muted-foreground'
+        isCurrentDeck(deck.id)
+          ? 'bg-primary font-semibold text-primary-foreground shadow-sm shadow-primary/20'
+          : 'text-muted-foreground'
       )}
     >
       <FileText className="h-3.5 w-3.5 shrink-0 opacity-65" />
       <span className="min-w-0 flex-1 truncate">{deck.title}</span>
-      <span className="shrink-0 tabular-nums text-[10px] opacity-75">{counts.get(deck.id)?.length ?? 0}</span>
+      <span className="shrink-0 tabular-nums text-[10px] opacity-75">
+        {counts.get(deck.id)?.length ?? 0}
+      </span>
     </button>
   );
   const content = (collapsed: boolean) => (
-    <div className="flex h-full flex-col bg-[#fdfcf9]">
+    <div className="flex h-full flex-col bg-card">
       <div
         className={cn(
           'flex h-14 sm:h-16 shrink-0 items-center gap-2 px-4',
@@ -159,26 +163,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <Button
           onClick={() => navigate(onCreateDeck)}
           className={cn('w-full gap-2', collapsed ? 'px-0' : 'justify-start')}
-          aria-label="새 덱 만들기"
-          title="새 덱 만들기"
+          aria-label="새 학습 세트"
+          title="새 학습 세트"
         >
           <Plus className="h-4 w-4" />
-          {!collapsed && <span>새 덱 만들기</span>}
+          {!collapsed && <span>새 학습 세트</span>}
         </Button>
       </div>
       <nav aria-label="주 메뉴" className={cn('space-y-1 px-3', collapsed && 'px-2')}>
         {[
-          { type: 'dashboard', label: '학습 홈', icon: Home, action: onNavigateHome, count: null },
+          {
+            type: 'dashboard',
+            label: '학습 홈',
+            icon: Home,
+            action: onNavigateHome,
+            count: null,
+          },
           {
             type: 'all-decks',
-            label: '모든 덱',
+            label: '학습 세트',
             icon: Layers,
             action: onNavigateAllDecks,
             count: decks.length,
           },
           {
             type: 'all-folders',
-            label: '모든 폴더',
+            label: '폴더',
             icon: Folder,
             action: onNavigateAllFolders,
             count: folders.length,
@@ -194,7 +204,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={cn(
               'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors',
               currentView.type === item.type
-                ? 'bg-secondary font-semibold text-primary'
+                ? 'bg-primary font-semibold text-primary-foreground shadow-sm shadow-primary/20'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               collapsed && 'justify-center px-0'
             )}
@@ -268,7 +278,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <button
                       type="button"
                       className="shrink-0 rounded-lg px-1 py-2 text-muted-foreground hover:text-foreground"
-                      onClick={() => setExpanded((prev) => ({ ...prev, [folder.id]: !isExpanded }))}
+                      onClick={() =>
+                        setExpanded((prev) => ({
+                          ...prev,
+                          [folder.id]: !isExpanded,
+                        }))
+                      }
                       aria-label={`${folder.title} ${isExpanded ? '접기' : '펼치기'}`}
                       aria-expanded={isExpanded}
                     >
@@ -302,7 +317,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {folderDecks.length ? (
                         folderDecks.map(renderDeck)
                       ) : (
-                        <p className="p-2 text-xs text-muted-foreground">아직 덱이 없어요.</p>
+                        <p className="p-2 text-xs text-muted-foreground">아직 세트가 없어요.</p>
                       )}
                     </div>
                   )}
@@ -311,7 +326,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
             {sortedDecks.some((deck) => !deck.folderId) && (
               <div className="mt-4">
-                <p className="mb-2 px-2 text-[10px] text-muted-foreground">미분류 덱</p>
+                <p className="mb-2 px-2 text-[10px] text-muted-foreground">미분류 세트</p>
                 <div className="space-y-0.5">
                   {sortedDecks.filter((deck) => !deck.folderId).map(renderDeck)}
                 </div>
@@ -420,7 +435,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-label="사이드바"
         className={cn(
           'sticky top-0 z-30 hidden h-screen shrink-0 border-r border-border/80 transition-[width] duration-200 lg:block',
-          isCollapsed ? 'w-[72px]' : 'w-60 xl:w-64'
+          isCollapsed ? 'w-[72px]' : 'w-60 xl:w-[264px]'
         )}
       >
         {content(isCollapsed)}

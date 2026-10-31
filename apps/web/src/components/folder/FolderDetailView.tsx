@@ -1,4 +1,4 @@
-import { indexCards } from '../../store/cardSelectors';
+import { indexCards, selectFolderCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { FolderModal } from './FolderModal';
@@ -8,7 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ConfirmModal } from '../common/ConfirmModal';
-import { StickyActionBar } from '../common/StickyActionBar';
+import { ActionMenu } from '../common/ActionMenu';
+import { Input } from '@/components/ui/input';
+import { richTextToText } from '../../utils/search';
+import { ArrowLeft, Search } from 'lucide-react';
 import {
   Folder,
   Plus,
@@ -18,6 +21,7 @@ import {
   Calendar,
   ArrowUpDown,
   ChevronDown,
+  Shuffle,
 } from 'lucide-react';
 import { DeckSortOption } from '../../types';
 
@@ -25,6 +29,7 @@ interface FolderDetailViewProps {
   folderId: string;
   onNavigateDeck: (deckId: string) => void;
   onStartStudy: (deckId: string) => void;
+  onStartFolderStudy: (folderId: string) => void;
   onCreateDeckInFolder: (folderId: string) => void;
   onBack: () => void;
 }
@@ -33,18 +38,28 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   folderId,
   onNavigateDeck,
   onStartStudy,
+  onStartFolderStudy,
   onCreateDeckInFolder,
   onBack,
 }) => {
-  const folders = useFlashcardStore(state => state.folders);
-  const decks = useFlashcardStore(state => state.decks);
-  const cards = useFlashcardStore(state => state.cards);
-  const deleteFolder = useFlashcardStore(state => state.deleteFolder);
+  const folders = useFlashcardStore((state) => state.folders);
+  const decks = useFlashcardStore((state) => state.decks);
+  const cards = useFlashcardStore((state) => state.cards);
+  const deleteFolder = useFlashcardStore((state) => state.deleteFolder);
+  const [query, setQuery] = useState('');
+  const cardIndex = useMemo(() => indexCards(cards).byDeck, [cards]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const folder = useMemo(() => folders.find((f) => f.id === folderId), [folders, folderId]);
-  const folderDecks = useMemo(() => decks.filter((d) => d.folderId === folderId), [decks, folderId]);
+  const folderDecks = useMemo(
+    () => decks.filter((d) => d.folderId === folderId),
+    [decks, folderId]
+  );
+  const folderCardsCount = useMemo(
+    () => selectFolderCards({ decks, cards }, folderId).length,
+    [decks, cards, folderId]
+  );
 
   const [sortBy, setSortBy] = useState<DeckSortOption>(() => {
     try {
@@ -68,7 +83,17 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   };
 
   const sortedDecks = useMemo(() => {
-    const list = [...folderDecks];
+    const q = query.trim().toLocaleLowerCase('ko-KR');
+    const list = folderDecks.filter(
+      (deck) =>
+        !q ||
+        `${deck.title} ${deck.description || ''}`.toLocaleLowerCase('ko-KR').includes(q) ||
+        (cardIndex.get(deck.id) || []).some((card) =>
+          richTextToText(`${card.termRichText} ${card.definitionRichText}`)
+            .toLocaleLowerCase('ko-KR')
+            .includes(q)
+        )
+    );
     switch (sortBy) {
       case 'name-asc':
         return list.sort((a, b) => {
@@ -101,7 +126,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
       default:
         return list;
     }
-  }, [folderDecks, sortBy]);
+  }, [folderDecks, sortBy, query, cardIndex]);
 
   if (!folder) {
     return (
@@ -121,152 +146,128 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   };
 
   return (
-    <div className="relative">
-      {/* 상단 Sticky 메뉴바 */}
-      <StickyActionBar
-        onBack={onBack}
-        iconOnlyBack
-        backTitle="학습 홈으로 돌아가기"
-        right={
-          <>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => onCreateDeckInFolder(folder.id)}
-              leftIcon={<Plus className="w-3.5 h-3.5" />}
-              className="font-semibold shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all px-2.5 sm:px-3"
-              title="새 덱 만들기"
-            >
-              <span className="hidden sm:inline">덱 추가</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowEditModal(true)}
-              aria-label="폴더 수정"
-              leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-            >
-              <span className="hidden sm:inline">폴더 수정</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-              aria-label="폴더 삭제"
-              leftIcon={<Trash2 className="w-3.5 h-3.5 text-destructive" />}
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            >
-              <span className="hidden sm:inline">폴더 삭제</span>
-            </Button>
-          </>
-        }
-      />
-
-      {/* 본문 콘텐츠 컨테이너 */}
-      <div className="page-container space-y-6">
-
-      {/* 폴더 메인 헤더 Card */}
-      <Card className="p-6 sm:p-8">
-        <div className="flex items-center gap-3.5 mb-2">
-          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
-            <Folder className="w-5 h-5 fill-primary/20" />
-          </div>
-          <div>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              폴더
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              {folder.title}
-            </h1>
-          </div>
-        </div>
-
-        {folder.description && (
-          <p className="text-muted-foreground text-sm sm:text-base mt-2 leading-relaxed">
-            {folder.description}
-          </p>
-        )}
-
-        <div className="flex items-center gap-4 mt-6 pt-4 border-t border-border text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5 font-medium text-foreground">
-            <Layers className="w-3.5 h-3.5 text-primary" />
-            덱 {folderDecks.length}개
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-            생성일: {new Date(folder.createdAt).toLocaleDateString()}
-          </span>
-        </div>
-      </Card>
-
-      {/* 소속 덱 목록 헤더 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="page-container space-y-7">
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          className="-ml-3 text-xs text-muted-foreground"
+          leftIcon={<ArrowLeft className="h-4 w-4" />}
+        >
+          학습 홈
+        </Button>
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-foreground tracking-tight">소속 카드 덱</h2>
-          <Badge variant="secondary" className="font-mono text-xs">
-            {folderDecks.length}
-          </Badge>
-        </div>
-
-        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-          {folderDecks.length > 0 && (
-            <div className="relative inline-flex items-center">
-              <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-              <select
-                value={sortBy}
-                onChange={(e) => handleSortChange(e.target.value as DeckSortOption)}
-                className="h-8 pl-8 pr-7 rounded-lg border border-input bg-background text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer appearance-none"
-                aria-label="카드 덱 정렬 방식"
-              >
-                <option value="name-asc">이름순</option>
-                <option value="name-desc">이름역순</option>
-                <option value="date-desc">최근 수정순</option>
-                <option value="date-asc">오래된 수정순</option>
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            </div>
-          )}
-
           <Button
-            variant="default"
-            size="sm"
             onClick={() => onCreateDeckInFolder(folder.id)}
-            leftIcon={<Plus className="w-4 h-4" />}
+            size="sm"
+            leftIcon={<Plus className="h-4 w-4" />}
           >
-            이 폴더에 새 덱 추가
+            새 학습 세트
           </Button>
+          <ActionMenu
+            label="폴더 관리"
+            actions={[
+              {
+                label: '폴더 수정',
+                icon: <Edit3 className="h-4 w-4" />,
+                onSelect: () => setShowEditModal(true),
+              },
+              {
+                label: '폴더 삭제',
+                icon: <Trash2 className="h-4 w-4" />,
+                onSelect: () => setShowDeleteConfirm(true),
+                destructive: true,
+              },
+            ]}
+          />
         </div>
       </div>
-
-      {folderDecks.length === 0 ? (
+      <section className="rounded-[28px] border border-[#f1e7de] bg-[#fff8f1] p-6 sm:p-8">
+        <div className="flex items-start gap-5">
+          <span className="rounded-[20px] bg-[#ffeadb] p-4 text-[#ba7549]">
+            <Folder className="h-7 w-7" />
+          </span>
+          <div className="min-w-0">
+            <p className="section-label mb-2">MY FOLDER</p>
+            <h1 className="page-title break-words">{folder.title}</h1>
+            {folder.description && (
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                {folder.description}
+              </p>
+            )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              학습 세트 {folderDecks.length}개 · 전체 카드 {folderCardsCount}장
+            </p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-col gap-4 border-t border-[#f1e7de] pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-lg text-xs leading-6 text-muted-foreground">
+            폴더 속 모든 카드를 섞어 복습해 보세요.
+            <br />
+            이미 기억한 카드도 함께 학습해요.
+          </p>
+          <Button
+            onClick={() => onStartFolderStudy(folder.id)}
+            disabled={!folderCardsCount}
+            leftIcon={<Shuffle className="h-4 w-4" />}
+          >
+            폴더 전체 랜덤 학습
+          </Button>
+        </div>
+      </section>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">
+          폴더의 학습 세트{' '}
+          <span className="ml-1 text-sm font-medium text-muted-foreground">
+            {sortedDecks.length}
+          </span>
+        </h2>
+        <select
+          aria-label="카드 덱 정렬 방식"
+          value={sortBy}
+          onChange={(event) => handleSortChange(event.target.value as DeckSortOption)}
+          className="filter-select"
+        >
+          <option value="date-desc">최근 수정순</option>
+          <option value="date-asc">오래된 순</option>
+          <option value="name-asc">이름 오름차순</option>
+          <option value="name-desc">이름 내림차순</option>
+        </select>
+      </div>
+      <Input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        aria-label="폴더 안 세트와 카드 검색"
+        placeholder="이 폴더에서 세트나 카드를 찾아보세요"
+        leftIcon={<Search className="h-4 w-4" />}
+      />
+      {!sortedDecks.length ? (
         <EmptyState
-          icon={<Layers className="w-6 h-6 text-muted-foreground" />}
-          title="이 폴더에 아직 덱이 없습니다."
-          description="새로운 플래시카드 덱을 만들어 추가해 보세요."
+          icon={<Layers className="h-8 w-8 text-primary" />}
+          title={query ? '검색 결과가 없어요' : '폴더에 첫 세트를 추가해 보세요'}
+          description={
+            query ? '다른 검색어로 다시 찾아보세요.' : '관련된 질문과 답을 한곳에 모아보세요.'
+          }
           action={
             <Button
-              variant="default"
-              size="sm"
-              onClick={() => onCreateDeckInFolder(folder.id)}
+              variant={query ? 'outline' : 'default'}
+              onClick={query ? () => setQuery('') : () => onCreateDeckInFolder(folder.id)}
             >
-              새 덱 만들기
+              {query ? '검색어 지우기' : '새 학습 세트 만들기'}
             </Button>
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
           {sortedDecks.map((deck) => {
-            const deckCards = (indexCards(cards).byDeck.get(deck.id) || []);
-            const learned = deckCards.filter((c) => c.learned).length;
-
+            const own = cardIndex.get(deck.id) || [];
             return (
               <DeckCard
                 key={deck.id}
                 deck={deck}
-                cardsCount={deckCards.length}
-                learnedCount={learned}
+                cardsCount={own.length}
+                learnedCount={own.filter((card) => card.learned).length}
                 showFolderBadge={false}
                 onNavigateDeck={onNavigateDeck}
                 onStartStudy={onStartStudy}
@@ -275,26 +276,18 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
           })}
         </div>
       )}
-
-      {/* 폴더 수정 모달 */}
       {showEditModal && (
-        <FolderModal
-          folderId={folder.id}
-          onClose={() => setShowEditModal(false)}
-        />
+        <FolderModal folderId={folder.id} onClose={() => setShowEditModal(false)} />
       )}
-
-      {/* 폴더 삭제 확인 모달 */}
       <ConfirmModal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDelete}
         title="폴더 삭제"
-        message={`'${folder.title}' 폴더를 삭제하시겠습니까?\n폴더 안의 덱들은 삭제되지 않고 미분류(루트)로 안전하게 이동됩니다.`}
+        message={`'${folder.title}' 폴더를 삭제할까요? 안의 학습 세트와 카드는 미분류로 이동하며 유지됩니다.`}
         confirmText="폴더 삭제"
-        isDanger={true}
+        isDanger
       />
     </div>
-  </div>
-);
+  );
 };

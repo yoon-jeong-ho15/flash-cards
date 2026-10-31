@@ -27,7 +27,14 @@ export const Flashcard: React.FC<FlashcardProps> = ({
     <div
       role="group"
       aria-label="학습 카드"
-      className="perspective-1200 w-full max-w-2xl h-[420px] sm:h-[460px] mx-auto select-none cursor-pointer group"
+      className="perspective-1200 w-full h-full mx-auto select-none cursor-pointer group"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onFlip();
+        }
+      }}
       onClick={onFlip}
     >
       <div
@@ -36,11 +43,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         }`}
       >
         {/* 앞면 (Term / 단어 & 이미지) */}
-        <div aria-hidden={isFlipped} ref={node => { if (node) node.inert = isFlipped; }} className="card-face-front bg-card rounded-2xl border border-border shadow-sm hover:border-primary/40 transition-colors p-5 sm:p-8 flex flex-col justify-between">
+        <div
+          aria-hidden={isFlipped}
+          ref={(node) => {
+            if (node) node.inert = isFlipped;
+          }}
+          className="card-face-front bg-card rounded-3xl border border-border shadow-[0_8px_30px_rgba(32,35,61,0.04)] hover:border-primary/40 transition-colors p-5 sm:p-8 flex flex-col justify-between"
+        >
           {/* 상단 헤더 */}
           <div className="flex items-center justify-between shrink-0">
             <Badge variant="secondary" className="text-xs font-medium">
-              앞면 · 개념 / 질문
+              질문
             </Badge>
 
             <div className="flex items-center gap-1">
@@ -52,7 +65,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     e.stopPropagation();
                     onEdit();
                   }}
-                  leftIcon={<Pencil className="w-3.5 h-3.5 text-muted-foreground group-hover/btn:text-foreground" />}
+                  leftIcon={
+                    <Pencil className="w-3.5 h-3.5 text-muted-foreground group-hover/btn:text-foreground" />
+                  }
                   className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 group/btn"
                   title="카드 내용 수정 (E)"
                 >
@@ -68,7 +83,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  leftIcon={<Trash2 className="w-3.5 h-3.5 text-muted-foreground group-hover/del:text-destructive" />}
+                  leftIcon={
+                    <Trash2 className="w-3.5 h-3.5 text-muted-foreground group-hover/del:text-destructive" />
+                  }
                   className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 group/del"
                   title="카드 삭제"
                 >
@@ -92,7 +109,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           </div>
 
           {/* 중앙 내용 (앞면) - my-auto prevents top content clipping when overflowing */}
-          <div className="flex-1 flex flex-col px-4 overflow-y-auto max-h-[300px] w-full">
+          <div className="flex-1 flex flex-col px-4 overflow-y-auto min-h-0 w-full">
             <div className="my-auto w-full text-center">
               {card.frontImageUrl && (
                 <ImageWithSkeleton
@@ -143,11 +160,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({
         </div>
 
         {/* 뒷면 (Definition / 정의 & 이미지) */}
-        <div aria-hidden={!isFlipped} ref={node => { if (node) node.inert = !isFlipped; }} className="card-face-back bg-card rounded-2xl border border-primary/40 shadow-sm hover:border-primary/60 transition-colors p-5 sm:p-8 flex flex-col justify-between">
+        <div
+          aria-hidden={!isFlipped}
+          ref={(node) => {
+            if (node) node.inert = !isFlipped;
+          }}
+          className="card-face-back bg-card rounded-3xl border border-primary/40 shadow-sm hover:border-primary/60 transition-colors p-5 sm:p-8 flex flex-col justify-between"
+        >
           {/* 상단 헤더 */}
           <div className="flex items-center justify-between shrink-0">
-            <Badge variant="warning" className="text-xs font-medium">
-              뒷면 · 정의 / 해설
+            <Badge variant="success" className="text-xs font-medium">
+              답변
             </Badge>
 
             <div className="flex items-center gap-1">
@@ -159,7 +182,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     e.stopPropagation();
                     onEdit();
                   }}
-                  leftIcon={<Pencil className="w-3.5 h-3.5 text-muted-foreground group-hover/btn:text-foreground" />}
+                  leftIcon={
+                    <Pencil className="w-3.5 h-3.5 text-muted-foreground group-hover/btn:text-foreground" />
+                  }
                   className="h-7 text-xs text-muted-foreground hover:text-foreground px-2 group/btn"
                   title="카드 내용 수정 (E)"
                 >
@@ -175,7 +200,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  leftIcon={<Trash2 className="w-3.5 h-3.5 text-muted-foreground group-hover/del:text-destructive" />}
+                  leftIcon={
+                    <Trash2 className="w-3.5 h-3.5 text-muted-foreground group-hover/del:text-destructive" />
+                  }
                   className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 group/del"
                   title="카드 삭제"
                 >
@@ -199,7 +226,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           </div>
 
           {/* 중앙 내용 (뒷면 텍스트 & 이미지) - my-auto prevents top clipping */}
-          <div className="flex-1 flex flex-col px-4 overflow-y-auto max-h-[300px] w-full">
+          <div className="flex-1 flex flex-col px-4 overflow-y-auto min-h-0 w-full">
             <div className="my-auto w-full">
               {backImage && (
                 <div className="text-center">
