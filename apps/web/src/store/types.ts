@@ -33,6 +33,7 @@ export interface AuthSlice {
 
 export type AccountData = Pick<FlashcardStoreState, 'folders' | 'decks' | 'cards'>;
 export interface SyncSlice {
+  isInitialSyncComplete: boolean;
   sessionVersion: number;
   mutationRevision: number;
   pendingVersions: Record<string, number>;

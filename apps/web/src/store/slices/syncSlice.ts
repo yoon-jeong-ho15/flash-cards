@@ -12,12 +12,13 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
   const run = (pull: boolean): Promise<void> => {
     pullRequested ||= pull;
     if (running) return running;
-    if (!online()) { set({ syncStatus: 'offline' }); return Promise.resolve(); }
+    if (!online()) { set({ syncStatus: 'offline', isInitialSyncComplete: true }); return Promise.resolve(); }
     const session = get().sessionVersion;
     const uid = get().user!.uid;
     const active = () => get().sessionVersion === session && get().user?.uid === uid;
     // Defer execution until `running` is assigned, including when there are no queued writes.
     running = Promise.resolve().then(async () => {
+      if (!active()) return;
       set({ syncStatus: 'syncing', syncError: null });
       try {
         while (active() && online()) {
@@ -37,19 +38,20 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
           if (revision !== get().mutationRevision) { pullRequested = true; continue; }
           if (cloud) set({ ...cloud, cards: sortCardsByOrder(cloud.cards) });
         }
-        if (active()) set({ syncStatus: online() ? 'synced' : 'offline', lastSyncedAt: Date.now() });
+        if (active()) set({ isInitialSyncComplete: true, syncStatus: online() ? 'synced' : 'offline', lastSyncedAt: Date.now() });
       } catch (error) {
-        if (active()) set({ syncStatus: 'error', syncError: error instanceof Error ? error.message : '동기화 실패' });
+        if (active()) set({ isInitialSyncComplete: true, syncStatus: 'error', syncError: error instanceof Error ? error.message : '동기화 실패' });
       }
     }).finally(() => {
       running = null;
       // A new account may have requested a sync while an old request was settling.
-      if (!active() && online()) void run(true);
+      if (!active()) void run(true);
     });
     return running;
   };
 
   return {
+    isInitialSyncComplete: false,
     sessionVersion: 0, mutationRevision: 0, pendingVersions: {},
     pendingSync: { ...EMPTY_PENDING_SYNC }, syncStatus: 'offline', lastSyncedAt: null, syncError: null,
     setSyncStatus: status => set({ syncStatus: status }),
