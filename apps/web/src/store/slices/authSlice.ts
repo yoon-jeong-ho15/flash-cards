@@ -21,7 +21,7 @@ export const createAuthSlice: StateCreator<
     }
     const data = readAccount(user?.uid);
     set({ ...data, user, isAuthInitialized: true, sessionVersion: get().sessionVersion + 1,
-      syncStatus: 'offline', syncError: null, authError: null, lastSyncedAt: null });
+      isInitialSyncComplete: !user, syncStatus: 'offline', syncError: null, authError: null, lastSyncedAt: null });
   },
 
   setAuthError: (error) => {

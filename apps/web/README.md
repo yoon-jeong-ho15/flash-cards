@@ -39,3 +39,26 @@ pnpm --filter @flashcards/web typecheck
 pnpm --filter @flashcards/web test
 pnpm --filter @flashcards/web build
 ```
+
+## URL routing
+
+The web app uses React Router's browser history. `src/routing.ts` maps URLs to
+existing screen props; the URL is the only source of navigation state.
+
+- `/`: dashboard
+- `/folders`, `/folders/:folderId`, `/folders/:folderId/study`
+- `/decks`, `/decks/:deckId`
+- `/decks/new?folderId=...`: create a deck, optionally inside a folder
+- `/decks/:deckId/edit?cardId=...`: edit a deck and optionally focus a card
+- `/decks/:deckId/study?shuffle=1&onlyDifficult=1`: study options
+
+Direct links wait for authentication restoration and the account's initial sync
+attempt before mounting a screen. Account changes preserve the URL, reload the
+account's data, and remount the screen. Missing resources show an account/login
+hint; failed or offline reads without cached data offer retry without redirecting.
+Cached data remains usable offline. Unknown paths show a not-found screen.
+Study URLs preserve options, not the current card or shuffled session order.
+
+Vercel and Firebase Hosting configurations both serve `index.html` for application
+paths, so opening a nested URL or refreshing it works after deployment. Other
+hosting providers need the same SPA fallback.

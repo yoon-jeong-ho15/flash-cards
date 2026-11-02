@@ -1,7 +1,10 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
-import { ViewMode } from './types';
+import { useLocation, useNavigate, Link } from 'react-router';
+import { resolveView, viewUrl, routeStatus } from './routing';
+import { EmptyState } from './components/common/EmptyState';
+import { Button } from './components/ui/button';
 import { useFlashcardStore } from './store/useFlashcardStore';
 import { BottomNavigation } from './components/common/BottomNavigation';
 import { Navbar } from './components/common/Navbar';
@@ -76,9 +79,13 @@ export const App: React.FC = () => {
     };
   }, [initCloudSync, setSyncStatus, user]);
 
-  const [currentView, setCurrentView] = useState<ViewMode>({
-    type: 'dashboard',
-  });
+  const location = useLocation();
+  const navigate = useNavigate();
+  const routeView = useMemo(() => resolveView(location.pathname, location.search), [location.pathname, location.search]);
+  const currentView = routeView ?? { type: 'dashboard' as const };
+  const status = useFlashcardStore(state => routeStatus(routeView, state));
+  const loginWithGoogle = useFlashcardStore(state => state.loginWithGoogle);
+  const authError = useFlashcardStore(state => state.authError);
   const [lastStudiedDeckId, setLastStudiedDeckId] = useState<string | null>(() => {
     try {
       return localStorage.getItem('flashcard_last_studied_deck_id');
@@ -123,27 +130,32 @@ export const App: React.FC = () => {
   }, [currentView]);
 
   useEffect(() => {
-    setCurrentView({ type: 'dashboard' });
     setFolderModalState({ isOpen: false });
-  }, [user?.uid]);
+    setIsMobileSidebarOpen(false);
+  }, [user?.uid, location.key]);
 
   // 네비게이션 헬퍼
-  const navigateHome = () => setCurrentView({ type: 'dashboard' });
-  const navigateAllFolders = () => setCurrentView({ type: 'all-folders' });
-  const navigateAllDecks = () => setCurrentView({ type: 'all-decks' });
-  const navigateFolder = (folderId: string) => setCurrentView({ type: 'folder', folderId });
-  const navigateDeck = (deckId: string) => setCurrentView({ type: 'deck', deckId });
+  const navigateHome = () => navigate(viewUrl({ type: 'dashboard' }));
+  const navigateAllFolders = () => navigate(viewUrl({ type: 'all-folders' }));
+  const navigateAllDecks = () => navigate(viewUrl({ type: 'all-decks' }));
+  const navigateFolder = (folderId: string) => navigate(viewUrl({ type: 'folder', folderId }));
+  const navigateDeck = (deckId: string) => navigate(viewUrl({ type: 'deck', deckId }));
   const navigateEditDeck = (deckId?: string, folderId?: string, focusCardId?: string) =>
-    setCurrentView({ type: 'edit-deck', deckId, folderId, focusCardId });
+    navigate(viewUrl({ type: 'edit-deck', deckId, folderId, focusCardId }));
   const navigateStudy = (deckId: string, onlyDifficult = false, shuffle = false) => {
-    setLastStudiedDeckId(deckId);
-    try {
-      localStorage.setItem('flashcard_last_studied_deck_id', deckId);
-    } catch {
-      // ignore storage error
-    }
-    setCurrentView({ type: 'study', deckId, onlyDifficult, shuffle });
+    navigate(viewUrl({ type: 'study', deckId, onlyDifficult, shuffle }));
   };
+
+  const studiedDeckId = status === 'ready' && currentView.type === 'study' ? currentView.deckId : null;
+  useEffect(() => {
+    if (!studiedDeckId) return;
+    setLastStudiedDeckId(studiedDeckId);
+    try {
+      localStorage.setItem('flashcard_last_studied_deck_id', studiedDeckId);
+    } catch {
+      // Study remains available when storage is full or disabled.
+    }
+  }, [studiedDeckId]);
 
   const openNewFolderModal = () => setFolderModalState({ isOpen: true });
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
@@ -153,6 +165,31 @@ export const App: React.FC = () => {
     currentView.type !== 'study' &&
     currentView.type !== 'folder-study' &&
     currentView.type !== 'edit-deck';
+
+  if (status !== 'ready') {
+    return (
+      <div className="page-container py-16">
+        {status === 'loading' ? (
+          <p role="status" className="text-center text-muted-foreground">자료를 불러오는 중…</p>
+        ) : (
+          <EmptyState
+            title={status === 'not-found' ? '페이지를 찾을 수 없어요' : status === 'unavailable' ? '자료를 불러오지 못했어요' : '자료를 찾을 수 없어요'}
+            description={status === 'unavailable'
+              ? '인터넷 연결을 확인하고 다시 시도해 주세요. 주소는 그대로 유지됩니다.'
+              : status === 'missing'
+                ? '삭제된 자료이거나 현재 계정에서 접근할 수 없는 자료입니다. 자료를 만든 계정으로 로그인해 주세요.'
+                : '주소를 확인해 주세요.'}
+            action={<>
+              <Link to="/" className="text-sm text-primary underline">홈으로</Link>
+              {status === 'unavailable' && <Button onClick={() => void initCloudSync()}>다시 시도</Button>}
+              {status === 'missing' && auth && <Button onClick={() => void loginWithGoogle().catch(() => {})}>{user ? '계정 변경' : '로그인'}</Button>}
+            </>}
+          />
+        )}
+        {authError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{authError}</p>}
+      </div>
+    );
+  }
 
   return (
     <MotionConfig reducedMotion="user">
@@ -197,7 +234,7 @@ export const App: React.FC = () => {
           <main
             id="main-content"
             tabIndex={-1}
-            key={user?.uid || 'guest'}
+            key={`${user?.uid || 'guest'}:${location.pathname}`}
             className={`flex-1 outline-none ${showSidebar ? 'pb-24 lg:pb-10' : ''}`}
           >
             <Suspense
@@ -252,7 +289,7 @@ export const App: React.FC = () => {
                   onStartStudy={(deckId) => navigateStudy(deckId)}
                   onCreateDeckInFolder={(folderId) => navigateEditDeck(undefined, folderId)}
                   onStartFolderStudy={(folderId) =>
-                    setCurrentView({ type: 'folder-study', folderId })
+                    navigate(viewUrl({ type: 'folder-study', folderId }))
                   }
                   onBack={navigateHome}
                 />
@@ -291,6 +328,7 @@ export const App: React.FC = () => {
 
               {currentView.type === 'study' && (
                 <StudyView
+                  key={`${location.pathname}:${location.search}`}
                   deckId={currentView.deckId}
                   onlyDifficult={currentView.onlyDifficult}
                   shuffle={currentView.shuffle}
@@ -301,6 +339,7 @@ export const App: React.FC = () => {
 
               {currentView.type === 'folder-study' && (
                 <StudyView
+                  key={`${location.pathname}:${location.search}`}
                   folderId={currentView.folderId}
                   shuffle
                   onExit={() => navigateFolder(currentView.folderId)}
