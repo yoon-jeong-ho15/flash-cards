@@ -6,13 +6,13 @@ const { harness: storeHarness, item, load } = require('./helpers.cjs');
 const { folderCards } = load('core/content.ts');
 
 const externals = ['react', 'react-native', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library'];
-const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail'].map(name => [name, esbuild.buildSync({
+const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail', 'StudySetup'].map(name => [name, esbuild.buildSync({
   entryPoints: [path.resolve(__dirname, `../src/ui/${name}.tsx`)], bundle: true, platform: 'node', format: 'cjs',
   write: false, external: externals, tsconfigRaw: { compilerOptions: { jsx: 'react' } },
 }).outputFiles[0].text]));
 
 // Render the actual screen functions with deterministic hooks and native view stubs.
-function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckLibrary' : screen) {
+function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckLibrary' : screen, dimensions = { width: 390, fontScale: 1 }) {
   const slots = [];
   let cursor = 0, dirty = false, effects = [], swipeProps;
   const changed = (a, b) => !a || !b || a.length !== b.length || a.some((value, i) => !Object.is(value, b[i]));
@@ -35,7 +35,7 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     useEffect: effect, useLayoutEffect: effect, useDeferredValue: value => value,
   };
   class Value { setValue() {} stopAnimation() {} interpolate() { return 0; } }
-  const native = { StyleSheet: { create: value => value }, Animated: { Value, View: 'Animated.View', timing: () => ({ start() {} }) }, Easing: { inOut: value => value, cubic: 'cubic' },
+  const native = { useWindowDimensions: () => dimensions, StyleSheet: { create: value => value }, Animated: { Value, View: 'Animated.View', timing: () => ({ start() {} }) }, Easing: { inOut: value => value, cubic: 'cubic' },
     AccessibilityInfo: { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }) },
     ...Object.fromEntries(['View', 'Text', 'Pressable', 'ScrollView', 'FlatList', 'ActivityIndicator'].map(name => [name, name])),
   };
@@ -77,7 +77,7 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
 function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
-  return [tree, ...nodes(tree.props?.children), ...nodes(tree.props?.ListHeaderComponent)];
+  return [tree, ...nodes(tree.props?.children), ...nodes(tree.props?.ListHeaderComponent), ...nodes(tree.props?.ListFooterComponent)];
 }
 const button = (tree, title) => {
   const found = nodes(tree).find(node => node.type === 'Button' && node.props.title === title);
@@ -103,7 +103,7 @@ async function fixture() {
   return { store, folder, other, empty, first, second, ids: own.map(card => card.id) };
 }
 
-test('folder screen launches all-card study even when its deck list is filtered and disables empty folders', async () => {
+test('library folder supports filtering and keeps study actions in the study tab', async () => {
   const f = await fixture();
   const screen = screenHarness(f.store, 'Library');
   let destination;
@@ -113,11 +113,9 @@ test('folder screen launches all-card study even when its deck list is filtered 
     nodes(tree).find(node => node.type === 'Field').props.onChangeText('검색 결과 없음');
     tree = screen.render(props);
     assert.equal(nodes(tree).find(node => node.type === 'FlatList').props.data.length, 0);
-    assert.equal(button(tree, '폴더 전체 랜덤 학습').disabled, false);
-    button(tree, '폴더 전체 랜덤 학습').onPress();
-    assert.deepEqual(destination, { type: 'folder-study', folderId: f.folder });
+    assert.ok(!nodes(tree).some(node => node.type === 'Button' && node.props.title === '폴더 전체 랜덤 학습'));
     const empty = screen.render({ ...props, folderId: f.empty });
-    assert.equal(button(empty, '폴더 전체 랜덤 학습').disabled, true);
+    assert.equal(nodes(empty).find(node => node.type === 'FlatList').props.data.length, 0);
   } finally { screen.cleanup(); }
 });
 
@@ -253,7 +251,7 @@ test('a swipe interrupts card flipping instead of waiting for the flip animation
 });
 
 
-test('study picker lists every folder and only unfiled decks, starts the selected source, and disables empty sources', async () => {
+test('study picker separates folder tiles from unfiled decks and preserves setup navigation', async () => {
   const f = await fixture();
   const emptyDeck = await f.store.saveDeck(undefined, { title: '빈 미분류 덱' }, [item()]);
   await f.store.deleteCard(f.store.getState().cards.find(card => card.deckId === emptyDeck).id);
@@ -262,21 +260,46 @@ test('study picker lists every folder and only unfiled decks, starts the selecte
   try {
     const tree = screen.render({ nav: { go: route => { destination = route; } } });
     const list = nodes(tree).find(node => node.type === 'FlatList');
-    const items = list.props.data;
-    assert.equal(items.filter(item => item.kind === 'folder').length, 3);
-    assert.equal(items.filter(item => item.kind === 'deck').length, 2);
-    assert.ok(!items.some(item => item.route.deckId === f.first || item.route.deckId === f.second));
-    assert.ok(items.findIndex(item => item.kind === 'deck') > items.findLastIndex(item => item.kind === 'folder'));
-    const row = item => nodes(list.props.renderItem({ item, index: items.indexOf(item) })).find(node => node.type === 'Pressable').props;
-    const folder = items.find(item => item.route.folderId === f.folder);
+    assert.equal(list.props.data.length, 3);
+    const row = item => nodes(list.props.renderItem({ item })).find(node => node.type === 'Pressable').props;
+    const folder = list.props.data.find(item => item.id === f.folder);
     assert.equal(folder.count, 3, 'folder includes learned cards and cards from all its decks');
+    assert.equal(folder.learned, 1);
     row(folder).onPress();
-    assert.deepEqual(destination, { type: 'folder-study', folderId: f.folder });
-    const deck = items.find(item => item.kind === 'deck' && item.count);
-    row(deck).onPress();
-    assert.deepEqual(destination, { type: 'study', deckId: deck.route.deckId });
-    assert.equal(row(items.find(item => item.route.folderId === f.empty)).disabled, true);
-    assert.equal(row(items.find(item => item.route.deckId === emptyDeck)).disabled, true);
+    assert.deepEqual(destination, { type: 'study-folder', folderId: f.folder });
+    row(list.props.data.find(item => item.id === f.empty)).onPress();
+    assert.deepEqual(destination, { type: 'study-folder', folderId: f.empty });
+    const unfiled = nodes(list.props.ListFooterComponent).filter(node => node.type === 'Pressable');
+    assert.equal(unfiled.length, 2);
+    const deck = unfiled.find(node => node.props.accessibilityLabel.startsWith('미분류 덱,'));
+    deck.props.onPress();
+    assert.deepEqual(destination, { type: 'study-options', deckId: f.store.getState().decks.find(deck => deck.title === '미분류 덱').id });
+    assert.equal(unfiled.find(node => node.props.accessibilityLabel.startsWith('빈 미분류 덱,')).props.disabled, true);
+  } finally { screen.cleanup(); }
+});
+
+test('study picker adapts to narrow screens and enlarged text and supports unfiled-only and empty libraries', async () => {
+  const f = await fixture();
+  const nav = { go() {}, back() {} };
+  for (const [dimensions, columns] of [
+    [{ width: 390, fontScale: 1 }, 2], [{ width: 320, fontScale: 1 }, 1],
+    [{ width: 390, fontScale: 1.5 }, 1], [{ width: 768, fontScale: 1 }, 3],
+  ]) {
+    const screen = screenHarness(f.store, 'Library', 'StudyLibrary', dimensions);
+    assert.equal(screen.render({ nav }).props.numColumns, columns);
+    screen.cleanup();
+  }
+  for (const folder of f.store.getState().folders) await f.store.deleteFolder(folder.id);
+  const screen = screenHarness(f.store, 'Library', 'StudyLibrary');
+  try {
+    const tree = screen.render({ nav });
+    assert.equal(tree.props.data.length, 0);
+    assert.equal(tree.props.ListEmptyComponent, undefined);
+    assert.equal(nodes(tree.props.ListFooterComponent).filter(node => node.type === 'Pressable').length, f.store.getState().decks.length);
+    for (const deck of f.store.getState().decks) await f.store.deleteDeck(deck.id);
+    const empty = screen.render({ nav });
+    assert.equal(empty.props.ListFooterComponent, undefined);
+    assert.ok(empty.props.ListEmptyComponent);
   } finally { screen.cleanup(); }
 });
 
@@ -299,5 +322,94 @@ test('deck detail prioritizes adding and editing cards instead of starting study
     const edit = nodes(list.props.renderItem({ item: card })).find(node => node.props?.accessibilityLabel === '카드 수정');
     edit.props.onPress();
     assert.deepEqual(destination, { type: 'edit-deck', deckId: f.first, focusCardId: card.id });
+  } finally { screen.cleanup(); }
+});
+
+
+test('study folder offers ordered and random study plus compact per-deck setup actions', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'StudySetup', 'StudyFolder');
+  let destination;
+  const props = { folderId: f.folder, nav: { go: route => { destination = route; }, back() {} } };
+  try {
+    const tree = screen.render(props);
+    button(tree, '폴더 전체 정방향 학습').onPress();
+    assert.deepEqual(destination, { type: 'folder-study', folderId: f.folder, shuffle: false });
+    button(tree, '폴더 전체 랜덤 학습').onPress();
+    assert.deepEqual(destination, { type: 'folder-study', folderId: f.folder, shuffle: true });
+    const list = nodes(tree).find(node => node.type === 'FlatList');
+    assert.deepEqual(new Set(list.props.data.map(deck => deck.id)), new Set([f.first, f.second]));
+    const play = nodes(list.props.renderItem({ item: list.props.data[0] })).find(node => node.props?.accessibilityLabel === `${list.props.data[0].title} 학습하기`);
+    assert.equal(play.props.accessibilityRole, 'button');
+    play.props.onPress();
+    assert.deepEqual(destination, { type: 'study-options', deckId: list.props.data[0].id });
+    const empty = screen.render({ ...props, folderId: f.empty });
+    assert.equal(nodes(empty).find(node => node.type === 'FlatList').props.data.length, 0);
+    assert.equal(button(empty, '폴더 전체 정방향 학습').disabled, true);
+    assert.equal(button(empty, '폴더 전체 랜덤 학습').disabled, true);
+    await f.store.deleteFolder(f.folder);
+    assert.ok(nodes(screen.render(props)).some(node => node.type === 'Empty' && node.props.title === '폴더를 찾을 수 없어요'));
+  } finally { screen.cleanup(); }
+});
+
+test('deck setup starts all cards in the chosen order and prevents starting an empty deck', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'StudySetup', 'DeckStudyOptions');
+  let destination;
+  const props = { deckId: f.first, nav: { go: route => { destination = route; }, back() {} } };
+  try {
+    let tree = screen.render(props);
+    button(tree, '학습 시작하기').onPress();
+    assert.deepEqual(destination, { type: 'study', deckId: f.first, shuffle: false, onlyDifficult: false });
+    const radio = nodes(tree).find(node => node.props?.accessibilityRole === 'radio' && node.props.accessibilityLabel === '순서 섞어 학습');
+    radio.props.onPress();
+    tree = screen.render(props);
+    assert.equal(nodes(tree).find(node => node.props?.accessibilityLabel === '순서 섞어 학습').props.accessibilityState.checked, true);
+    button(tree, '학습 시작하기').onPress();
+    assert.deepEqual(destination, { type: 'study', deckId: f.first, shuffle: true, onlyDifficult: false });
+    for (const card of f.store.getState().cards.filter(card => card.deckId === f.first)) await f.store.deleteCard(card.id);
+    assert.equal(button(screen.render(props), '학습 시작하기').disabled, true);
+    await f.store.deleteDeck(f.first);
+    assert.ok(nodes(screen.render(props)).some(node => node.type === 'Empty' && node.props.title === '덱을 찾을 수 없어요'));
+  } finally { screen.cleanup(); }
+});
+
+test('explicit ordered deck study starts at card one including learned cards, while shuffle permutes all cards', async () => {
+  const f = await fixture();
+  for (const shuffle of [false, true]) {
+    const screen = screenHarness(f.store, 'Study');
+    const props = { deckId: f.first, shuffle, unlearnedOnly: false, onExit() {} };
+    try {
+      screen.render(props);
+      const seen = [screen.currentId()];
+      screen.next();
+      screen.render(props);
+      seen.push(screen.currentId());
+      assert.deepEqual(seen, shuffle ? [f.ids[1], f.ids[0]] : [f.ids[0], f.ids[1]]);
+    } finally { screen.cleanup(); }
+  }
+});
+
+
+test('ordered folder study follows the visible deck order and each deck card order, including learned cards and restarts', async () => {
+  const f = await fixture();
+  await f.store.setPreferences({ folderDeckSort: 'name-desc' });
+  // Saving the first deck moves its cards after the second deck in storage.
+  const deck = f.store.getState().decks.find(item => item.id === f.first);
+  await f.store.saveDeck(f.first, { title: deck.title, folderId: f.folder }, f.store.getState().cards.filter(card => card.deckId === f.first));
+  const screen = screenHarness(f.store, 'Study');
+  const props = { folderId: f.folder, shuffle: false, onExit() {} };
+  try {
+    const seen = [];
+    for (let index = 0; index < 3; index++) {
+      screen.render(props);
+      seen.push(screen.currentId());
+      screen.next();
+    }
+    assert.deepEqual(seen, [f.ids[0], f.ids[1], f.ids[2]]);
+    const finished = screen.render(props);
+    button(finished, '전체 카드 다시 학습').onPress();
+    screen.render(props);
+    assert.equal(screen.currentId(), f.ids[0]);
   } finally { screen.cleanup(); }
 });

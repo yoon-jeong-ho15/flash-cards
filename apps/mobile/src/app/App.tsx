@@ -13,6 +13,7 @@ import { DeckEditor } from '../ui/DeckEditor';
 import { Dashboard, DeckLibrary, FolderLibrary, Search, StudyLibrary } from '../ui/Library';
 import { FolderForm } from '../ui/FolderForm';
 import { Study } from '../ui/Study';
+import { StudyFolder, DeckStudyOptions } from '../ui/StudySetup';
 import { Button, ImageProvider, colors, s, showError } from '../ui/kit';
 import type { Navigation, Route } from '../ui/navigation';
 import { Icon, iconFonts, type IconName } from '../ui/Icon';
@@ -48,8 +49,8 @@ function Workspace() {
   const isStudying = route.type === 'study' || route.type === 'folder-study';
   const immersive = isStudying || route.type === 'edit-deck';
   const topLevel = ['dashboard', 'all-decks', 'all-folders', 'study-library', 'search', 'account'].includes(route.type);
-  const activeTab = ['all-decks', 'folder', 'deck'].includes(route.type) ? 'all-folders' : route.type;
-  const title = route.type === 'study-library' ? '학습하기' : route.type === 'dashboard' ? 'Flashcards' : route.type === 'all-decks' || route.type === 'all-folders' ? '라이브러리' : route.type === 'search' ? '검색' : route.type === 'account' ? '마이 페이지' : route.type === 'edit-deck' ? '카드 만들기' : route.type === 'folder' ? '폴더' : '학습 세트';
+  const activeTab = ['study-folder', 'study-options'].includes(route.type) ? 'study-library' : ['all-decks', 'folder', 'deck'].includes(route.type) ? 'all-folders' : route.type;
+  const title = ['study-library', 'study-folder', 'study-options'].includes(route.type) ? '학습하기' : route.type === 'dashboard' ? 'Flashcards' : route.type === 'all-decks' || route.type === 'all-folders' ? '라이브러리' : route.type === 'search' ? '검색' : route.type === 'account' ? '마이 페이지' : route.type === 'edit-deck' ? '카드 만들기' : route.type === 'folder' ? '폴더' : '학습 세트';
   return <View style={{ flex: 1 }}>
     {!isStudying && <View style={styles.header}>
       {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={colors.ink} /></Pressable>}
@@ -66,6 +67,8 @@ function Workspace() {
     <View style={{ flex: 1 }}>
       {route.type === 'dashboard' && <Dashboard nav={nav} onNewFolder={() => setFolderForm(true)} />}
       {route.type === 'study-library' && <StudyLibrary nav={nav} />}
+      {route.type === 'study-folder' && <StudyFolder key={route.folderId} folderId={route.folderId} nav={nav} />}
+      {route.type === 'study-options' && <DeckStudyOptions key={route.deckId} deckId={route.deckId} nav={nav} />}
       {route.type === 'all-decks' && <DeckLibrary nav={nav} onFolders={() => setHistory([{ type: 'all-folders' }])} />}
       {route.type === 'all-folders' && <FolderLibrary nav={nav} onNewFolder={() => setFolderForm(true)} onDecks={() => setHistory([{ type: 'all-decks' }])} />}
       {route.type === 'folder' && <DeckLibrary key={route.folderId} folderId={route.folderId} nav={nav} />}
@@ -74,9 +77,9 @@ function Workspace() {
       {route.type === 'account' && <Account />}
       {route.type === 'edit-deck' && <DeckEditor key={`${route.deckId || 'new'}:${route.folderId || ''}`} deckId={route.deckId} folderId={route.folderId} focusCardId={route.focusCardId} appendCard={route.appendCard} onClose={pop} guard={guard}
         onSaved={id => setHistory(previous => [...previous.slice(0, -1), { type: 'deck', deckId: id }])} />}
-      {route.type === 'study' && <Study key={`${route.deckId}:${route.shuffle}`} deckId={route.deckId} shuffle={route.shuffle}
-        onExit={() => setHistory(previous => [...previous.slice(0, -1), { type: 'deck', deckId: route.deckId }])} />}
-      {route.type === 'folder-study' && <Study key={`folder:${route.folderId}`} folderId={route.folderId} shuffle onExit={pop} />}
+      {route.type === 'study' && <Study key={`${route.deckId}:${route.shuffle}`} deckId={route.deckId} shuffle={route.shuffle} unlearnedOnly={route.onlyDifficult}
+        onExit={() => setHistory(previous => previous[previous.length - 2]?.type === 'study-options' ? previous.slice(0, -1) : [...previous.slice(0, -1), { type: 'deck', deckId: route.deckId }])} />}
+      {route.type === 'folder-study' && <Study key={`folder:${route.folderId}:${route.shuffle ?? true}`} folderId={route.folderId} shuffle={route.shuffle ?? true} onExit={pop} />}
     </View>
     {!immersive ? <SafeAreaView edges={['bottom']} style={styles.tabArea}><View style={styles.tabs}>{tabs.map(([target, label, icon]) => {
       const selected = activeTab === target.type;

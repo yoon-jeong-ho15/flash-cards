@@ -35,6 +35,10 @@ export function sortDecks<T extends Pick<Deck, 'title' | 'createdAt'> & { update
     return (sort === 'date-asc' ? -time : time) || name;
   });
 }
+export function orderedFolderCards(cards: Card[], decks: Deck[], folderId: string, sort: DeckSortOption = 'date-desc'): Card[] {
+  return sortDecks(decks.filter(deck => deck.folderId === folderId), sort)
+    .flatMap(deck => orderedCards(cards, deck.id));
+}
 export function shuffled<T>(items: T[], random = Math.random): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [copy[i], copy[j]] = [copy[j], copy[i]]; }
