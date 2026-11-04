@@ -10,8 +10,8 @@ import { FolderPicker } from './FolderPicker';
 import { Icon } from './Icon';
 
 const emptyCard = (): CardInput => ({ id: `temp-${randomUUID()}`, termRichText: '', definitionRichText: '' });
-export function DeckEditor({ deckId, folderId, focusCardId, onClose, onSaved, guard }: {
-  deckId?: string; folderId?: string; focusCardId?: string; onClose: () => void; onSaved: (id: string) => void;
+export function DeckEditor({ deckId, folderId, focusCardId, appendCard = false, onClose, onSaved, guard }: {
+  deckId?: string; folderId?: string; focusCardId?: string; appendCard?: boolean; onClose: () => void; onSaved: (id: string) => void;
   guard: React.MutableRefObject<(() => void) | null>;
 }) {
   const state = useStore();
@@ -20,9 +20,9 @@ export function DeckEditor({ deckId, folderId, focusCardId, onClose, onSaved, gu
   const fingerprint = JSON.stringify([original, originalCards]);
   const [baseline, setBaseline] = useState(fingerprint);
   const [draft, setDraft] = useState<Draft>(() => ({ title: original?.title || '', description: original?.description || '', folderId: original?.folderId || folderId || null,
-    cards: originalCards.length ? originalCards : [emptyCard(), emptyCard()], savedAt: 0 }));
+    cards: originalCards.length ? appendCard ? [...originalCards, emptyCard()] : originalCards : [emptyCard(), emptyCard()], savedAt: 0 }));
   const initial = useRef(JSON.stringify(draft));
-  const [selected, setSelected] = useState(() => Math.max(0, draft.cards.findIndex(c => c.id === focusCardId)));
+  const [selected, setSelected] = useState(() => appendCard && !focusCardId ? originalCards.length : Math.max(0, draft.cards.findIndex(c => c.id === focusCardId)));
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState(false);

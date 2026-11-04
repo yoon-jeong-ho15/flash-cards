@@ -5,14 +5,14 @@ const esbuild = require('esbuild');
 const { harness: storeHarness, item, load } = require('./helpers.cjs');
 const { folderCards } = load('core/content.ts');
 
-const externals = ['react', 'react-native', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm'];
-const sources = Object.fromEntries(['Study', 'Library'].map(name => [name, esbuild.buildSync({
+const externals = ['react', 'react-native', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library'];
+const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail'].map(name => [name, esbuild.buildSync({
   entryPoints: [path.resolve(__dirname, `../src/ui/${name}.tsx`)], bundle: true, platform: 'node', format: 'cjs',
   write: false, external: externals, tsconfigRaw: { compilerOptions: { jsx: 'react' } },
 }).outputFiles[0].text]));
 
 // Render the actual screen functions with deterministic hooks and native view stubs.
-function screenHarness(store, screen) {
+function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckLibrary' : screen) {
   const slots = [];
   let cursor = 0, dirty = false, effects = [], swipeProps;
   const changed = (a, b) => !a || !b || a.length !== b.length || a.some((value, i) => !Object.is(value, b[i]));
@@ -42,6 +42,7 @@ function screenHarness(store, screen) {
   const mocks = {
     react, 'react-native': native, '../platform/runtime': { store, useStore: () => store.getState() },
     '../editor/RichText': { RichText: 'RichText' }, './CardComposer': { CardComposer: 'CardComposer' },
+    './Library': { deckAccent: () => ({ bg: '#FFFFFF', ink: '#000000' }) }, './FolderPicker': { FolderPicker: 'FolderPicker' },
     './Icon': { Icon: 'Icon' }, './FolderForm': { FolderForm: 'FolderForm' },
     './kit': { colors: {}, s: {}, useImage: () => () => {}, showError: error => { throw error; },
       ...Object.fromEntries(['Attachment', 'Button', 'Empty', 'Progress', 'Chips', 'Field', 'Select', 'ProgressRing', 'Sheet'].map(name => [name, name])),
@@ -59,7 +60,7 @@ function screenHarness(store, screen) {
       let tree, count = 0;
       do {
         dirty = false; cursor = 0; effects = [];
-        tree = module.exports[screen === 'Library' ? 'DeckLibrary' : 'Study'](props);
+        tree = module.exports[exportName](props);
         effects.forEach(fn => fn());
         assert.ok(++count < 20, 'screen should settle without a render loop');
       } while (dirty);
@@ -248,5 +249,55 @@ test('a swipe interrupts card flipping instead of waiting for the flip animation
     assert.equal(flipControl(tree).props.disabled, false, 'the new swipe immediately cancels the flip');
     screen.next();
     assert.ok(button(screen.render(props), '전체 카드 다시 학습'));
+  } finally { screen.cleanup(); }
+});
+
+
+test('study picker lists every folder and only unfiled decks, starts the selected source, and disables empty sources', async () => {
+  const f = await fixture();
+  const emptyDeck = await f.store.saveDeck(undefined, { title: '빈 미분류 덱' }, [item()]);
+  await f.store.deleteCard(f.store.getState().cards.find(card => card.deckId === emptyDeck).id);
+  const screen = screenHarness(f.store, 'Library', 'StudyLibrary');
+  let destination;
+  try {
+    const tree = screen.render({ nav: { go: route => { destination = route; } } });
+    const list = nodes(tree).find(node => node.type === 'FlatList');
+    const items = list.props.data;
+    assert.equal(items.filter(item => item.kind === 'folder').length, 3);
+    assert.equal(items.filter(item => item.kind === 'deck').length, 2);
+    assert.ok(!items.some(item => item.route.deckId === f.first || item.route.deckId === f.second));
+    assert.ok(items.findIndex(item => item.kind === 'deck') > items.findLastIndex(item => item.kind === 'folder'));
+    const row = item => nodes(list.props.renderItem({ item, index: items.indexOf(item) })).find(node => node.type === 'Pressable').props;
+    const folder = items.find(item => item.route.folderId === f.folder);
+    assert.equal(folder.count, 3, 'folder includes learned cards and cards from all its decks');
+    row(folder).onPress();
+    assert.deepEqual(destination, { type: 'folder-study', folderId: f.folder });
+    const deck = items.find(item => item.kind === 'deck' && item.count);
+    row(deck).onPress();
+    assert.deepEqual(destination, { type: 'study', deckId: deck.route.deckId });
+    assert.equal(row(items.find(item => item.route.folderId === f.empty)).disabled, true);
+    assert.equal(row(items.find(item => item.route.deckId === emptyDeck)).disabled, true);
+  } finally { screen.cleanup(); }
+});
+
+
+test('deck detail prioritizes adding and editing cards instead of starting study', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'DeckDetail');
+  let destination;
+  try {
+    const tree = screen.render({ deckId: f.first, nav: { go: route => { destination = route; }, back() {} } });
+    const displayedText = nodes(tree).filter(node => node.type === 'Text').map(text).join('');
+    assert.ok(displayedText.includes('카드 관리'));
+    assert.ok(!displayedText.includes('어떻게 학습할까요?'));
+    assert.equal(nodes(tree).filter(node => node.props?.accessibilityRole === 'radio').length, 0);
+    assert.equal(nodes(tree).filter(node => node.type === 'Button' && /학습 시작|전체 카드 복습/.test(node.props.title)).length, 0);
+    button(tree, '카드 추가하기').onPress();
+    assert.deepEqual(destination, { type: 'edit-deck', deckId: f.first, appendCard: true });
+    const list = nodes(tree).find(node => node.type === 'FlatList');
+    const card = list.props.data[0];
+    const edit = nodes(list.props.renderItem({ item: card })).find(node => node.props?.accessibilityLabel === '카드 수정');
+    edit.props.onPress();
+    assert.deepEqual(destination, { type: 'edit-deck', deckId: f.first, focusCardId: card.id });
   } finally { screen.cleanup(); }
 });
