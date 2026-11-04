@@ -571,7 +571,6 @@ export function FolderLibrary({
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={
         <View style={{ gap: 20 }}>
-          <Text style={s.title}>나의 배움이 모이는 곳</Text>
           <View style={l.libraryTabs}>
             <Text style={l.selectedTab}>폴더</Text>
             <Pressable
@@ -582,12 +581,6 @@ export function FolderLibrary({
               <Text style={l.unselectedTab}>학습 세트</Text>
             </Pressable>
           </View>
-          <Field
-            label="폴더 검색"
-            placeholder="폴더 이름으로 찾아보세요"
-            value={query}
-            onChangeText={setQuery}
-          />
           <View style={[s.row, { flexWrap: "nowrap" }]}>
             <Select
               label="폴더 정렬"
@@ -605,9 +598,7 @@ export function FolderLibrary({
         </View>
       }
       ListEmptyComponent={
-        <Empty
-          title={query ? "검색 결과가 없어요" : "폴더가 없어요"}
-        />
+        <Empty title={query ? "검색 결과가 없어요" : "폴더가 없어요"} />
       }
       renderItem={({ item }) => (
         <Pressable

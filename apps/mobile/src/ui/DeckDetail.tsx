@@ -261,14 +261,25 @@ export function DeckDetail({
           </View>
         )}
       />
-      <View style={s.dock}>
-        <Button
-          title="카드 추가하기"
-          icon="plus"
-          onPress={() =>
-            nav.go({ type: "edit-deck", deckId, appendCard: true })
-          }
-        />
+      <View style={[s.dock, s.row, { flexWrap: "nowrap" }]}>
+        <View style={{ flex: 1 }}>
+          <Button
+            title="카드 추가하기"
+            icon="plus"
+            onPress={() =>
+              nav.go({ type: "edit-deck", deckId, appendCard: true })
+            }
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button
+            title="학습하기"
+            icon="play"
+            tone="secondary"
+            disabled={!own.length}
+            onPress={() => nav.go({ type: "study-options", deckId })}
+          />
+        </View>
       </View>
       {moving && (
         <FolderPicker

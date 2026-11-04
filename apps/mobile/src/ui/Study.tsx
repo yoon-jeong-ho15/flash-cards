@@ -97,7 +97,14 @@ export function Study({
   const own = useMemo(
     () =>
       folderId !== undefined
-        ? shuffle ? folderCards(cards, decks, folderId) : orderedFolderCards(cards, decks, folderId, preferences.folderDeckSort)
+        ? shuffle
+          ? folderCards(cards, decks, folderId)
+          : orderedFolderCards(
+              cards,
+              decks,
+              folderId,
+              preferences.folderDeckSort,
+            )
         : orderedCards(cards, deckId ?? ""),
     [cards, decks, deckId, folderId, shuffle, preferences.folderDeckSort],
   );
@@ -233,7 +240,14 @@ export function Study({
     const latest = store.getState();
     const target =
       folderId !== undefined
-        ? shuffle ? folderCards(latest.cards, latest.decks, folderId) : orderedFolderCards(latest.cards, latest.decks, folderId, latest.preferences.folderDeckSort)
+        ? shuffle
+          ? folderCards(latest.cards, latest.decks, folderId)
+          : orderedFolderCards(
+              latest.cards,
+              latest.decks,
+              folderId,
+              latest.preferences.folderDeckSort,
+            )
         : orderedCards(latest.cards, deckId ?? "");
     setSession(
       startSession(
@@ -552,18 +566,7 @@ export function Study({
             >
               <Icon name="back" size={20} color={colors.ink} />
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="카드 뒤집기"
-              disabled={busy || turning || swipe.transitioning}
-              onPress={flip}
-              style={[s.row, { minHeight: 44, paddingHorizontal: 12 }]}
-            >
-              <Icon name="rotate" size={18} />
-              <Text style={[s.label, { color: colors.primary }]}>
-                카드 뒤집기
-              </Text>
-            </Pressable>
+
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={last ? "학습 결과 보기" : "다음 카드"}

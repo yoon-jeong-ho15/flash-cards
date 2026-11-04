@@ -235,16 +235,16 @@ test('a swipe interrupts card flipping instead of waiting for the flip animation
   const screen = screenHarness(f.store, 'Study');
   const props = { deckId: f.first, onExit() {} };
   const flipControl = tree => nodes(tree).find(node => node.type === 'Pressable'
-    && node.props.accessibilityLabel === '카드 뒤집기' && typeof node.props.disabled === 'boolean');
+    && node.props.accessibilityLabel === '카드 뒤집기');
   try {
     let tree = screen.render(props);
     flipControl(tree).props.onPress();
     tree = screen.render(props);
-    assert.equal(flipControl(tree).props.disabled, true, 'the flip animation is in progress');
+    assert.equal(button(tree, '알아요').disabled, true, 'rating stays disabled while the flip animation is in progress');
     assert.equal(screen.swipeDisabled(), false, 'flipping must not block a new swipe');
     screen.startSwipe();
     tree = screen.render(props);
-    assert.equal(flipControl(tree).props.disabled, false, 'the new swipe immediately cancels the flip');
+    assert.equal(button(tree, '알아요').disabled, false, 'the new swipe immediately cancels the flip');
     screen.next();
     assert.ok(button(screen.render(props), '전체 카드 다시 학습'));
   } finally { screen.cleanup(); }
@@ -309,7 +309,8 @@ test('deck detail prioritizes adding and editing cards instead of starting study
   const screen = screenHarness(f.store, 'DeckDetail');
   let destination;
   try {
-    const tree = screen.render({ deckId: f.first, nav: { go: route => { destination = route; }, back() {} } });
+    const props = { deckId: f.first, nav: { go: route => { destination = route; }, back() {} } };
+    const tree = screen.render(props);
     const displayedText = nodes(tree).filter(node => node.type === 'Text').map(text).join('');
     assert.ok(displayedText.includes('카드 관리'));
     assert.ok(!displayedText.includes('어떻게 학습할까요?'));
@@ -317,11 +318,18 @@ test('deck detail prioritizes adding and editing cards instead of starting study
     assert.equal(nodes(tree).filter(node => node.type === 'Button' && /학습 시작|전체 카드 복습/.test(node.props.title)).length, 0);
     button(tree, '카드 추가하기').onPress();
     assert.deepEqual(destination, { type: 'edit-deck', deckId: f.first, appendCard: true });
+    assert.equal(button(tree, '학습하기').tone, 'secondary');
+    button(tree, '학습하기').onPress();
+    assert.deepEqual(destination, { type: 'study-options', deckId: f.first });
     const list = nodes(tree).find(node => node.type === 'FlatList');
     const card = list.props.data[0];
     const edit = nodes(list.props.renderItem({ item: card })).find(node => node.props?.accessibilityLabel === '카드 수정');
     edit.props.onPress();
     assert.deepEqual(destination, { type: 'edit-deck', deckId: f.first, focusCardId: card.id });
+    nodes(tree).find(node => node.type === 'Field').props.onChangeText('검색 결과 없음');
+    assert.equal(button(screen.render(props), '학습하기').disabled, false);
+    for (const card of f.store.getState().cards.filter(card => card.deckId === f.first)) await f.store.deleteCard(card.id);
+    assert.equal(button(screen.render(props), '학습하기').disabled, true);
   } finally { screen.cleanup(); }
 });
 
