@@ -29,21 +29,11 @@ export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
     <View style={[s.row, { flexWrap: 'nowrap', gap: 12 }]}><View style={{ flex: 1 }}><Progress learned={learned} total={own.length} compact /></View><Text style={[s.label, { color: learned === own.length && own.length ? colors.success : colors.muted }]}>{learned === own.length && own.length ? '학습 완료' : `${learned}/${own.length} 학습`}</Text></View>
   </Pressable>;
 }
-function CardArt() {
-  return <View pointerEvents="none" accessible={false} style={{ height: 120, width: 115 }}>
-    <View style={[l.artCard, { backgroundColor: '#BDB6FF', transform: [{ rotate: '-16deg' }], left: 2, top: 13 }]} />
-    <View style={[l.artCard, { backgroundColor: '#DAD6FF', transform: [{ rotate: '9deg' }], left: 19, top: 7 }]} />
-    <View style={[l.artCard, { backgroundColor: '#FFFFFF', transform: [{ rotate: '20deg' }], left: 28, top: 16, alignItems: 'center', justifyContent: 'center', gap: 10 }]}><View style={{ backgroundColor: colors.pale, padding: 9, borderRadius: 13 }}><Icon name="sparkles" size={24} /></View><View style={{ width: 40, height: 4, borderRadius: 3, backgroundColor: '#DFDCF6' }} /><View style={{ width: 28, height: 4, borderRadius: 3, backgroundColor: '#EEECFA' }} /></View>
-  </View>;
-}
 export function Dashboard({ nav, onNewFolder }: { nav: Navigation; onNewFolder: () => void }) {
-  const { cards, decks, folders, preferences, user } = useStore();
+  const { cards, decks, folders, user } = useStore();
   const [creating, setCreating] = useState(false);
   const recent = sortDecks(decks, 'date-desc');
-  const unfinished = recent.filter(d => cards.some(c => c.deckId === d.id && !c.learned));
-  const featured = unfinished.find(d => d.id === preferences.lastStudiedDeckId) || unfinished[0] || recent.find(d => cards.some(c => c.deckId === d.id));
   const learned = cards.filter(c => c.learned).length;
-  const featuredCards = cards.filter(c => c.deckId === featured?.id);
   const sample = () => {
     setCreating(true);
     void attempt(async () => {
@@ -57,11 +47,6 @@ export function Dashboard({ nav, onNewFolder }: { nav: Navigation; onNewFolder: 
   return <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.page, { gap: 26 }]}>
     <View style={{ gap: 6 }}><Text style={s.muted}>{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</Text><Text style={s.title}>{user?.displayName ? `${user.displayName}님,` : '반가워요,'}{'\n'}오늘도 하나씩 기억해요<Text style={{ color: colors.primary }}>.</Text></Text></View>
     <Pressable accessibilityRole="button" accessibilityLabel="내 학습 자료 검색" onPress={() => nav.go({ type: 'search' })} style={l.search}><Icon name="search" color={colors.muted} /><Text style={[s.muted, { flex: 1 }]}>어떤 내용을 공부할까요?</Text></Pressable>
-    <View style={l.hero}>
-      <View style={[s.row, { flexWrap: 'nowrap', alignItems: 'center', gap: 4 }]}><View style={{ flex: 1, gap: 12 }}><Text style={l.heroLabel}>{featured ? 'READY TO LEARN' : 'A LITTLE, EVERY DAY'}</Text><Text style={l.heroTitle}>{featured ? '오늘도 한 걸음' : '작은 카드 한 장,\n커다란 배움의 시작'}</Text><Text style={l.heroDetail}>{featured ? featuredCards.every(c => c.learned) ? '모든 카드를 익혔어요.' : `복습할 카드 ${featuredCards.filter(c => !c.learned).length}장` : '나만의 카드를 만들고\n가볍게 학습을 시작해요.'}</Text></View><CardArt /></View>
-      {featured && <View style={{ backgroundColor: '#FFFFFF16', padding: 14, borderRadius: 15, gap: 8 }}><Text numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>{featured.title}</Text><View style={{ height: 4, backgroundColor: '#FFFFFF30', borderRadius: 4 }}><View style={{ height: 4, borderRadius: 4, backgroundColor: '#C5F1C9', width: `${featuredCards.length ? featuredCards.filter(c => c.learned).length / featuredCards.length * 100 : 0}%` }} /></View></View>}
-      <Pressable accessibilityRole="button" onPress={() => nav.go(featured ? { type: 'study', deckId: featured.id } : { type: 'edit-deck' })} style={({ pressed }) => [l.heroButton, { opacity: pressed ? 0.8 : 1 }]}><Icon name={featured ? 'play' : 'plus'} size={18} /><Text style={{ flex: 1, textAlign: 'center', color: colors.primary, fontSize: 15, fontWeight: '800' }}>{featured ? featuredCards.every(c => c.learned) ? '한 번 더 복습하기' : '학습 이어가기' : '첫 학습 세트 만들기'}</Text><Icon name="arrow" size={18} /></Pressable>
-    </View>
     <View style={l.stats}>{[[decks.length, '학습 세트'], [cards.length, '전체 카드'], [learned, '기억한 카드']].map(([value, label], i) => <View key={label} style={[l.stat, i > 0 && { borderLeftWidth: 1, borderColor: colors.border }]}><Text style={[s.h2, { fontSize: 23, color: i === 2 ? colors.primary : colors.ink }]}>{value}</Text><Text style={s.label}>{label}</Text></View>)}</View>
     <View style={{ gap: 14 }}><Section title="최근 학습 세트" onPress={() => nav.go({ type: 'all-decks' })} />{recent.slice(0, 3).map(d => <DeckTile key={d.id} deck={d} nav={nav} />)}{!recent.length && <View style={[s.box, { gap: 16 }]}><View style={s.row}><View style={[l.deckIcon, { backgroundColor: colors.mint }]}><Icon name="book" color={colors.success} /></View><View style={{ flex: 1 }}><Text style={s.h2}>처음이라면 가볍게</Text><Text style={s.muted}>여행 영어 6장으로 사용법 익히기</Text></View></View><Button title="샘플 세트로 시작하기" tone="secondary" busy={creating} onPress={sample} /></View>}</View>
     <View style={{ gap: 14 }}><Section title="주제별로 모아두기" action="폴더 만들기" onPress={onNewFolder} />{folders.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>{folders.slice(0, 6).map(folder => <Pressable key={folder.id} accessibilityRole="button" onPress={() => nav.go({ type: 'folder', folderId: folder.id })} style={[s.box, { width: 170, backgroundColor: colors.peach, borderWidth: 0 }]}><Icon name="folder" color="#BA7549" size={26} /><Text numberOfLines={1} style={[s.text, { fontWeight: '700' }]}>{folder.title}</Text><Text style={s.muted}>세트 {decks.filter(d => d.folderId === folder.id).length}개</Text></Pressable>)}</ScrollView> : <Pressable accessibilityRole="button" onPress={onNewFolder} style={[s.box, s.row, { gap: 14 }]}><Icon name="folder" size={26} color="#BA7549" /><View style={{ flex: 1 }}><Text style={[s.text, { fontWeight: '600' }]}>배우는 주제마다, 나만의 폴더</Text><Text style={s.muted}>관련된 세트를 한곳에 모아보세요.</Text></View><Icon name="chevron" size={18} color={colors.muted} /></Pressable>}</View>
@@ -131,12 +116,6 @@ export function Search({ nav }: { nav: Navigation }) {
 const l = StyleSheet.create({
   textAction: { minHeight: 44, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 4 },
   search: { backgroundColor: '#EDEEF5', paddingHorizontal: 17, minHeight: 54, borderRadius: 17, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  hero: { padding: 22, gap: 20, borderRadius: 26, backgroundColor: colors.primary, overflow: 'hidden' },
-  heroLabel: { color: '#DBD7FF', fontWeight: '700', fontSize: 10, letterSpacing: 1.6 },
-  heroTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 23, lineHeight: 33, letterSpacing: -0.6 },
-  heroDetail: { color: '#E2DEFF', fontSize: 13, lineHeight: 21 },
-  heroButton: { minHeight: 50, paddingHorizontal: 17, paddingVertical: 12, backgroundColor: '#FFFFFF', borderRadius: 15, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  artCard: { position: 'absolute', width: 76, height: 98, borderRadius: 14 },
   stats: { flexDirection: 'row', paddingVertical: 20, backgroundColor: colors.card, borderRadius: 22, borderWidth: 1, borderColor: colors.border },
   stat: { flex: 1, alignItems: 'center', gap: 6, paddingHorizontal: 5 },
   deckIcon: { width: 50, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
