@@ -5,6 +5,7 @@ export interface Data { folders: Folder[]; decks: Deck[]; cards: Card[] }
 export type Kind = keyof Data;
 export interface Operation { kind: Kind; id: string; revision: number; deleted: boolean }
 export interface Preferences {
+  mockDataVersion?: number;
   lastStudiedDeckId?: string;
   deckSort?: DeckSortOption;
   folderDeckSort?: DeckSortOption;

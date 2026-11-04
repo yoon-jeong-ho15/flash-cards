@@ -8,7 +8,7 @@ import type { CardDrag } from '../ui/useSwipeMotion';
 export interface RichTextHandle { getHTML(): Promise<string>; insertImage(url: string): void }
 interface Props { html: string; editable?: boolean; label?: string; presentation?: 'default' | 'study-front' | 'study-back'; onChange?: (html: string) => void; onImage?: (url: string) => void; onFlip?: () => void; onCardDrag?: (event: CardDrag) => void; onPickImage?: () => void }
 export const RichText = forwardRef<RichTextHandle, Props>(function RichText(props, ref) {
-  const web = useRef<WebView>(null);
+  const web = useRef<WebView<object>>(null);
   const latest = useRef(props); latest.current = props;
   const [height, setHeight] = useState(props.editable ? 320 : 80);
   const [ready, setReady] = useState(false);
@@ -32,7 +32,7 @@ export const RichText = forwardRef<RichTextHandle, Props>(function RichText(prop
   if (failed) return <Text accessibilityRole="alert">{plainText(props.html)}{'\n'}서식 화면을 불러오지 못했습니다. 화면을 다시 열어 주세요.</Text>;
   return <View style={{ minHeight: props.editable ? 320 : 60 }}>
     {!ready && <ActivityIndicator accessibilityLabel="카드 내용 불러오는 중" />}
-    <WebView ref={web} source={{ html: editorDocument }} originWhitelist={['*']} style={{ height, backgroundColor: 'transparent' }}
+    <WebView<object> ref={web} source={{ html: editorDocument }} originWhitelist={['*']} style={{ height, backgroundColor: 'transparent' }}
       scrollEnabled={Boolean(props.editable)} javaScriptEnabled domStorageEnabled={false}
       allowFileAccess={false} allowFileAccessFromFileURLs={false} allowUniversalAccessFromFileURLs={false}
       mixedContentMode="never" setSupportMultipleWindows={false}

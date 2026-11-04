@@ -1,8 +1,12 @@
 import { GoogleAuthProvider, signInWithCredential, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { store } from './runtime';
+import { mockAuthEnabled, mockUser } from './testAuth';
+import { seedMockData } from './mockData';
 
 // Load native Google Sign-In only on demand; guest mode also works in Expo Go.
 export async function login() {
+  if (mockAuthEnabled) { await store.switchUser(mockUser); await seedMockData(store, mockUser.uid); return; }
   if (!auth) throw new Error('Firebase 및 Google 로그인 설정이 필요합니다. README의 환경 변수 설정을 확인해 주세요.');
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
   if (!webClientId) throw new Error('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID를 설정해 주세요.');
@@ -15,6 +19,7 @@ export async function login() {
   await signInWithCredential(auth, GoogleAuthProvider.credential(result.data.idToken));
 }
 export async function logout() {
+  if (mockAuthEnabled) { await store.switchUser(null); return; }
   if (auth) await signOut(auth);
   try { const { GoogleSignin } = await import('@react-native-google-signin/google-signin'); await GoogleSignin.signOut(); }
   catch { /* Firebase sign-out is authoritative, including guest-only Expo Go sessions. */ }

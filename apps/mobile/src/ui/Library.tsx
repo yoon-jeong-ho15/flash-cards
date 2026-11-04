@@ -149,7 +149,7 @@ export function Search({ nav }: { nav: Navigation }) {
       {matchingFolders.length > 0 && <View style={{ gap: 8 }}><Text style={s.label}>폴더 {matchingFolders.length}개</Text>{matchingFolders.map(f => <Button key={f.id} title={`폴더 · ${f.title}`} tone="secondary" onPress={() => nav.go({ type: 'folder', folderId: f.id })} />)}</View>}
       <Text accessibilityLiveRegion="polite" style={[s.label, { marginBottom: 6 }]}>{q.trim() ? `검색된 학습 세트 ${matchingDecks.length}개` : '최근 수정한 학습 세트'}</Text>
     </View>}
-    ListEmptyComponent={!matchingFolders.length ? <Empty title={q.trim() ? '검색 결과가 없어요' : '아직 학습 자료가 없어요'} detail={q.trim() ? '다른 단어나 더 짧은 검색어로 찾아보세요.' : '하단의 + 버튼으로 첫 세트를 만들어 보세요.'} /> : null}
+    ListEmptyComponent={!matchingFolders.length ? <Empty title={q.trim() ? '검색 결과가 없어요' : '아직 학습 자료가 없어요'} detail={q.trim() ? '다른 단어나 더 짧은 검색어로 찾아보세요.' : '라이브러리에서 첫 세트를 만들어 보세요.'} /> : undefined}
     renderItem={({ item }) => <DeckTile deck={item} nav={nav} />} />;
 }
 const l = StyleSheet.create({

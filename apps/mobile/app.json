@@ -16,16 +16,23 @@
       "googleServicesFile": "./google-services.json",
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [],
-      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-dev-client",
       "@react-native-google-signin/google-signin",
-      ["expo-image-picker", {
-        "photosPermission": "학습 카드에 첨부할 사진을 선택합니다.",
-        "cameraPermission": "학습 카드에 첨부할 사진을 촬영합니다.",
-        "microphonePermission": false
-      }]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "학습 카드에 첨부할 사진을 선택합니다.",
+          "cameraPermission": "학습 카드에 첨부할 사진을 촬영합니다.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-font",
+      "expo-status-bar"
     ]
   }
 }

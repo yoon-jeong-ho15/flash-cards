@@ -38,8 +38,8 @@ export function Study({ deckId, folderId, shuffle = folderId !== undefined, onEx
   const flipInFlight = useRef(false);
   const animationVersion = useRef(0);
   const flipReady = useRef<() => void>(() => {});
-  const frontScroll = useRef<ScrollView>(null);
-  const backScroll = useRef<ScrollView>(null);
+  const frontScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const backScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const openImage = useImage();
   useEffect(() => { if (deckId !== undefined) void store.setPreferences({ lastStudiedDeckId: deckId }).catch(showError); }, [deckId]);
   useEffect(() => {
