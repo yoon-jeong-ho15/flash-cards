@@ -5,7 +5,7 @@ const esbuild = require('esbuild');
 const { harness: storeHarness, item, load } = require('./helpers.cjs');
 const { folderCards } = load('core/content.ts');
 
-const externals = ['react', 'react-native', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library', './Typography', './theme'];
+const externals = ['react', 'react-native', 'expo-haptics', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library', './Typography', './theme'];
 const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail', 'StudySetup'].map(name => [name, esbuild.buildSync({
   entryPoints: [path.resolve(__dirname, `../src/ui/${name}.tsx`)], bundle: true, platform: 'node', format: 'cjs',
   write: false, external: externals, tsconfigRaw: { compilerOptions: { jsx: 'react' } },
@@ -41,7 +41,7 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
   };
   const mocks = {
     './Typography': { Text: 'Text', TextInput: 'TextInput' },
-    './theme': { useUI: () => ({ colors: {}, s: {}, uiScale: 1, dark: false }), useThemedStyles: factory => factory({}) },
+    './theme': { useUI: () => ({ colors: {}, s: {}, uiScale: 1, dark: false }), useThemedStyles: factory => factory({}), radius: { control: 10, card: 12, sheet: 20 } },
     react, 'react-native': native, '../platform/runtime': { store, useStore: () => store.getState() },
     '../editor/RichText': { RichText: 'RichText' }, './CardComposer': { CardComposer: 'CardComposer' },
     './Library': { deckAccent: () => ({ bg: '#FFFFFF', ink: '#000000' }) }, './FolderPicker': { FolderPicker: 'FolderPicker' },
@@ -50,6 +50,7 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
       ...Object.fromEntries(['Attachment', 'Button', 'Empty', 'Progress', 'Chips', 'Field', 'Select', 'ProgressRing', 'Sheet'].map(name => [name, name])),
     },
     './useSwipeMotion': { useSwipeMotion: props => { swipeProps = props; return { panHandlers: {}, style: {}, transitioning: false, prepareFlip: () => true }; } },
+    'expo-haptics': { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: 'light' } },
   };
   const module = { exports: {} };
   const deterministicMath = Object.assign(Object.create(Math), { random: () => 0 });

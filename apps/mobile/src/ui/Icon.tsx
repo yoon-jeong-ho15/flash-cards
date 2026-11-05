@@ -47,8 +47,8 @@ export function Icon({
   size?: number;
   color?: string;
 }) {
-  const { colors, s } = useUI();
-  const color = colorProp ?? colors.primary;
+  const { colors } = useUI();
+  const color = colorProp ?? colors.icon;
   return (
     <View
       pointerEvents="none"

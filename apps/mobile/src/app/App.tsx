@@ -1,4 +1,4 @@
-import { useUI, useThemedStyles, type Palette } from '../ui/theme';
+import { radius, useUI, useThemedStyles, type Palette } from '../ui/theme';
 import { appearance, useAppearance } from '../platform/appearance';
 import { Text } from '../ui/Typography';
 import React, { Component, useEffect, useRef, useState } from 'react';
@@ -62,11 +62,11 @@ function Workspace() {
   const title = ['study-library', 'study-folder', 'study-options'].includes(route.type) ? '학습하기' : route.type === 'dashboard' ? 'Flashcards' : route.type === 'all-decks' || route.type === 'all-folders' ? '라이브러리' : route.type === 'search' ? '검색' : route.type === 'account' ? '마이 페이지' : route.type === 'edit-deck' ? '카드 만들기' : route.type === 'folder' ? '폴더' : '학습 세트';
   return <View style={{ flex: 1 }}>
     {!isStudying && <View style={styles.header}>
-      {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={colors.ink} /></Pressable>}
+      {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={colors.icon} /></Pressable>}
       {route.type === 'dashboard' && <View style={styles.brand}><Icon name="layers" color={colors.onPrimary} size={20} /></View>}
       <Text numberOfLines={1} style={[styles.headerTitle, { flex: 1 }]}>{title}</Text>
       {!immersive && <Pressable accessibilityRole="button" accessibilityLabel="계정 및 동기화 상태" onPress={() => nav.go({ type: 'account' })} style={styles.avatar}>
-        <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14 }}>{(state.user?.displayName || state.user?.email || '나')[0].toUpperCase()}</Text>
+        <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 14 }}>{(state.user?.displayName || state.user?.email || '나')[0].toUpperCase()}</Text>
         <View style={[styles.statusDot, { backgroundColor: state.status === 'error' ? colors.red : state.online ? colors.success : colors.muted }]} />
       </Pressable>}
       {immersive && <View style={[s.row, { gap: 5 }]}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.success }} /><Text style={s.label}>자동 임시 저장</Text></View>}
@@ -93,9 +93,9 @@ function Workspace() {
     {!immersive ? <SafeAreaView edges={['bottom']} style={styles.tabArea}><View style={styles.tabs}>{tabs.map(([target, label, icon]) => {
       const selected = activeTab === target.type;
       const study = target.type === 'study-library';
-      return <Pressable key={label} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={() => setHistory([target])} style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.6 : 1 }]}>
-        <View style={study ? styles.study : [styles.tabIcon, selected && { backgroundColor: colors.pale }]}><Icon name={icon} color={study ? colors.onPrimary : selected ? colors.primary : colors.muted} size={22} /></View>
-        <Text style={{ fontSize: 10, fontWeight: selected ? '800' : '500', color: selected ? colors.primary : colors.muted }}>{label}</Text>
+      return <Pressable key={label} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected }} onPress={() => setHistory([target])} style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.6 : 1 }]}>
+        <View style={[styles.tabIcon, selected && { backgroundColor: colors.pale }, study && styles.studyTabIcon, study && selected && styles.studyTabSelected]}><Icon name={icon} color={study ? colors.onPrimary : selected ? colors.primary : colors.icon} size={22} /></View>
+        <Text style={{ fontSize: 11, fontWeight: selected ? '700' : study ? '600' : '500', color: selected || study ? colors.primary : colors.muted }}>{label}</Text>
       </Pressable>;
     })}</View></SafeAreaView> : <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.card }} />}
     {folderForm && <FolderForm onClose={() => setFolderForm(false)} onSaved={id => { setFolderForm(false); nav.go({ type: 'folder', folderId: id }); }} />}
@@ -127,16 +127,17 @@ export default function App() {
   return <SafeAreaProvider><SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.bg }}><StatusBar style={dark ? "light" : "dark"} /><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ErrorBoundary><ImageProvider><Bootstrap /></ImageProvider></ErrorBoundary></KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
 }
 const createStyles = (colors: Palette) => StyleSheet.create({
-  header: { paddingHorizontal: 22, minHeight: 66, paddingVertical: 10, gap: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg },
-  headerTitle: { color: colors.ink, fontSize: 20, letterSpacing: -0.6, fontWeight: '800' },
-  brand: { width: 34, height: 36, borderRadius: 11, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  header: { paddingHorizontal: 16, minHeight: 56, paddingVertical: 6, gap: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  headerTitle: { color: colors.ink, fontSize: 18, letterSpacing: -0.5, fontWeight: '700' },
+  brand: { width: 32, height: 32, borderRadius: radius.control, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
-  avatar: { width: 38, height: 38, borderRadius: 15, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.card },
+  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
   statusDot: { position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: colors.bg },
-  notice: { paddingHorizontal: 22, paddingVertical: 7, backgroundColor: colors.peach },
+  notice: { paddingHorizontal: 16, paddingVertical: 6, backgroundColor: colors.subtle },
   tabArea: { backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border },
-  tabs: { width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 7, alignItems: 'center' },
-  tab: { flex: 1, minHeight: 58, gap: 4, alignItems: 'center', justifyContent: 'center' },
-  tabIcon: { width: 48, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  study: { width: 44, height: 38, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  tabs: { width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', paddingHorizontal: 10, paddingTop: 5, paddingBottom: 4, alignItems: 'center' },
+  tab: { flex: 1, minHeight: 56, gap: 4, alignItems: 'center', justifyContent: 'center' },
+  tabIcon: { width: 48, height: 32, borderRadius: radius.control, alignItems: 'center', justifyContent: 'center' },
+  studyTabIcon: { width: 52, height: 36, borderRadius: 12, backgroundColor: colors.primary, boxShadow: `0px 2px 6px ${colors.ring}` },
+  studyTabSelected: { boxShadow: `0px 0px 0px 3px ${colors.ring}` },
 });

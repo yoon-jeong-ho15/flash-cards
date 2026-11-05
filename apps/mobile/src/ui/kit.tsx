@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform,
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon, type IconName } from "./Icon";
-import { useUI } from "./theme";
+import { radius, useUI } from "./theme";
 export { colors, s, useUI } from "./theme";
 export function Button({
   title,
@@ -32,26 +32,29 @@ export function Button({
       disabled={disabled || busy}
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: 50,
-        paddingHorizontal: 18,
-        paddingVertical: 13,
-        borderRadius: 15,
+        minHeight: 44,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: radius.control,
+        borderWidth: 1,
+        borderColor: tone === "secondary" ? colors.input : "transparent",
         flexDirection: "row",
         gap: 8,
         alignItems: "center",
         justifyContent: "center",
-        opacity: disabled || busy ? 0.4 : pressed ? 0.75 : 1,
+        opacity: disabled || busy ? 0.45 : pressed ? 0.8 : 1,
+        boxShadow: tone === "danger" ? undefined : `0px 1px 2px ${colors.shadow}`,
         backgroundColor:
           tone === "primary"
             ? colors.primary
             : tone === "danger"
               ? colors.dangerBg
-              : colors.pale,
+              : pressed ? colors.subtle : colors.card,
       })}
     >
       {busy ? (
         <ActivityIndicator
-          color={tone === "primary" ? colors.onPrimary : colors.primary}
+          color={tone === "primary" ? colors.onPrimary : tone === "danger" ? colors.red : colors.primary}
         />
       ) : (
         <>
@@ -77,7 +80,7 @@ export function Button({
                   : tone === "danger"
                     ? colors.red
                     : colors.primary,
-              fontWeight: "700",
+              fontWeight: "600",
               fontSize: 14,
               textAlign: "center",
             }}
@@ -104,17 +107,21 @@ export function Button({
 }
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
   const { colors, s } = useUI();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 7 }}>
-      <Text style={s.label}>{label}</Text>
+      <Text style={[s.label, { color: colors.ink }]}>{label}</Text>
       <TextInput
         placeholderTextColor={colors.muted}
         accessibilityLabel={label}
         {...props}
+        onFocus={(event) => { setFocused(true); props.onFocus?.(event); }}
+        onBlur={(event) => { setFocused(false); props.onBlur?.(event); }}
         style={[
           s.input,
           props.multiline && { minHeight: 80, textAlignVertical: "top" },
           props.style,
+          focused && { borderColor: colors.primary, boxShadow: `0px 0px 0px 3px ${colors.ring}` },
         ]}
       />
     </View>
@@ -131,7 +138,7 @@ export function Chips<T extends string>({
 }) {
   const { colors, s } = useUI();
   return (
-    <View style={[s.row, { gap: 8 }]}>
+    <View style={[s.row, { gap: 4, padding: 4, borderRadius: radius.control + 4, backgroundColor: colors.subtle, alignSelf: "flex-start" }]}>
       {options.map(([key, label]) => (
         <Pressable
           key={key}
@@ -140,12 +147,13 @@ export function Chips<T extends string>({
           onPress={() => onChange(key)}
           style={({ pressed }) => ({
             minHeight: 44,
-            paddingHorizontal: 16,
-            paddingVertical: 11,
-            borderRadius: 14,
-            backgroundColor: key === value ? colors.primary : colors.card,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: radius.control,
+            backgroundColor: key === value ? colors.card : "transparent",
             borderWidth: 1,
-            borderColor: key === value ? colors.primary : colors.border,
+            borderColor: key === value ? colors.border : "transparent",
+            boxShadow: key === value ? `0px 1px 2px ${colors.shadow}` : undefined,
             opacity: pressed ? 0.7 : 1,
           })}
         >
@@ -153,7 +161,7 @@ export function Chips<T extends string>({
             style={{
               fontSize: 13,
               fontWeight: "600",
-              color: key === value ? colors.onPrimary : colors.muted,
+              color: key === value ? colors.primary : colors.muted,
             }}
           >
             {label}
@@ -181,6 +189,7 @@ export function Select<T extends string>({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${options.find(([key]) => key === value)?.[1]}`}
+        accessibilityState={{ expanded: open }}
         onPress={() => setOpen(true)}
         style={[
           s.input,
@@ -196,7 +205,7 @@ export function Select<T extends string>({
         <Text style={[s.muted, { color: colors.ink, flexShrink: 1 }]}>
           {options.find(([key]) => key === value)?.[1]}
         </Text>
-        <Icon name="chevron-down" size={16} color={colors.muted} />
+        <Icon name="chevron-down" size={16} color={colors.icon} />
       </Pressable>
       <Modal
         visible={open}
@@ -208,7 +217,7 @@ export function Select<T extends string>({
           style={{
             flex: 1,
             justifyContent: "flex-end",
-            backgroundColor: "#15201966",
+            backgroundColor: "#09090B66",
           }}
         >
           <Pressable
@@ -221,12 +230,13 @@ export function Select<T extends string>({
             edges={["bottom"]}
             style={{
               backgroundColor: colors.card,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
+              borderTopLeftRadius: radius.sheet,
+              borderTopRightRadius: radius.sheet,
               padding: 20,
               gap: 8,
             }}
           >
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.input, alignSelf: "center", marginBottom: 12 }} />
             <Text style={[s.h2, { marginBottom: 12 }]}>{label}</Text>
             {options.map(([key, title]) => (
               <Pressable
@@ -260,7 +270,7 @@ export function Select<T extends string>({
                   >
                     {title}
                   </Text>
-                  {key === value && <Icon name="check" size={18} />}
+                  {key === value && <Icon name="check" size={18} color={colors.primary} />}
                 </View>
               </Pressable>
             ))}
@@ -307,15 +317,15 @@ export function Progress({
           text: `${percent}%`,
         }}
         style={{
-          height: 6,
+          height: 4,
           borderRadius: 4,
-          backgroundColor: colors.pale,
+          backgroundColor: colors.track,
           overflow: "hidden",
         }}
       >
         <View
           style={{
-            height: 6,
+            height: 4,
             borderRadius: 4,
             width: `${percent}%`,
             backgroundColor: colors.primary,
@@ -349,7 +359,7 @@ export function ProgressRing({ percent }: { percent: number }) {
               top: 36.5 + Math.sin(angle) * 36.5,
               width: 2.5,
               height: 7,
-              backgroundColor: i < percent ? colors.primary : colors.pale,
+              backgroundColor: i < percent ? colors.primary : colors.track,
               transform: [{ rotate: `${i * 3.6}deg` }],
             }}
           />
@@ -372,17 +382,19 @@ export function Empty({
   const { colors, s } = useUI();
   return (
     <View
-      style={[s.box, { paddingVertical: 36, alignItems: "center", gap: 10 }]}
+      style={[s.box, { paddingVertical: 24, alignItems: "center", gap: 10, borderStyle: "dashed", boxShadow: undefined }]}
     >
       <View
         style={{
-          width: 48,
-          height: 6,
-          backgroundColor: colors.pale,
-          borderRadius: 6,
-          marginBottom: 8,
+          width: 40,
+          height: 40,
+          backgroundColor: colors.iconBg,
+          borderRadius: 12,
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 4,
         }}
-      />
+      ><Icon name="layers" size={22} /></View>
       <Text style={[s.h2, { textAlign: "center" }]}>{title}</Text>
       <Text style={[s.muted, { textAlign: "center" }]}>{detail}</Text>
     </View>
@@ -407,16 +419,21 @@ export function Sheet({
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
         <View
           style={{
-            padding: 16,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
             borderBottomWidth: 1,
             borderColor: colors.border,
             flexDirection: "row",
             alignItems: "center",
             gap: 10,
+            backgroundColor: colors.card,
           }}
         >
           <Text style={[s.h2, { flex: 1 }]}>{title}</Text>
-          <Button title="닫기" tone="secondary" onPress={onClose} />
+          <Pressable accessibilityRole="button" accessibilityLabel="닫기" onPress={onClose}
+            style={({ pressed }) => ({ minWidth: 44, minHeight: 44, borderRadius: radius.control, backgroundColor: pressed ? colors.subtle : colors.card, alignItems: "center", justifyContent: "center" })}>
+            <Icon name="close" size={20} color={colors.icon} />
+          </Pressable>
         </View>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -478,7 +495,7 @@ export function ImageProvider({ children }: { children: React.ReactNode }) {
       {children}
       {url && (
         <Modal animationType="fade" onRequestClose={() => setURL(null)}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: "#152019" }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: "#09090B" }}>
             <View style={[s.row, { padding: 16, justifyContent: "flex-end" }]}>
               <Button
                 title="축소"

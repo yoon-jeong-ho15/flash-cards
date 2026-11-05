@@ -1,15 +1,120 @@
-import { useUI } from './theme';
+import { CollectionIcon } from './CollectionSurface';
+import { type Palette, useUI } from './theme';
 import { Text } from './Typography';
-import React, { useState } from "react";
-import { FlatList, Pressable, View } from 'react-native';
-import { cardMatches, orderedCards } from "../core/content";
-import { RichText } from "../editor/RichText";
+import React, { useMemo, useState } from "react";
+import { FlatList, Image, Platform, Pressable, View } from 'react-native';
+import { cardMatches, orderedCards, plainText } from "../core/content";
+import { parseDocument } from 'htmlparser2';
 import { store, useStore } from "../platform/runtime";
 import { Attachment, Button, Chips, Empty, Field, Sheet, attempt, confirm, useImage } from "./kit";
 import { Icon } from "./Icon";
 import { FolderPicker } from "./FolderPicker";
-import { deckAccent } from "./Library";
 import type { Navigation } from "./navigation";
+
+type DomNode = {
+  type: string;
+  name?: string;
+  data?: string;
+  attribs?: Record<string, string>;
+  children?: DomNode[];
+};
+
+function renderDomNode(
+  node: DomNode,
+  key: string | number,
+  colors: Palette,
+  onImage?: (url: string) => void
+): React.ReactNode {
+  if (node.type === 'text') {
+    return node.data ?? '';
+  }
+  if (node.type === 'tag') {
+    const children = node.children?.map((child, i) =>
+      renderDomNode(child, `${key}-${i}`, colors, onImage)
+    );
+    switch (node.name) {
+      case 'strong':
+      case 'b':
+        return <Text key={key} style={{ fontWeight: '700' }}>{children}</Text>;
+      case 'em':
+      case 'i':
+        return <Text key={key} style={{ fontStyle: 'italic' }}>{children}</Text>;
+      case 'u':
+        return <Text key={key} style={{ textDecorationLine: 'underline' }}>{children}</Text>;
+      case 's':
+      case 'del':
+        return <Text key={key} style={{ textDecorationLine: 'line-through' }}>{children}</Text>;
+      case 'mark':
+        return (
+          <Text key={key} style={{ backgroundColor: '#FEF08A', color: '#18181B', borderRadius: 2, paddingHorizontal: 2 }}>
+            {children}
+          </Text>
+        );
+      case 'code':
+        return (
+          <Text key={key} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', backgroundColor: colors.subtle, color: colors.primary, fontSize: 13 }}>
+            {children}
+          </Text>
+        );
+      case 'br':
+        return '\n';
+      case 'p':
+        return (
+          <Text key={key} style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>
+            {children}
+            {'\n'}
+          </Text>
+        );
+      case 'li':
+        return (
+          <Text key={key} style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>
+            {'• '}
+            {children}
+            {'\n'}
+          </Text>
+        );
+      case 'img': {
+        const src = node.attribs?.src;
+        if (!src) return null;
+        return (
+          <Pressable key={key} accessibilityRole="button" accessibilityLabel="첨부 이미지 확대" onPress={() => onImage?.(src)} style={{ marginVertical: 4 }}>
+            <Image source={{ uri: src }} resizeMode="contain" style={{ width: '100%', height: 160, borderRadius: 8 }} />
+          </Pressable>
+        );
+      }
+      default:
+        return <React.Fragment key={key}>{children}</React.Fragment>;
+    }
+  }
+  return null;
+}
+
+export function CardPreview({
+  html,
+  onImage,
+}: {
+  html: string;
+  onImage?: (url: string) => void;
+}) {
+  const { colors } = useUI();
+  const content = useMemo(() => {
+    if (!html || !html.trim()) return null;
+    try {
+      const doc = parseDocument(html);
+      return (doc.children as DomNode[]).map((child, i) =>
+        renderDomNode(child, i, colors, onImage)
+      );
+    } catch {
+      return <Text style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>{plainText(html)}</Text>;
+    }
+  }, [html, colors, onImage]);
+
+  if (!content || (Array.isArray(content) && content.length === 0)) {
+    return <Text style={{ fontSize: 13, color: colors.muted, fontStyle: 'italic' }}>내용 없음</Text>;
+  }
+
+  return <View style={{ minHeight: 22 }}>{content}</View>;
+}
 
 export function DeckDetail({
   deckId,
@@ -43,7 +148,6 @@ export function DeckDetail({
       </View>
     );
   const folder = folders.find((f) => f.id === deck.folderId);
-  const accent = deckAccent(deck.title);
   return (
     <>
       <FlatList
@@ -56,7 +160,7 @@ export function DeckDetail({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          <View style={{ gap: 22 }}>
+          <View style={{ gap: 12 }}>
             <View
               style={[
                 s.row,
@@ -73,11 +177,11 @@ export function DeckDetail({
                 }
                 style={[s.row, { minHeight: 44, flexShrink: 1 }]}
               >
-                <Icon name="folder" size={16} color={colors.muted} />
+                <Icon name="folder" size={16} color={colors.icon} />
                 <Text numberOfLines={1} style={[s.label, { flexShrink: 1 }]}>
                   {folder?.title || "미분류"}
                 </Text>
-                <Icon name="chevron" size={14} color={colors.muted} />
+                <Icon name="chevron" size={14} color={colors.icon} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -90,34 +194,25 @@ export function DeckDetail({
                   justifyContent: "center",
                 }}
               >
-                <Icon name="more" color={colors.ink} />
+                <Icon name="more" color={colors.icon} />
               </Pressable>
             </View>
-            <View style={{ gap: 14 }}>
-              <View
-                style={{
-                  width: 64,
-                  height: 68,
-                  borderRadius: 20,
-                  backgroundColor: accent.bg,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Icon name="layers" color={accent.ink} size={32} />
+            <View style={[s.row, { flexWrap: "nowrap", alignItems: "flex-start", gap: 12 }]}>
+              <CollectionIcon kind="deck" size={40} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={s.title}>{deck.title}</Text>
+                {Boolean(deck.description) && (
+                  <Text style={s.muted}>{deck.description}</Text>
+                )}
+                <Text style={s.label}>
+                  {own.length}장의 카드 ·{" "}
+                  {new Date(deck.updatedAt).toLocaleDateString("ko-KR", {
+                    month: "long",
+                    day: "numeric",
+                  })}{" "}
+                  수정
+                </Text>
               </View>
-              <Text style={s.title}>{deck.title}</Text>
-              {Boolean(deck.description) && (
-                <Text style={s.muted}>{deck.description}</Text>
-              )}
-              <Text style={s.label}>
-                {own.length}장의 카드 ·{" "}
-                {new Date(deck.updatedAt).toLocaleDateString("ko-KR", {
-                  month: "long",
-                  day: "numeric",
-                })}{" "}
-                수정
-              </Text>
             </View>
             <View style={[s.row, { justifyContent: "space-between" }]}>
               <Text style={s.h2}>카드 관리</Text>
@@ -178,7 +273,7 @@ export function DeckDetail({
           </View>
         }
         renderItem={({ item }) => (
-          <View style={[s.box, { marginBottom: 14, padding: 18, gap: 14 }]}>
+          <View style={[s.box, { marginBottom: 0, padding: 14, gap: 10 }]}>
             <View style={[s.row, { justifyContent: "space-between" }]}>
               <Text style={s.label}>
                 {String(own.findIndex((c) => c.id === item.id) + 1).padStart(
@@ -199,18 +294,18 @@ export function DeckDetail({
                   justifyContent: "center",
                 }}
               >
-                <Icon name="pencil" size={16} color={colors.muted} />
+                <Icon name="pencil" size={16} color={colors.icon} />
               </Pressable>
             </View>
             <View style={{ gap: 6 }}>
-              <Text style={[s.label, { color: colors.primary }]}>질문</Text>
-              <RichText side="front" html={item.termRichText} onImage={openImage} />
+              <Text style={s.label}>질문</Text>
+              <CardPreview html={item.termRichText} onImage={openImage} />
               <Attachment url={item.frontImageUrl} />
             </View>
             <View style={{ height: 1, backgroundColor: colors.border }} />
             <View style={{ gap: 6 }}>
               <Text style={s.label}>답변</Text>
-              <RichText side="back" html={item.definitionRichText} onImage={openImage} />
+              <CardPreview html={item.definitionRichText} onImage={openImage} />
               <Attachment url={item.backImageUrl || item.imageUrl} />
             </View>
             <Pressable
@@ -231,7 +326,7 @@ export function DeckDetail({
                   borderRadius: 7,
                   borderWidth: 1.5,
                   borderColor: item.learned ? colors.success : colors.border,
-                  backgroundColor: item.learned ? colors.mint : colors.card,
+                  backgroundColor: item.learned ? colors.subtle : colors.card,
                   justifyContent: "center",
                   alignItems: "center",
                 }}

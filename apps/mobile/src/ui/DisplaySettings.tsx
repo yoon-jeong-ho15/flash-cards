@@ -17,7 +17,7 @@ function FontSetting({ label, setting, value, min, max, step, suffix, preview }:
     const next = Math.round((value + delta) * 100) / 100;
     void appearance.update({ [setting]: next }).catch(showError).finally(() => setBusy(false));
   };
-  return <View style={{ gap: 12 }}>
+  return <View style={{ gap: 8 }}>
     <View style={[s.row, { justifyContent: 'space-between', gap: 12 }]}>
       <Text style={[s.text, { fontWeight: '600', flex: 1, minWidth: 120 }]}>{label}</Text>
       <View style={[s.row, { flexWrap: 'nowrap', gap: 8 }]}>
@@ -26,22 +26,22 @@ function FontSetting({ label, setting, value, min, max, step, suffix, preview }:
           <Pressable accessibilityRole="button" accessibilityLabel={`${label} ${direction === -1 ? '줄이기' : '키우기'}`}
             accessibilityState={{ disabled: busy || (direction === -1 ? value <= min : value >= max) }}
             disabled={busy || (direction === -1 ? value <= min : value >= max)} onPress={() => change(direction * step)}
-            style={({ pressed }) => ({ minWidth: 44, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.pale, opacity: busy || (direction === -1 ? value <= min : value >= max) ? 0.35 : pressed ? 0.7 : 1 })}>
+            style={({ pressed }) => ({ minWidth: 44, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: colors.input, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, opacity: busy || (direction === -1 ? value <= min : value >= max) ? 0.35 : pressed ? 0.7 : 1 })}>
             <Text style={[s.h2, { color: colors.primary }]}>{direction === -1 ? '−' : '+'}</Text>
           </Pressable>
         </React.Fragment>)}
       </View>
     </View>
-    <View style={{ padding: 14, borderRadius: 12, backgroundColor: colors.bg }}>{preview}</View>
+    <View style={{ padding: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bg }}>{preview}</View>
   </View>;
 }
 
 export function DisplaySettings() {
   const settings = useAppearance();
   const { colors, s } = useUI();
-  return <View style={{ gap: 14 }}>
+  return <View style={{ gap: 10 }}>
     <Text style={s.h2}>화면 설정</Text>
-    <View style={[s.box, { gap: 22 }]}>
+    <View style={[s.box, { gap: 16 }]}>
       <View style={{ gap: 12 }}><Text style={[s.text, { fontWeight: '600' }]}>화면 모드</Text>
         <Chips value={settings.theme} options={[[ 'system', '기기 설정' ], [ 'light', '라이트' ], [ 'dark', '다크' ]]}
           onChange={(theme: AppearanceSettings['theme']) => { void appearance.update({ theme }).catch(showError); }} />

@@ -1,4 +1,5 @@
-import { useUI, useThemedStyles, type Palette } from './theme';
+import { CollectionIcon, CollectionSurface } from './CollectionSurface';
+import { radius, useUI, useThemedStyles, type Palette } from './theme';
 import { Text } from './Typography';
 import React, { useDeferredValue, useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -16,18 +17,6 @@ const sortOptions: Array<[DeckSortOption, string]> = [
   ["name-asc", "이름 오름차순"],
   ["name-desc", "이름 내림차순"],
 ];
-const accents = [
-  { bg: "#EEECFF", ink: "#6155E8" },
-  { bg: "#E6F5EF", ink: "#21856F" },
-  { bg: "#FFF0E7", ink: "#BA7549" },
-  { bg: "#E9F0FF", ink: "#4E79C9" },
-];
-export const deckAccent = (title: string) =>
-  accents[
-    Array.from(title).reduce((sum, c) => sum + c.charCodeAt(0), 0) %
-      accents.length
-  ];
-
 function Section({
   title,
   action,
@@ -61,61 +50,60 @@ function Section({
 }
 export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
   const { colors, s } = useUI();
-  const l = useThemedStyles(createStyles);
   const { cards, folders } = useStore();
   const own = cards.filter((c) => c.deckId === deck.id);
   const learned = own.filter((c) => c.learned).length;
-  const accent = deckAccent(deck.title);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${deck.title} 덱 열기, 카드 ${own.length}장, ${learned}장 학습 완료`}
       onPress={() => nav.go({ type: "deck", deckId: deck.id })}
-      style={({ pressed }) => [s.box, { gap: 16, opacity: pressed ? 0.75 : 1 }]}
     >
-      <View style={[s.row, { flexWrap: "nowrap", gap: 14 }]}>
-        <View style={[l.deckIcon, { backgroundColor: accent.bg }]}>
-          <Icon name="layers" size={24} color={accent.ink} />
-        </View>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text
-            numberOfLines={2}
-            style={[s.h2, { fontSize: 17, lineHeight: 24 }]}
-          >
-            {deck.title}
-          </Text>
-          <Text numberOfLines={1} style={s.muted}>
-            {own.length}장 ·{" "}
-            {folders.find((f) => f.id === deck.folderId)?.title || "미분류"}
-          </Text>
-        </View>
-        <Icon name="chevron" size={18} color={colors.muted} />
-      </View>
-      {Boolean(deck.description) && (
-        <Text numberOfLines={2} style={s.muted}>
-          {deck.description}
-        </Text>
+      {({ pressed }) => (
+        <CollectionSurface pressed={pressed} kind="deck" style={{ gap: 12 }}>
+          <View style={[s.row, { flexWrap: "nowrap", gap: 10 }]}>
+            <CollectionIcon kind="deck" />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text
+                numberOfLines={2}
+                style={[s.h2, { fontSize: 16, lineHeight: 23 }]}
+              >
+                {deck.title}
+              </Text>
+              <Text numberOfLines={1} style={s.muted}>
+                {own.length}장 ·{" "}
+                {folders.find((f) => f.id === deck.folderId)?.title || "미분류"}
+              </Text>
+            </View>
+            <Icon name="chevron" size={18} color={colors.icon} />
+          </View>
+          {Boolean(deck.description) && (
+            <Text numberOfLines={2} style={s.muted}>
+              {deck.description}
+            </Text>
+          )}
+          <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
+            <View style={{ flex: 1 }}>
+              <Progress learned={learned} total={own.length} compact />
+            </View>
+            <Text
+              style={[
+                s.label,
+                {
+                  color:
+                    learned === own.length && own.length
+                      ? colors.success
+                      : colors.muted,
+                },
+              ]}
+            >
+              {learned === own.length && own.length
+                ? "학습 완료"
+                : `${learned}/${own.length} 학습`}
+            </Text>
+          </View>
+        </CollectionSurface>
       )}
-      <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
-        <View style={{ flex: 1 }}>
-          <Progress learned={learned} total={own.length} compact />
-        </View>
-        <Text
-          style={[
-            s.label,
-            {
-              color:
-                learned === own.length && own.length
-                  ? colors.success
-                  : colors.muted,
-            },
-          ]}
-        >
-          {learned === own.length && own.length
-            ? "학습 완료"
-            : `${learned}/${own.length} 학습`}
-        </Text>
-      </View>
     </Pressable>
   );
 }
@@ -159,7 +147,7 @@ export function Dashboard({
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={[s.page, { gap: 26 }]}
+      contentContainerStyle={[s.page, { gap: 16 }]}
     >
       <View style={{ gap: 6 }}>
         <Text style={s.muted}>
@@ -181,7 +169,7 @@ export function Dashboard({
         onPress={() => nav.go({ type: "search" })}
         style={l.search}
       >
-        <Icon name="search" color={colors.muted} />
+        <Icon name="search" color={colors.icon} />
         <Text style={[s.muted, { flex: 1 }]}>어떤 내용을 공부할까요?</Text>
       </Pressable>
       <View style={l.stats}>
@@ -200,7 +188,7 @@ export function Dashboard({
             <Text
               style={[
                 s.h2,
-                { fontSize: 23, color: i === 2 ? colors.primary : colors.ink },
+                { fontSize: 22, lineHeight: 28, color: colors.ink },
               ]}
             >
               {value}
@@ -209,7 +197,7 @@ export function Dashboard({
           </View>
         ))}
       </View>
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 10 }}>
         <Section
           title="최근 학습 세트"
           onPress={() => nav.go({ type: "all-decks" })}
@@ -218,10 +206,10 @@ export function Dashboard({
           <DeckTile key={d.id} deck={d} nav={nav} />
         ))}
         {!recent.length && (
-          <View style={[s.box, { gap: 16 }]}>
+          <View style={[s.box, { gap: 12 }]}>
             <View style={s.row}>
-              <View style={[l.deckIcon, { backgroundColor: colors.mint }]}>
-                <Icon name="book" color={colors.success} />
+              <View style={[l.deckIcon, { backgroundColor: colors.iconBg }]}>
+                <Icon name="book" color={colors.icon} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.h2}>처음이라면 가볍게</Text>
@@ -237,7 +225,7 @@ export function Dashboard({
           </View>
         )}
       </View>
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 10 }}>
         <Section
           title="주제별로 모아두기"
           action="폴더 만들기"
@@ -254,18 +242,19 @@ export function Dashboard({
                 key={folder.id}
                 accessibilityRole="button"
                 onPress={() => nav.go({ type: "folder", folderId: folder.id })}
-                style={[
-                  s.box,
-                  { width: 170, backgroundColor: colors.peach, borderWidth: 0 },
-                ]}
+                style={{ width: 170 }}
               >
-                <Icon name="folder" color={colors.warm} size={26} />
-                <Text numberOfLines={1} style={[s.text, { fontWeight: "700" }]}>
-                  {folder.title}
-                </Text>
-                <Text style={s.muted}>
-                  세트 {decks.filter((d) => d.folderId === folder.id).length}개
-                </Text>
+                {({ pressed }) => (
+                  <CollectionSurface pressed={pressed} kind="folder">
+                    <CollectionIcon kind="folder" size={32} />
+                    <Text numberOfLines={1} style={[s.text, { fontWeight: "700" }]}>
+                      {folder.title}
+                    </Text>
+                    <Text style={s.muted}>
+                      세트 {decks.filter((d) => d.folderId === folder.id).length}개
+                    </Text>
+                  </CollectionSurface>
+                )}
               </Pressable>
             ))}
           </ScrollView>
@@ -273,15 +262,15 @@ export function Dashboard({
           <Pressable
             accessibilityRole="button"
             onPress={onNewFolder}
-            style={[s.box, s.row, { gap: 14 }]}
+            style={[s.box, s.row, { gap: 10 }]}
           >
-            <Icon name="folder" size={26} color={colors.warm} />
+            <Icon name="folder" size={26} color={colors.icon} />
             <View style={{ flex: 1 }}>
               <Text style={[s.text, { fontWeight: "600" }]}>
                 배우는 주제마다, 나만의 폴더
               </Text>
             </View>
-            <Icon name="chevron" size={18} color={colors.muted} />
+            <Icon name="chevron" size={18} color={colors.icon} />
           </Pressable>
         )}
       </View>
@@ -302,13 +291,22 @@ export function DeckLibrary({
   const state = useStore();
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
-  const [tab, setTab] = useState<"all" | "root">("all");
-  const [filter, setFilter] = useState<"all" | "unlearned" | "completed">(
-    "all",
-  );
+  const [filter, setFilter] = useState<"all" | "root" | "unlearned" | "completed">("all");
   const [editFolder, setEditFolder] = useState(false);
   const [actions, setActions] = useState(false);
   const folder = state.folders.find((f) => f.id === folderId);
+  const filterOptions: Array<["all" | "root" | "unlearned" | "completed", string]> = folderId
+    ? [
+        ["all", "전체"],
+        ["unlearned", "학습 중"],
+        ["completed", "완료"],
+      ]
+    : [
+        ["all", "전체"],
+        ["root", "미분류"],
+        ["unlearned", "학습 중"],
+        ["completed", "완료"],
+      ];
   const folderCardsCount = useMemo(
     () =>
       folderId !== undefined
@@ -325,7 +323,7 @@ export function DeckLibrary({
       sortDecks(
         state.decks.filter((d) => {
           if (folderId && d.folderId !== folderId) return false;
-          if (!folderId && tab === "root" && d.folderId) return false;
+          if (!folderId && filter === "root" && d.folderId) return false;
           const own = state.cards.filter((c) => c.deckId === d.id);
           if (filter === "unlearned" && !own.some((c) => !c.learned))
             return false;
@@ -341,7 +339,7 @@ export function DeckLibrary({
         }),
         sort,
       ),
-    [state.decks, state.cards, folderId, tab, filter, deferred, sort],
+    [state.decks, state.cards, folderId, filter, deferred, sort],
   );
   if (folderId && !folder)
     return (
@@ -366,13 +364,13 @@ export function DeckLibrary({
           void store.sync();
         }}
         ListHeaderComponent={
-          <View style={{ gap: 20 }}>
+          <View style={{ gap: 12 }}>
             {folder ? (
               <>
                 <View style={[s.row, { flexWrap: "nowrap" }]}>
                   <View style={{ flex: 1, gap: 6 }}>
                     <View style={s.row}>
-                      <Icon name="folder" color={colors.warm} />
+                      <Icon name="folder" color={colors.icon} />
                       <Text style={s.label}>내 폴더</Text>
                     </View>
                     <Text style={s.title}>{folder.title}</Text>
@@ -386,7 +384,7 @@ export function DeckLibrary({
                     onPress={() => setActions(true)}
                     style={l.textAction}
                   >
-                    <Icon name="more" color={colors.ink} />
+                    <Icon name="more" color={colors.icon} />
                   </Pressable>
                 </View>
               </>
@@ -400,11 +398,11 @@ export function DeckLibrary({
                     onPress={
                       onFolders || (() => nav.go({ type: "all-folders" }))
                     }
-                    style={l.textAction}
+                    style={l.libraryTabAction}
                   >
                     <Text style={l.unselectedTab}>폴더</Text>
                   </Pressable>
-                  <Text style={l.selectedTab}>학습 세트</Text>
+                  <Text accessibilityRole="tab" accessibilityState={{ selected: true }} style={l.selectedTab}>학습 세트</Text>
                 </View>
               </>
             )}
@@ -415,41 +413,54 @@ export function DeckLibrary({
               onChangeText={setQuery}
               returnKeyType="search"
             />
-            {!folderId && (
-              <Chips
-                value={tab}
-                options={[
-                  ["all", "전체 세트"],
-                  ["root", "미분류"],
-                ]}
-                onChange={setTab}
-              />
-            )}
-            <View style={[s.row, { flexWrap: "nowrap" }]}>
-              <Select
-                label="학습 상태"
-                value={filter}
-                options={[
-                  ["all", "모든 학습 상태"],
-                  ["unlearned", "학습 중"],
-                  ["completed", "학습 완료"],
-                ]}
-                onChange={setFilter}
-              />
-              <Select
-                label="정렬"
-                value={sort}
-                options={sortOptions}
-                onChange={(value) => {
-                  void attempt(() =>
-                    store.setPreferences(
-                      folderId
-                        ? { folderDeckSort: value }
-                        : { deckSort: value },
-                    ),
+            <View style={[s.row, { justifyContent: "space-between", flexWrap: "nowrap", gap: 8, alignItems: "center" }]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 6, alignItems: "center" }}
+                style={{ flexShrink: 1 }}
+              >
+                {filterOptions.map(([key, label]) => {
+                  const selected = filter === key;
+                  return (
+                    <Pressable
+                      key={key}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => setFilter(key)}
+                      style={[
+                        l.filterChip,
+                        selected && l.filterChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          l.filterChipText,
+                          selected && l.filterChipTextActive,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </Pressable>
                   );
-                }}
-              />
+                })}
+              </ScrollView>
+              <View style={{ minWidth: 120, flexShrink: 0 }}>
+                <Select
+                  label="정렬"
+                  value={sort}
+                  options={sortOptions}
+                  onChange={(value) => {
+                    void attempt(() =>
+                      store.setPreferences(
+                        folderId
+                          ? { folderDeckSort: value }
+                          : { deckSort: value },
+                      ),
+                    );
+                  }}
+                />
+              </View>
             </View>
             <View
               style={[
@@ -472,7 +483,7 @@ export function DeckLibrary({
           </View>
         }
         ListEmptyComponent={
-          <View style={{ gap: 14 }}>
+          <View style={{ gap: 10 }}>
             <Empty
               title={
                 query || filter !== "all"
@@ -480,14 +491,13 @@ export function DeckLibrary({
                   : "첫 세트를 만들어 보세요"
               }
             />
-            {query || filter !== "all" || tab !== "all" ? (
+            {query || filter !== "all" ? (
               <Button
                 title="검색 및 필터 초기화"
                 tone="secondary"
                 onPress={() => {
                   setQuery("");
                   setFilter("all");
-                  setTab("all");
                 }}
               />
             ) : (
@@ -563,13 +573,13 @@ export function FolderLibrary({
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={
-        <View style={{ gap: 20 }}>
+        <View style={{ gap: 12 }}>
           <View style={l.libraryTabs}>
-            <Text style={l.selectedTab}>폴더</Text>
+            <Text accessibilityRole="tab" accessibilityState={{ selected: true }} style={l.selectedTab}>폴더</Text>
             <Pressable
               accessibilityRole="button"
               onPress={onDecks || (() => nav.go({ type: "all-decks" }))}
-              style={l.textAction}
+              style={l.libraryTabAction}
             >
               <Text style={l.unselectedTab}>학습 세트</Text>
             </Pressable>
@@ -597,23 +607,24 @@ export function FolderLibrary({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${item.title} 폴더 열기`}
-          style={s.box}
-          onPress={() => nav.go({ type: "folder", folderId: item.id })}
+              onPress={() => nav.go({ type: "folder", folderId: item.id })}
         >
-          <View style={[s.row, { gap: 14, flexWrap: "nowrap" }]}>
-            <View style={[l.deckIcon, { backgroundColor: colors.peach }]}>
-              <Icon name="folder" color={colors.warm} size={26} />
-            </View>
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.h2}>{item.title}</Text>
-              <Text style={s.muted}>
-                학습 세트 {decks.filter((d) => d.folderId === item.id).length}개
-              </Text>
-            </View>
-            <Icon name="chevron" size={18} color={colors.muted} />
-          </View>
-          {Boolean(item.description) && (
-            <Text style={s.muted}>{item.description}</Text>
+          {({ pressed }) => (
+            <CollectionSurface pressed={pressed} kind="folder">
+              <View style={[s.row, { gap: 10, flexWrap: "nowrap" }]}>
+                <CollectionIcon kind="folder" />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={s.h2}>{item.title}</Text>
+                  <Text style={s.muted}>
+                    학습 세트 {decks.filter((d) => d.folderId === item.id).length}개
+                  </Text>
+                </View>
+                <Icon name="chevron" size={18} color={colors.icon} />
+              </View>
+              {Boolean(item.description) && (
+                <Text style={s.muted}>{item.description}</Text>
+              )}
+            </CollectionSurface>
           )}
         </Pressable>
       )}
@@ -648,7 +659,7 @@ export function Search({ nav }: { nav: Navigation }) {
       keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={
-        <View style={{ gap: 20 }}>
+        <View style={{ gap: 12 }}>
           <View style={{ gap: 6 }}>
             <Text style={s.title}>검색</Text>
           </View>
@@ -710,7 +721,7 @@ export function Search({ nav }: { nav: Navigation }) {
   );
 }
 const createStyles = (colors: Palette) => StyleSheet.create({
-  listPage: { gap: 10 },
+  listPage: { gap: 8 },
   textAction: {
     minHeight: 44,
     paddingHorizontal: 4,
@@ -719,44 +730,80 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     gap: 4,
   },
   search: {
-    backgroundColor: colors.subtle,
-    paddingHorizontal: 17,
-    minHeight: 54,
-    borderRadius: 17,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.input,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    borderRadius: radius.control,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
   stats: {
     flexDirection: "row",
-    paddingVertical: 20,
+    paddingVertical: 12,
     backgroundColor: colors.card,
-    borderRadius: 22,
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  stat: { flex: 1, alignItems: "center", gap: 6, paddingHorizontal: 5 },
+  stat: { flex: 1, alignItems: "center", gap: 2, paddingHorizontal: 5 },
   deckIcon: {
-    width: 50,
-    height: 54,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: radius.control,
     alignItems: "center",
     justifyContent: "center",
   },
   libraryTabs: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 28,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
+    gap: 4,
+    padding: 4,
+    borderRadius: radius.control + 4,
+    backgroundColor: colors.subtle,
   },
   selectedTab: {
-    fontSize: 16,
-    fontWeight: "800",
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: "center",
+    fontWeight: "600",
     color: colors.primary,
-    paddingVertical: 15,
-    borderBottomWidth: 3,
-    borderColor: colors.primary,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: radius.control,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    overflow: "hidden",
   },
-  unselectedTab: { fontSize: 16, fontWeight: "600", color: colors.muted },
+  libraryTabAction: { flex: 1, minHeight: 44, paddingVertical: 11, alignItems: "center", justifyContent: "center" },
+  unselectedTab: { fontSize: 14, lineHeight: 22, fontWeight: "500", color: colors.muted },
+  filterChip: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.control + 2,
+    backgroundColor: colors.subtle,
+    borderWidth: 1,
+    borderColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterChipActive: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    boxShadow: `0px 1px 2px ${colors.shadow}`,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.muted,
+  },
+  filterChipTextActive: {
+    fontWeight: "700",
+    color: colors.primary,
+  },
 });

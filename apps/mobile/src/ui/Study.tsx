@@ -1,5 +1,6 @@
-import { useUI, useThemedStyles, type Palette } from './theme';
+import { radius, useUI, useThemedStyles, type Palette } from './theme';
 import { Text } from './Typography';
+import * as Haptics from 'expo-haptics';
 import React, {
   useEffect,
   useLayoutEffect,
@@ -280,7 +281,7 @@ export function Study({
               style={{ width: 1, height: 42, backgroundColor: colors.border }}
             />
             <View style={{ alignItems: "center", gap: 6 }}>
-              <Text style={[s.title, { color: colors.warm }]}>
+              <Text style={[s.title, { color: colors.muted }]}>
                 {own.length - learned}
               </Text>
               <Text style={s.muted}>다시 볼 카드</Text>
@@ -324,6 +325,9 @@ export function Study({
       swipe.transitioning
     )
       return;
+    if (known) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
     const id = current.id;
     ratingInFlight.current = true;
     setBusy(true);
@@ -389,7 +393,7 @@ export function Study({
           <Text
             style={[
               study.face,
-              back && { backgroundColor: colors.mint, color: colors.success },
+              back && { backgroundColor: colors.subtle, color: colors.success },
             ]}
           >
             {back ? "답변" : "질문"}
@@ -404,7 +408,7 @@ export function Study({
             }}
             style={study.smallButton}
           >
-            <Icon name="pencil" size={17} color={colors.muted} />
+            <Icon name="pencil" size={17} color={colors.icon} />
           </Pressable>
         </Pressable>
         <Pressable onPress={flip} style={{ flex: 1 }} accessible={false}>
@@ -441,7 +445,7 @@ export function Study({
           onPress={flip}
           style={study.cardFooter}
         >
-          <Icon name="rotate" size={15} color={colors.muted} />
+          <Icon name="rotate" size={15} color={colors.icon} />
           <Text style={s.muted}>{back ? "질문 보기" : "답변 보기"}</Text>
         </Pressable>
       </Animated.View>
@@ -460,7 +464,7 @@ export function Study({
             onPress={onExit}
             style={study.smallButton}
           >
-            <Icon name="close" size={22} color={colors.ink} />
+            <Icon name="close" size={22} color={colors.icon} />
           </Pressable>
           <View style={{ flex: 1, alignItems: "center", gap: 3 }}>
             <Text numberOfLines={1} style={[s.text, { fontWeight: "700" }]}>
@@ -474,7 +478,7 @@ export function Study({
             카드 {session.index + 1}/{session.ids.length}
           </Text>
         </View>
-        <View style={{ paddingHorizontal: 22, paddingTop: 8, gap: 10 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, gap: 10 }}>
           <Progress
             learned={session.index}
             total={session.ids.length}
@@ -547,7 +551,7 @@ export function Study({
                 { opacity: session.index === 0 ? 0.3 : 1 },
               ]}
             >
-              <Icon name="back" size={20} color={colors.ink} />
+              <Icon name="back" size={20} color={colors.icon} />
             </Pressable>
 
             <Pressable
@@ -557,7 +561,7 @@ export function Study({
               onPress={() => swipe.navigate(1)}
               style={study.navButton}
             >
-              <Icon name="arrow" size={20} color={colors.ink} />
+              <Icon name="arrow" size={20} color={colors.icon} />
             </Pressable>
           </View>
           <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
@@ -610,7 +614,7 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     width: "100%",
     maxWidth: 720,
     alignSelf: "center",
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 24,
   },
@@ -618,9 +622,9 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     height: "100%",
     backgroundColor: colors.card,
     borderWidth: 1,
-    borderRadius: 26,
+    borderRadius: radius.card,
     padding: 18,
-    boxShadow: "0px 8px 24px #24234708",
+    boxShadow: `0px 4px 16px ${colors.shadow}`,
   },
   faceLayer: {
     position: "absolute",
@@ -662,19 +666,19 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     gap: 8,
     minHeight: 42,
   },
-  stack: { position: "absolute", height: 100, borderRadius: 26 },
+  stack: { position: "absolute", height: 100, borderRadius: radius.card },
   dock: {
     width: "100%",
     maxWidth: 720,
     alignSelf: "center",
-    paddingHorizontal: 22,
+    paddingHorizontal: 20,
     paddingBottom: 14,
     gap: 10,
   },
   navButton: {
     width: 46,
     height: 44,
-    borderRadius: 14,
+    borderRadius: radius.control,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
@@ -684,10 +688,9 @@ const createStyles = (colors: Palette) => StyleSheet.create({
   celebration: {
     width: 96,
     height: 96,
-    borderRadius: 32,
+    borderRadius: 24,
     backgroundColor: colors.pale,
     alignItems: "center",
     justifyContent: "center",
-    transform: [{ rotate: "-8deg" }],
   },
 });

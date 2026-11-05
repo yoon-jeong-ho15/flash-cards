@@ -411,7 +411,7 @@ export function DeckEditor({
             />
           </View>
         )}
-        <View style={[s.box, { gap: 16 }]}>
+        <View style={[s.box, { gap: 12 }]}>
           <Field
             label="학습 세트 제목"
             placeholder="예: 이번 주에 외울 영어 표현"
@@ -431,7 +431,7 @@ export function DeckEditor({
             <Icon
               name={details ? "close" : "plus"}
               size={16}
-              color={colors.muted}
+              color={colors.icon}
             />
           </Pressable>
           {details && (
@@ -479,11 +479,11 @@ export function DeckEditor({
               disabled={busy}
               onPress={() => selectCard(index)}
               style={{
-                minWidth: 54,
-                minHeight: 52,
-                paddingHorizontal: 16,
-                borderRadius: 16,
-                borderWidth: 1.5,
+                minWidth: 44,
+                minHeight: 44,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
                 borderColor:
                   index === selected ? colors.primary : colors.border,
                 backgroundColor: index === selected ? colors.pale : colors.card,
@@ -494,7 +494,7 @@ export function DeckEditor({
               <Text
                 style={{
                   fontSize: 15,
-                  fontWeight: "800",
+                  fontWeight: "600",
                   color: index === selected ? colors.primary : colors.muted,
                 }}
               >
@@ -508,12 +508,12 @@ export function DeckEditor({
             disabled={busy}
             onPress={addCard}
             style={{
-              width: 52,
-              minHeight: 52,
-              borderRadius: 16,
-              borderWidth: 1.5,
+              width: 44,
+              minHeight: 44,
+              borderRadius: 10,
+              borderWidth: 1,
               borderStyle: "dashed",
-              borderColor: colors.primary,
+              borderColor: colors.input,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -522,7 +522,7 @@ export function DeckEditor({
           </Pressable>
         </ScrollView>
         {card && (
-          <View style={[s.box, { padding: 16, gap: 16 }]}>
+          <View style={[s.box, { padding: 12, gap: 10 }]}>
             <View style={[s.row, { justifyContent: "space-between" }]}>
               <View style={s.row}>
                 <View
@@ -533,7 +533,7 @@ export function DeckEditor({
                     borderRadius: 3,
                   }}
                 />
-                <Text style={[s.label, { color: colors.primary }]}>
+                <Text style={s.label}>
                   CARD {String(selected + 1).padStart(2, "0")}
                 </Text>
               </View>
@@ -549,7 +549,7 @@ export function DeckEditor({
                   justifyContent: "center",
                 }}
               >
-                <Icon name="more" color={colors.muted} />
+                <Icon name="more" color={colors.icon} />
               </Pressable>
             </View>
             <CardComposer

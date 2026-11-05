@@ -1,3 +1,4 @@
+import { CollectionIcon, CollectionSurface } from './CollectionSurface';
 import { useUI } from './theme';
 import { Text } from './Typography';
 import React, { useState } from "react";
@@ -37,16 +38,18 @@ export function StudyFolder({
       contentContainerStyle={[s.page, { gap: 10 }]}
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={
-        <View style={{ gap: 20, marginBottom: 4 }}>
-          <View style={{ gap: 8 }}>
-            <Icon name="folder" size={30} color={colors.warm} />
-            <Text style={s.title}>{folder.title}</Text>
-            {Boolean(folder.description) && (
-              <Text style={s.muted}>{folder.description}</Text>
-            )}
-            <Text style={s.label}>
-              학습 세트 {decks.length}개 · 카드 {count}장
-            </Text>
+        <View style={{ gap: 14, marginBottom: 4 }}>
+          <View style={[s.row, { flexWrap: "nowrap", alignItems: "flex-start", gap: 12 }]}>
+            <CollectionIcon kind="folder" size={40} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={s.title}>{folder.title}</Text>
+              {Boolean(folder.description) && (
+                <Text style={s.muted}>{folder.description}</Text>
+              )}
+              <Text style={s.label}>
+                학습 세트 {decks.length}개 · 카드 {count}장
+              </Text>
+            </View>
           </View>
           <View style={{ gap: 8 }}>
             <Button
@@ -60,6 +63,7 @@ export function StudyFolder({
             <Button
               title="폴더 전체 랜덤 학습"
               icon="shuffle"
+              tone="secondary"
               disabled={!count}
               onPress={() =>
                 nav.go({ type: "folder-study", folderId, shuffle: true })
@@ -81,16 +85,16 @@ export function StudyFolder({
         const cards = state.cards.filter((card) => card.deckId === item.id);
         const learned = cards.filter((card) => card.learned).length;
         return (
-          <View style={[s.box, { gap: 12 }]}>
+          <CollectionSurface kind="deck" style={{ gap: 12 }}>
             <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
-              <Icon name="layers" size={24} />
+              <CollectionIcon kind="deck" />
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={s.h2}>{item.title}</Text>
-                <Text style={s.muted}>
-                  {cards.length
-                    ? `카드 ${cards.length}장 · 기억한 카드 ${learned}장`
-                    : "학습할 카드가 없어요"}
-                </Text>
+                  <Text style={s.h2}>{item.title}</Text>
+                  <Text style={s.muted}>
+                    {cards.length
+                      ? `카드 ${cards.length}장 · 기억한 카드 ${learned}장`
+                      : "학습할 카드가 없어요"}
+                  </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -105,7 +109,7 @@ export function StudyFolder({
                   flexShrink: 0,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: colors.pale,
+                  backgroundColor: colors.subtle,
                   opacity: !cards.length ? 0.4 : pressed ? 0.7 : 1,
                 })}
                 onPress={() =>
@@ -116,7 +120,7 @@ export function StudyFolder({
               </Pressable>
             </View>
             <Progress learned={learned} total={cards.length} compact />
-          </View>
+          </CollectionSurface>
         );
       }}
     />
@@ -148,10 +152,12 @@ export function DeckStudyOptions({
         contentContainerStyle={s.page}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ gap: 8 }}>
-          <Icon name="layers" size={30} />
-          <Text style={s.title}>{deck.title}</Text>
-          <Text style={s.muted}>전체 카드 {count}장</Text>
+        <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
+          <CollectionIcon kind="deck" size={40} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={s.title}>{deck.title}</Text>
+            <Text style={s.muted}>전체 카드 {count}장</Text>
+          </View>
         </View>
         <View style={{ gap: 12 }}>
           <Text style={s.h2}>학습 순서</Text>
@@ -177,11 +183,11 @@ export function DeckStudyOptions({
                 },
               ]}
             >
-              <View style={[s.row, { justifyContent: "space-between" }]}>
-                <Icon name={icon} size={26} />
+              <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
+                <Icon name={icon} size={22} />
+                <Text style={[s.h2, { flex: 1 }]}>{title}</Text>
                 {shuffle === value && <Icon name="check" />}
               </View>
-              <Text style={s.h2}>{title}</Text>
             </Pressable>
           ))}
         </View>

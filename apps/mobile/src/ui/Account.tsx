@@ -26,30 +26,25 @@ export function Account() {
   };
   return (
     <ScrollView
-      contentContainerStyle={[s.page, { gap: 24 }]}
+      contentContainerStyle={[s.page, { gap: 12 }]}
       showsVerticalScrollIndicator={false}
     >
       <View
-        style={[s.box, { alignItems: "center", paddingVertical: 28, gap: 12 }]}
+        style={[s.box, { gap: 12 }]}
       >
-        <View
-          style={{
-            width: 76,
-            height: 76,
-            borderRadius: 28,
-            backgroundColor: colors.pale,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Icon name="user" size={36} />
+        <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
+          <View style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 22,
+            borderWidth: 1, borderColor: colors.border, backgroundColor: colors.iconBg,
+            alignItems: "center", justifyContent: "center" }}>
+            <Icon name="user" size={22} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={s.h2}>{state.user?.displayName || "나의 학습 공간"}</Text>
+            {state.user?.email && <Text style={s.muted}>{state.user.email}</Text>}
+          </View>
         </View>
-        <Text style={s.title}>
-          {state.user?.displayName || "나의 학습 공간"}
-        </Text>
-        {state.user?.email && <Text style={s.muted}>{state.user.email}</Text>}
         {!state.user && (!expoGo || mockAuthEnabled) && (
-          <View style={{ alignSelf: "stretch", marginTop: 8 }}>
+          <View style={{ alignSelf: "stretch" }}>
             <Button
               title={
                 mockAuthEnabled
@@ -67,15 +62,15 @@ export function Account() {
           </View>
         )}
         {mockAuthEnabled && state.user && (
-          <Text style={[s.label, { color: colors.primary }]}>
+          <Text style={[s.label, { color: colors.ink }]}>
             테스트 로그인 · 기기 저장 전용
           </Text>
         )}
       </View>
       <DisplaySettings />
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 10 }}>
         <Text style={s.h2}>지금까지 쌓은 배움</Text>
-        <View style={[s.box, { gap: 20 }]}>
+        <View style={[s.box, { gap: 12 }]}>
           <View style={[s.row, { justifyContent: "space-around" }]}>
             {[
               [state.decks.length, "학습 세트"],
@@ -84,7 +79,7 @@ export function Account() {
             ].map(([value, label]) => (
               <View key={label} style={{ alignItems: "center", gap: 6 }}>
                 <Text
-                  style={[s.title, { color: colors.primary, fontSize: 25 }]}
+                  style={[s.title, { color: colors.ink, fontSize: 22, lineHeight: 28 }]}
                 >
                   {value}
                 </Text>
@@ -95,17 +90,17 @@ export function Account() {
           <Progress learned={learned} total={state.cards.length} />
         </View>
       </View>
-      <View style={{ gap: 14 }}>
+      <View style={{ gap: 10 }}>
         <Text style={s.h2}>저장 및 동기화</Text>
-        <View style={[s.box, { gap: 16 }]}>
+        <View style={[s.box, { gap: 12 }]}>
           <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
             <View
               style={{
                 width: 42,
                 height: 42,
-                borderRadius: 14,
+                borderRadius: 10,
                 backgroundColor:
-                  state.status === "error" ? colors.dangerBg : colors.mint,
+                  state.status === "error" ? colors.dangerBg : colors.subtle,
                 alignItems: "center",
                 justifyContent: "center",
               }}
