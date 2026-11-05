@@ -103,3 +103,21 @@ test('study swipes navigate in both directions without flipping, while vertical 
     assert.deepEqual(messages, [], 'editing must not enable study gestures');
   } finally { close(); }
 });
+
+test('card appearance updates fonts and dark theme without changing content, formatting or editable state', () => {
+  const { window, messages, close } = document();
+  try {
+    window.nativeReceive({ type: 'init', editable: true, html: '<p><strong>내 질문</strong></p>', fontSize: 30, dark: true, uiScale: 1.2 });
+    const root = window.document.getElementById('content');
+    assert.equal(window.document.documentElement.dataset.theme, 'dark');
+    assert.equal(window.document.body.style.getPropertyValue('--content-font-size'), '30px');
+    assert.equal(window.document.body.style.getPropertyValue('--toolbar-font-size'), '16.8px');
+    window.nativeReceive({ type: 'appearance', fontSize: 18, dark: false, presentation: 'study-back' });
+    assert.equal(window.document.documentElement.dataset.theme, 'light');
+    assert.equal(window.document.body.style.getPropertyValue('--content-font-size'), '18px');
+    assert.equal(root.querySelector('strong').textContent, '내 질문');
+    assert.ok(root.querySelector('[contenteditable="true"]'));
+    window.nativeReceive({ type: 'get', id: 'appearance-save' });
+    assert.match(messages.find(message => message.id === 'appearance-save').html, /<strong>내 질문<\/strong>/);
+  } finally { close(); }
+});

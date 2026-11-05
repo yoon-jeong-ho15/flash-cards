@@ -1,28 +1,11 @@
+import { useUI, useThemedStyles, type Palette } from './theme';
+import { Text } from './Typography';
 import React, { useDeferredValue, useMemo, useState } from "react";
-import {
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Deck, DeckSortOption } from "../core/types";
 import { cardMatches, folderCards, matches, sortDecks } from "../core/content";
 import { store, useStore } from "../platform/runtime";
-import {
-  Button,
-  Chips,
-  Empty,
-  Field,
-  Progress,
-  Select,
-  Sheet,
-  attempt,
-  colors,
-  confirm,
-  s,
-} from "./kit";
+import { Button, Chips, Empty, Field, Progress, Select, Sheet, attempt, confirm } from "./kit";
 import { Icon } from "./Icon";
 import { FolderForm } from "./FolderForm";
 import type { Navigation } from "./navigation";
@@ -54,6 +37,8 @@ function Section({
   action?: string;
   onPress?: () => void;
 }) {
+  const { colors, s } = useUI();
+  const l = useThemedStyles(createStyles);
   return (
     <View
       style={[s.row, { justifyContent: "space-between", flexWrap: "nowrap" }]}
@@ -75,6 +60,8 @@ function Section({
   );
 }
 export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
+  const { colors, s } = useUI();
+  const l = useThemedStyles(createStyles);
   const { cards, folders } = useStore();
   const own = cards.filter((c) => c.deckId === deck.id);
   const learned = own.filter((c) => c.learned).length;
@@ -139,6 +126,8 @@ export function Dashboard({
   nav: Navigation;
   onNewFolder: () => void;
 }) {
+  const { colors, s } = useUI();
+  const l = useThemedStyles(createStyles);
   const { cards, decks, folders, user } = useStore();
   const [creating, setCreating] = useState(false);
   const recent = sortDecks(decks, "date-desc");
@@ -270,7 +259,7 @@ export function Dashboard({
                   { width: 170, backgroundColor: colors.peach, borderWidth: 0 },
                 ]}
               >
-                <Icon name="folder" color="#BA7549" size={26} />
+                <Icon name="folder" color={colors.warm} size={26} />
                 <Text numberOfLines={1} style={[s.text, { fontWeight: "700" }]}>
                   {folder.title}
                 </Text>
@@ -286,7 +275,7 @@ export function Dashboard({
             onPress={onNewFolder}
             style={[s.box, s.row, { gap: 14 }]}
           >
-            <Icon name="folder" size={26} color="#BA7549" />
+            <Icon name="folder" size={26} color={colors.warm} />
             <View style={{ flex: 1 }}>
               <Text style={[s.text, { fontWeight: "600" }]}>
                 배우는 주제마다, 나만의 폴더
@@ -308,6 +297,8 @@ export function DeckLibrary({
   folderId?: string;
   onFolders?: () => void;
 }) {
+  const { colors, s } = useUI();
+  const l = useThemedStyles(createStyles);
   const state = useStore();
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
@@ -381,7 +372,7 @@ export function DeckLibrary({
                 <View style={[s.row, { flexWrap: "nowrap" }]}>
                   <View style={{ flex: 1, gap: 6 }}>
                     <View style={s.row}>
-                      <Icon name="folder" color="#BA7549" />
+                      <Icon name="folder" color={colors.warm} />
                       <Text style={s.label}>내 폴더</Text>
                     </View>
                     <Text style={s.title}>{folder.title}</Text>
@@ -555,6 +546,8 @@ export function FolderLibrary({
   onNewFolder: () => void;
   onDecks?: () => void;
 }) {
+  const { colors, s } = useUI();
+  const l = useThemedStyles(createStyles);
   const { folders, decks, preferences } = useStore();
   const [query, setQuery] = useState("");
   const sort = preferences.folderSort || "date-desc";
@@ -609,7 +602,7 @@ export function FolderLibrary({
         >
           <View style={[s.row, { gap: 14, flexWrap: "nowrap" }]}>
             <View style={[l.deckIcon, { backgroundColor: colors.peach }]}>
-              <Icon name="folder" color="#BA7549" size={26} />
+              <Icon name="folder" color={colors.warm} size={26} />
             </View>
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={s.h2}>{item.title}</Text>
@@ -630,6 +623,8 @@ export function FolderLibrary({
 export { StudyLibrary } from "./StudyLibrary";
 
 export function Search({ nav }: { nav: Navigation }) {
+  const { colors, s } = useUI();
+  const l = useThemedStyles(createStyles);
   const { decks, folders, cards } = useStore();
   const [query, setQuery] = useState("");
   const q = useDeferredValue(query);
@@ -714,7 +709,7 @@ export function Search({ nav }: { nav: Navigation }) {
     />
   );
 }
-const l = StyleSheet.create({
+const createStyles = (colors: Palette) => StyleSheet.create({
   listPage: { gap: 10 },
   textAction: {
     minHeight: 44,
@@ -724,7 +719,7 @@ const l = StyleSheet.create({
     gap: 4,
   },
   search: {
-    backgroundColor: "#EDEEF5",
+    backgroundColor: colors.subtle,
     paddingHorizontal: 17,
     minHeight: 54,
     borderRadius: 17,

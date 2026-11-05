@@ -109,3 +109,7 @@ pnpm --filter @flashcards/mobile export:check
 `export:check`는 iOS·Android JavaScript 번들과 에셋의 Metro 빌드를 검증하며 서명된 네이티브 바이너리를 생성하지 않습니다. EAS CLI를 사용하는 경우 `eas.json`의 development / preview / production 프로필로 별도 빌드합니다. 실제 Google 로그인, 카메라 권한, 네이티브 키보드와 WebView 편집 상호작용은 실제 기기 또는 시뮬레이터에서 확인해야 합니다.
 
 코드 구성: `src/core`는 프레임워크 독립 저장·검색·학습 로직, `src/platform`은 Firebase·기기 API, `src/ui`는 화면, `editor`는 브라우저 편집기 원본입니다. `src/editor/document.generated.ts`는 `build:editor`로 재생성하며 함께 커밋합니다.
+
+## 화면 설정
+
+마이 페이지의 화면 설정에서 UI 글자 크기(80~150%), 질문·답변 본문 크기(각각 12~40px), 화면 모드(기기 설정·라이트·다크)를 조정합니다. 변경은 즉시 반영되며 기기에 저장되어 계정 전환과 앱 재실행 후에도 유지됩니다. 카드 본문 크기는 UI 글자 크기와 독립적이며, 카드 목록·학습 화면·편집기에서 동일하게 적용됩니다. 화면 설정 초기화는 자료를 삭제하지 않습니다.

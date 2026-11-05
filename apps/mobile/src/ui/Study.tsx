@@ -1,3 +1,5 @@
+import { useUI, useThemedStyles, type Palette } from './theme';
+import { Text } from './Typography';
 import React, {
   useEffect,
   useLayoutEffect,
@@ -5,34 +7,13 @@ import React, {
   useRef,
   useState,
 } from "react";
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Card, CardInput } from "../core/types";
 import { folderCards, orderedCards, orderedFolderCards } from "../core/content";
 import { reconcileSession, startSession, stepSession } from "../core/study";
 import { RichText } from "../editor/RichText";
 import { store, useStore } from "../platform/runtime";
-import {
-  Attachment,
-  Button,
-  Empty,
-  Progress,
-  ProgressRing,
-  Sheet,
-  colors,
-  confirm,
-  s,
-  showError,
-  useImage,
-} from "./kit";
+import { Attachment, Button, Empty, Progress, ProgressRing, Sheet, confirm, showError, useImage } from "./kit";
 import { CardComposer, type ComposerHandle } from "./CardComposer";
 import { Icon } from "./Icon";
 import { useSwipeMotion } from "./useSwipeMotion";
@@ -90,6 +71,8 @@ export function Study({
   unlearnedOnly?: boolean;
   onExit: () => void;
 }) {
+  const { colors, s } = useUI();
+  const study = useThemedStyles(createStyles);
   const { decks, cards, folders, preferences } = useStore();
   const deck = decks.find((d) => d.id === deckId);
   const source =
@@ -297,7 +280,7 @@ export function Study({
               style={{ width: 1, height: 42, backgroundColor: colors.border }}
             />
             <View style={{ alignItems: "center", gap: 6 }}>
-              <Text style={[s.title, { color: "#BA7549" }]}>
+              <Text style={[s.title, { color: colors.warm }]}>
                 {own.length - learned}
               </Text>
               <Text style={s.muted}>다시 볼 카드</Text>
@@ -374,7 +357,7 @@ export function Study({
           study.card,
           study.faceLayer,
           {
-            borderColor: back ? "#C9C3FF" : colors.border,
+            borderColor: back ? colors.border : colors.border,
             transform: [
               { perspective: 1200 },
               {
@@ -518,7 +501,7 @@ export function Study({
                   left: 18,
                   right: 18,
                   bottom: -10,
-                  backgroundColor: "#E8E6F5",
+                  backgroundColor: colors.stackBack,
                 },
               ]}
             />
@@ -526,7 +509,7 @@ export function Study({
               pointerEvents="none"
               style={[
                 study.stack,
-                { left: 9, right: 9, bottom: -5, backgroundColor: "#F0EEFA" },
+                { left: 9, right: 9, bottom: -5, backgroundColor: colors.stackFront },
               ]}
             />
             <View
@@ -603,7 +586,7 @@ export function Study({
     </>
   );
 }
-const study = StyleSheet.create({
+const createStyles = (colors: Palette) => StyleSheet.create({
   bar: {
     paddingHorizontal: 18,
     paddingVertical: 12,

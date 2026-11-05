@@ -1,3 +1,4 @@
+import { useUI } from './theme';
 import React, {
   forwardRef,
   useImperativeHandle,
@@ -8,15 +9,7 @@ import { Alert, View } from "react-native";
 import type { CardInput } from "../core/types";
 import { RichText, type RichTextHandle } from "../editor/RichText";
 import { chooseImage } from "../platform/images";
-import {
-  Attachment,
-  Button,
-  Chips,
-  colors,
-  s,
-  showError,
-  useImage,
-} from "./kit";
+import { Attachment, Button, Chips, showError, useImage } from "./kit";
 
 export interface ComposerHandle {
   flush(): Promise<CardInput>;
@@ -25,6 +18,7 @@ export const CardComposer = forwardRef<
   ComposerHandle,
   { card: CardInput; onChange: (card: CardInput) => void }
 >(function CardComposer({ card, onChange }, ref) {
+  const { colors, s } = useUI();
   const [side, setSide] = useState<"front" | "back">("front");
   const [busy, setBusy] = useState(false);
   const editor = useRef<RichTextHandle>(null);
@@ -95,6 +89,7 @@ export const CardComposer = forwardRef<
           ref={editor}
           key={side}
           html={card[field]}
+          side={side}
           editable
           label={side === "front" ? "카드 앞면" : "카드 뒷면"}
           onChange={(html) => update({ [field]: html })}

@@ -1,7 +1,8 @@
+import { useUI } from './theme';
 import React from "react";
 import { View } from "react-native";
 import { Lucide, type LucideIconName } from "@react-native-vector-icons/lucide";
-import { colors } from "./theme";
+
 
 export const iconNames = {
   menu: "menu",
@@ -40,12 +41,14 @@ export const iconFonts = {
 export function Icon({
   name,
   size = 20,
-  color = colors.primary,
+  color: colorProp,
 }: {
   name: IconName;
   size?: number;
   color?: string;
 }) {
+  const { colors, s } = useUI();
+  const color = colorProp ?? colors.primary;
   return (
     <View
       pointerEvents="none"

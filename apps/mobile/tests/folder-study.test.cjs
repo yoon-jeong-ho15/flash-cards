@@ -5,7 +5,7 @@ const esbuild = require('esbuild');
 const { harness: storeHarness, item, load } = require('./helpers.cjs');
 const { folderCards } = load('core/content.ts');
 
-const externals = ['react', 'react-native', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library'];
+const externals = ['react', 'react-native', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library', './Typography', './theme'];
 const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail', 'StudySetup'].map(name => [name, esbuild.buildSync({
   entryPoints: [path.resolve(__dirname, `../src/ui/${name}.tsx`)], bundle: true, platform: 'node', format: 'cjs',
   write: false, external: externals, tsconfigRaw: { compilerOptions: { jsx: 'react' } },
@@ -40,6 +40,8 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     ...Object.fromEntries(['View', 'Text', 'Pressable', 'ScrollView', 'FlatList', 'ActivityIndicator'].map(name => [name, name])),
   };
   const mocks = {
+    './Typography': { Text: 'Text', TextInput: 'TextInput' },
+    './theme': { useUI: () => ({ colors: {}, s: {}, uiScale: 1, dark: false }), useThemedStyles: factory => factory({}) },
     react, 'react-native': native, '../platform/runtime': { store, useStore: () => store.getState() },
     '../editor/RichText': { RichText: 'RichText' }, './CardComposer': { CardComposer: 'CardComposer' },
     './Library': { deckAccent: () => ({ bg: '#FFFFFF', ink: '#000000' }) }, './FolderPicker': { FolderPicker: 'FolderPicker' },

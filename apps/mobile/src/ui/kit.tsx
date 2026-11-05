@@ -1,86 +1,11 @@
+import { Text, TextInput } from './Typography';
 import React, { createContext, useContext, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type TextInputProps,
-} from "react-native";
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type TextInputProps } from 'react-native';
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon, type IconName } from "./Icon";
-import { colors } from "./theme";
-export { colors } from "./theme";
-export const s = StyleSheet.create({
-  page: {
-    paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 32,
-    gap: 20,
-    width: "100%",
-    maxWidth: 720,
-    alignSelf: "center",
-  },
-  title: {
-    fontSize: 28,
-    lineHeight: 38,
-    letterSpacing: -0.8,
-    fontWeight: "800",
-    color: colors.ink,
-  },
-  h2: {
-    fontSize: 19,
-    lineHeight: 28,
-    letterSpacing: -0.4,
-    fontWeight: "700",
-    color: colors.ink,
-  },
-  text: { fontSize: 15, lineHeight: 24, color: colors.ink },
-  muted: { fontSize: 13, lineHeight: 21, color: colors.muted },
-  label: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
-  box: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    padding: 20,
-    borderRadius: 22,
-    gap: 12,
-  },
-  input: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: colors.ink,
-    fontSize: 15,
-  },
-  dock: {
-    paddingHorizontal: 22,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    gap: 10,
-  },
-  error: { color: colors.red, fontSize: 14, lineHeight: 22 },
-});
+import { useUI } from "./theme";
+export { colors, s, useUI } from "./theme";
 export function Button({
   title,
   onPress,
@@ -98,6 +23,7 @@ export function Button({
   icon?: IconName;
   iconPosition?: "start" | "end";
 }) {
+  const { colors, s } = useUI();
   return (
     <Pressable
       accessibilityRole="button"
@@ -119,13 +45,13 @@ export function Button({
           tone === "primary"
             ? colors.primary
             : tone === "danger"
-              ? "#FCECF0"
+              ? colors.dangerBg
               : colors.pale,
       })}
     >
       {busy ? (
         <ActivityIndicator
-          color={tone === "primary" ? "#FFF" : colors.primary}
+          color={tone === "primary" ? colors.onPrimary : colors.primary}
         />
       ) : (
         <>
@@ -135,7 +61,7 @@ export function Button({
               size={17}
               color={
                 tone === "primary"
-                  ? "#FFF"
+                  ? colors.onPrimary
                   : tone === "danger"
                     ? colors.red
                     : colors.primary
@@ -147,7 +73,7 @@ export function Button({
               flexShrink: 1,
               color:
                 tone === "primary"
-                  ? "#FFF"
+                  ? colors.onPrimary
                   : tone === "danger"
                     ? colors.red
                     : colors.primary,
@@ -164,7 +90,7 @@ export function Button({
               size={17}
               color={
                 tone === "primary"
-                  ? "#FFF"
+                  ? colors.onPrimary
                   : tone === "danger"
                     ? colors.red
                     : colors.primary
@@ -177,6 +103,7 @@ export function Button({
   );
 }
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
+  const { colors, s } = useUI();
   return (
     <View style={{ gap: 7 }}>
       <Text style={s.label}>{label}</Text>
@@ -202,6 +129,7 @@ export function Chips<T extends string>({
   options: Array<[T, string]>;
   onChange: (value: T) => void;
 }) {
+  const { colors, s } = useUI();
   return (
     <View style={[s.row, { gap: 8 }]}>
       {options.map(([key, label]) => (
@@ -215,9 +143,9 @@ export function Chips<T extends string>({
             paddingHorizontal: 16,
             paddingVertical: 11,
             borderRadius: 14,
-            backgroundColor: key === value ? colors.ink : colors.card,
+            backgroundColor: key === value ? colors.primary : colors.card,
             borderWidth: 1,
-            borderColor: key === value ? colors.ink : colors.border,
+            borderColor: key === value ? colors.primary : colors.border,
             opacity: pressed ? 0.7 : 1,
           })}
         >
@@ -225,7 +153,7 @@ export function Chips<T extends string>({
             style={{
               fontSize: 13,
               fontWeight: "600",
-              color: key === value ? "#FFFFFF" : colors.muted,
+              color: key === value ? colors.onPrimary : colors.muted,
             }}
           >
             {label}
@@ -246,6 +174,7 @@ export function Select<T extends string>({
   options: Array<[T, string]>;
   onChange: (value: T) => void;
 }) {
+  const { colors, s } = useUI();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -355,6 +284,7 @@ export function Progress({
   total: number;
   compact?: boolean;
 }) {
+  const { colors, s } = useUI();
   const percent = total
     ? Math.min(100, Math.max(0, Math.round((learned / total) * 100)))
     : 0;
@@ -396,6 +326,7 @@ export function Progress({
   );
 }
 export function ProgressRing({ percent }: { percent: number }) {
+  const { colors, s } = useUI();
   return (
     <View
       accessible
@@ -438,6 +369,7 @@ export function Empty({
   title?: string;
   detail?: string;
 }) {
+  const { colors, s } = useUI();
   return (
     <View
       style={[s.box, { paddingVertical: 36, alignItems: "center", gap: 10 }]}
@@ -465,6 +397,7 @@ export function Sheet({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const { colors, s } = useUI();
   return (
     <Modal
       animationType="slide"
@@ -530,6 +463,7 @@ export const confirm = (
 const ImageContext = createContext<(url: string) => void>(() => {});
 export const useImage = () => useContext(ImageContext);
 export function ImageProvider({ children }: { children: React.ReactNode }) {
+  const { colors, s } = useUI();
   const [url, setURL] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   return (

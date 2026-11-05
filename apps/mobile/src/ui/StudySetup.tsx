@@ -1,8 +1,10 @@
+import { useUI } from './theme';
+import { Text } from './Typography';
 import React, { useState } from "react";
-import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Pressable, ScrollView, View } from 'react-native';
 import { folderCards, sortDecks } from "../core/content";
 import { useStore } from "../platform/runtime";
-import { Button, Empty, Progress, colors, s } from "./kit";
+import { Button, Empty, Progress } from "./kit";
 import { Icon } from "./Icon";
 import type { Navigation } from "./navigation";
 
@@ -13,6 +15,7 @@ export function StudyFolder({
   folderId: string;
   nav: Navigation;
 }) {
+  const { colors, s } = useUI();
   const state = useStore();
   const folder = state.folders.find((item) => item.id === folderId);
   const decks = sortDecks(
@@ -36,7 +39,7 @@ export function StudyFolder({
       ListHeaderComponent={
         <View style={{ gap: 20, marginBottom: 4 }}>
           <View style={{ gap: 8 }}>
-            <Icon name="folder" size={30} color="#BA7549" />
+            <Icon name="folder" size={30} color={colors.warm} />
             <Text style={s.title}>{folder.title}</Text>
             {Boolean(folder.description) && (
               <Text style={s.muted}>{folder.description}</Text>
@@ -127,6 +130,7 @@ export function DeckStudyOptions({
   deckId: string;
   nav: Navigation;
 }) {
+  const { colors, s } = useUI();
   const { decks, cards } = useStore();
   const [shuffle, setShuffle] = useState(false);
   const deck = decks.find((item) => item.id === deckId);

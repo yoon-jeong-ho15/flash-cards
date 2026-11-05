@@ -1,15 +1,10 @@
+import { useUI, useThemedStyles, type Palette } from './theme';
+import { Text } from './Typography';
 import React, { useMemo } from "react";
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { FlatList, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { sortDecks } from "../core/content";
 import { useStore } from "../platform/runtime";
-import { Button, Empty, colors, s } from "./kit";
+import { Button, Empty } from "./kit";
 import { Icon } from "./Icon";
 import type { Navigation } from "./navigation";
 
@@ -28,9 +23,11 @@ const folderColor = (title: string) =>
   ];
 
 export function StudyLibrary({ nav }: { nav: Navigation }) {
+  const { colors, s, uiScale } = useUI();
+  const styles = useThemedStyles(createStyles);
   const { folders, decks, cards, preferences } = useStore();
   const { width, fontScale } = useWindowDimensions();
-  const columns = width < 350 || fontScale > 1.3 ? 1 : width >= 600 ? 3 : 2;
+  const columns = width < 350 || fontScale * uiScale > 1.3 ? 1 : width >= 600 ? 3 : 2;
   const { topics, unfiled } = useMemo(() => {
     const counts = new Map<string, { count: number; learned: number }>();
     cards.forEach((card) => {
@@ -160,7 +157,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                 >
                   <Icon name="folder" size={22} color={accent.ink} />
                 </View>
-                <Icon name="chevron" size={15} color="#A7A9B8" />
+                <Icon name="chevron" size={15} color={colors.muted} />
               </View>
               <View style={styles.folderInfo}>
                 <Text numberOfLines={2} style={styles.folderTitle}>
@@ -249,7 +246,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: Palette) => StyleSheet.create({
   page: { paddingTop: 14, paddingHorizontal: 22, paddingBottom: 32, gap: 0 },
   header: { paddingBottom: 14 },
   summary: {
@@ -262,7 +259,7 @@ const styles = StyleSheet.create({
   },
   summaryText: { fontSize: 12, lineHeight: 18, color: colors.muted },
   summaryValue: { fontWeight: "700", color: colors.ink },
-  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "#C8CAD5" },
+  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.border },
   sectionHeading: {
     flexDirection: "row",
     alignItems: "center",
@@ -284,7 +281,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E9EAF1",
+    borderColor: colors.border,
     backgroundColor: colors.card,
     gap: 13,
   },
@@ -309,7 +306,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   metadata: { fontSize: 11, lineHeight: 18, color: colors.muted },
-  separator: { color: "#C1C3CF" },
+  separator: { color: colors.border },
   progressArea: { gap: 7 },
   progressLabels: {
     flexDirection: "row",
@@ -319,11 +316,11 @@ const styles = StyleSheet.create({
   },
   progressLabel: { fontSize: 10, lineHeight: 15, color: colors.muted },
   progressValue: { fontSize: 10, lineHeight: 15, fontWeight: "700" },
-  progressTotal: { fontWeight: "400", color: "#9B9EAF" },
+  progressTotal: { fontWeight: "400", color: colors.muted },
   track: {
     height: 3,
     borderRadius: 2,
-    backgroundColor: "#F0F1F6",
+    backgroundColor: colors.track,
     overflow: "hidden",
   },
   fill: { height: "100%", borderRadius: 2 },
@@ -333,7 +330,7 @@ const styles = StyleSheet.create({
   deckList: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E9EAF1",
+    borderColor: colors.border,
     backgroundColor: colors.card,
     overflow: "hidden",
   },
@@ -344,12 +341,12 @@ const styles = StyleSheet.create({
     padding: 16,
     minHeight: 86,
   },
-  deckBorder: { borderTopWidth: 1, borderTopColor: "#EFF0F5" },
+  deckBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   deckIcon: {
     width: 40,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#F3F1FF",
+    backgroundColor: colors.pale,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -365,7 +362,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: "#F6F5FD",
+    backgroundColor: colors.subtle,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -1,12 +1,17 @@
+import { useUI } from './theme';
+import { Text } from './Typography';
 import React, { useState } from "react";
 import { isRunningInExpoGo } from "expo";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from 'react-native';
 import { login, logout } from "../platform/auth";
 import { mockAuthEnabled } from "../platform/testAuth";
 import { store, useStore } from "../platform/runtime";
 import { Icon } from "./Icon";
-import { Button, Progress, colors, confirm, s, showError } from "./kit";
+import { Button, Progress, confirm, showError } from "./kit";
+import { DisplaySettings } from "./DisplaySettings";
+
 export function Account() {
+  const { colors, s } = useUI();
   const state = useStore();
   const expoGo = isRunningInExpoGo();
   const [busy, setBusy] = useState(false);
@@ -67,6 +72,7 @@ export function Account() {
           </Text>
         )}
       </View>
+      <DisplaySettings />
       <View style={{ gap: 14 }}>
         <Text style={s.h2}>지금까지 쌓은 배움</Text>
         <View style={[s.box, { gap: 20 }]}>
@@ -99,7 +105,7 @@ export function Account() {
                 height: 42,
                 borderRadius: 14,
                 backgroundColor:
-                  state.status === "error" ? "#FCECF0" : colors.mint,
+                  state.status === "error" ? colors.dangerBg : colors.mint,
                 alignItems: "center",
                 justifyContent: "center",
               }}

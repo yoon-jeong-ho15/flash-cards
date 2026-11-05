@@ -1,26 +1,12 @@
+import { useUI } from './theme';
+import { Text } from './Typography';
 import React, { useEffect, useRef, useState } from "react";
-import {
-  Alert,
-  AppState,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Alert, AppState, Pressable, ScrollView, View } from 'react-native';
 import { randomUUID } from "expo-crypto";
 import type { CardInput, Draft } from "../core/types";
 import { hasContent, orderedCards, plainText } from "../core/content";
 import { store, useStore } from "../platform/runtime";
-import {
-  Button,
-  Empty,
-  Field,
-  Sheet,
-  attempt,
-  colors,
-  s,
-  showError,
-} from "./kit";
+import { Button, Empty, Field, Sheet, attempt, showError } from "./kit";
 import { CardComposer, type ComposerHandle } from "./CardComposer";
 import { FolderPicker } from "./FolderPicker";
 import { Icon } from "./Icon";
@@ -47,6 +33,7 @@ export function DeckEditor({
   onSaved: (id: string) => void;
   guard: React.MutableRefObject<(() => void) | null>;
 }) {
+  const { colors, s } = useUI();
   const state = useStore();
   const original = state.decks.find((d) => d.id === deckId);
   const originalCards = orderedCards(state.cards, deckId || "");

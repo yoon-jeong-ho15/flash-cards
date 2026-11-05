@@ -1,5 +1,8 @@
+import { useUI, useThemedStyles, type Palette } from '../ui/theme';
+import { appearance, useAppearance } from '../platform/appearance';
+import { Text } from '../ui/Typography';
 import React, { Component, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Appearance, AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -14,20 +17,26 @@ import { Dashboard, DeckLibrary, FolderLibrary, Search, StudyLibrary } from '../
 import { FolderForm } from '../ui/FolderForm';
 import { Study } from '../ui/Study';
 import { StudyFolder, DeckStudyOptions } from '../ui/StudySetup';
-import { Button, ImageProvider, colors, s, showError } from '../ui/kit';
+import { Button, ImageProvider, showError } from '../ui/kit';
 import type { Navigation, Route } from '../ui/navigation';
 import { Icon, iconFonts, type IconName } from '../ui/Icon';
 
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? <View style={s.page}><Text style={s.title}>화면을 불러오지 못했어요</Text><Text style={s.text}>앱을 다시 시작해 주세요. 기기에 저장된 자료와 임시 저장본은 유지됩니다.</Text><Button title="화면 다시 열기" onPress={() => this.setState({ failed: false })} /></View> : this.props.children; }
+  render() { return this.state.failed ? <ErrorMessage onRetry={() => this.setState({ failed: false })} /> : this.props.children; }
+}
+function ErrorMessage({ onRetry }: { onRetry: () => void }) {
+  const { s } = useUI();
+  return <View style={s.page}><Text style={s.title}>화면을 불러오지 못했어요</Text><Button title="화면 다시 열기" onPress={onRetry} /></View>;
 }
 const tabs: Array<[Route, string, IconName]> = [
   [{ type: 'dashboard' }, '홈', 'home'], [{ type: 'all-folders' }, '라이브러리', 'layers'],
   [{ type: 'study-library' }, '학습하기', 'play'], [{ type: 'search' }, '검색', 'search'], [{ type: 'account' }, '마이', 'user'],
 ];
 function Workspace() {
+  const { colors, s } = useUI();
+  const styles = useThemedStyles(createStyles);
   const state = useStore();
   const [history, setHistory] = useState<Route[]>([{ type: 'dashboard' }]);
   const [folderForm, setFolderForm] = useState(false);
@@ -54,7 +63,7 @@ function Workspace() {
   return <View style={{ flex: 1 }}>
     {!isStudying && <View style={styles.header}>
       {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={colors.ink} /></Pressable>}
-      {route.type === 'dashboard' && <View style={styles.brand}><Icon name="layers" color="#FFFFFF" size={20} /></View>}
+      {route.type === 'dashboard' && <View style={styles.brand}><Icon name="layers" color={colors.onPrimary} size={20} /></View>}
       <Text numberOfLines={1} style={[styles.headerTitle, { flex: 1 }]}>{title}</Text>
       {!immersive && <Pressable accessibilityRole="button" accessibilityLabel="계정 및 동기화 상태" onPress={() => nav.go({ type: 'account' })} style={styles.avatar}>
         <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14 }}>{(state.user?.displayName || state.user?.email || '나')[0].toUpperCase()}</Text>
@@ -85,7 +94,7 @@ function Workspace() {
       const selected = activeTab === target.type;
       const study = target.type === 'study-library';
       return <Pressable key={label} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={() => setHistory([target])} style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.6 : 1 }]}>
-        <View style={study ? styles.study : [styles.tabIcon, selected && { backgroundColor: colors.pale }]}><Icon name={icon} color={study ? '#FFFFFF' : selected ? colors.primary : colors.muted} size={22} /></View>
+        <View style={study ? styles.study : [styles.tabIcon, selected && { backgroundColor: colors.pale }]}><Icon name={icon} color={study ? colors.onPrimary : selected ? colors.primary : colors.muted} size={22} /></View>
         <Text style={{ fontSize: 10, fontWeight: selected ? '800' : '500', color: selected ? colors.primary : colors.muted }}>{label}</Text>
       </Pressable>;
     })}</View></SafeAreaView> : <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.card }} />}
@@ -93,6 +102,7 @@ function Workspace() {
   </View>;
 }
 function Bootstrap() {
+  const { colors, s } = useUI();
   const state = useStore();
   const [iconsReady, iconError] = useFonts(iconFonts);
   useEffect(() => {
@@ -109,14 +119,19 @@ function Bootstrap() {
   return <Workspace key={state.session} />;
 }
 export default function App() {
-  return <SafeAreaProvider><SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.bg }}><StatusBar style="dark" /><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ErrorBoundary><ImageProvider><Bootstrap /></ImageProvider></ErrorBoundary></KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
+  const { colors, dark } = useUI();
+  const settings = useAppearance();
+  useEffect(() => { void appearance.load(); }, []);
+  useEffect(() => { Appearance.setColorScheme(settings.theme === 'system' ? 'auto' : settings.theme); }, [settings.theme]);
+  if (!settings.ready) return null;
+  return <SafeAreaProvider><SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.bg }}><StatusBar style={dark ? "light" : "dark"} /><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ErrorBoundary><ImageProvider><Bootstrap /></ImageProvider></ErrorBoundary></KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
 }
-const styles = StyleSheet.create({
+const createStyles = (colors: Palette) => StyleSheet.create({
   header: { paddingHorizontal: 22, minHeight: 66, paddingVertical: 10, gap: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg },
   headerTitle: { color: colors.ink, fontSize: 20, letterSpacing: -0.6, fontWeight: '800' },
   brand: { width: 34, height: 36, borderRadius: 11, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
-  avatar: { width: 38, height: 38, borderRadius: 15, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
+  avatar: { width: 38, height: 38, borderRadius: 15, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.card },
   statusDot: { position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: colors.bg },
   notice: { paddingHorizontal: 22, paddingVertical: 7, backgroundColor: colors.peach },
   tabArea: { backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border },

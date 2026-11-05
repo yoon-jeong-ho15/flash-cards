@@ -1,21 +1,11 @@
+import { useUI } from './theme';
+import { Text } from './Typography';
 import React, { useState } from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { FlatList, Pressable, View } from 'react-native';
 import { cardMatches, orderedCards } from "../core/content";
 import { RichText } from "../editor/RichText";
 import { store, useStore } from "../platform/runtime";
-import {
-  Attachment,
-  Button,
-  Chips,
-  Empty,
-  Field,
-  Sheet,
-  attempt,
-  colors,
-  confirm,
-  s,
-  useImage,
-} from "./kit";
+import { Attachment, Button, Chips, Empty, Field, Sheet, attempt, confirm, useImage } from "./kit";
 import { Icon } from "./Icon";
 import { FolderPicker } from "./FolderPicker";
 import { deckAccent } from "./Library";
@@ -28,6 +18,7 @@ export function DeckDetail({
   deckId: string;
   nav: Navigation;
 }) {
+  const { colors, s } = useUI();
   const { decks, folders, cards } = useStore();
   const deck = decks.find((d) => d.id === deckId);
   const [query, setQuery] = useState("");
@@ -213,13 +204,13 @@ export function DeckDetail({
             </View>
             <View style={{ gap: 6 }}>
               <Text style={[s.label, { color: colors.primary }]}>질문</Text>
-              <RichText html={item.termRichText} onImage={openImage} />
+              <RichText side="front" html={item.termRichText} onImage={openImage} />
               <Attachment url={item.frontImageUrl} />
             </View>
             <View style={{ height: 1, backgroundColor: colors.border }} />
             <View style={{ gap: 6 }}>
               <Text style={s.label}>답변</Text>
-              <RichText html={item.definitionRichText} onImage={openImage} />
+              <RichText side="back" html={item.definitionRichText} onImage={openImage} />
               <Attachment url={item.backImageUrl || item.imageUrl} />
             </View>
             <Pressable
