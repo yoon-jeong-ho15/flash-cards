@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card as CardType } from '../../types';
 import { RichTextViewer } from '../editor/RichTextViewer';
-import { RotateCcw, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react';
+import { RotateCcw, Image as ImageIcon, Pencil, Trash2, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ImageWithSkeleton } from '../common/ImageWithSkeleton';
@@ -48,13 +48,23 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           ref={(node) => {
             if (node) node.inert = isFlipped;
           }}
-          className="card-face-front bg-card rounded-3xl border border-border shadow-[0_8px_30px_rgba(32,35,61,0.04)] hover:border-primary/40 transition-colors p-5 sm:p-8 flex flex-col justify-between"
+          className={`card-face-front bg-card rounded-3xl border ${
+            card.learned ? 'border-primary/50 ring-1 ring-primary/20' : 'border-border'
+          } shadow-[0_8px_30px_rgba(32,35,61,0.04)] hover:border-primary/40 transition-colors p-5 sm:p-8 flex flex-col justify-between`}
         >
           {/* 상단 헤더 */}
           <div className="flex items-center justify-between shrink-0">
-            <Badge variant="secondary" className="text-xs font-medium">
-              질문
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs font-medium">
+                질문
+              </Badge>
+              {card.learned && (
+                <Badge variant="success" className="text-xs font-medium flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  알아요
+                </Badge>
+              )}
+            </div>
 
             <div className="flex items-center gap-1">
               {onEdit && (
@@ -165,13 +175,23 @@ export const Flashcard: React.FC<FlashcardProps> = ({
           ref={(node) => {
             if (node) node.inert = !isFlipped;
           }}
-          className="card-face-back bg-card rounded-3xl border border-primary/40 shadow-sm hover:border-primary/60 transition-colors p-5 sm:p-8 flex flex-col justify-between"
+          className={`card-face-back bg-card rounded-3xl border ${
+            card.learned ? 'border-primary ring-1 ring-primary/20' : 'border-primary/40'
+          } shadow-sm hover:border-primary/60 transition-colors p-5 sm:p-8 flex flex-col justify-between`}
         >
           {/* 상단 헤더 */}
           <div className="flex items-center justify-between shrink-0">
-            <Badge variant="success" className="text-xs font-medium">
-              답변
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="success" className="text-xs font-medium">
+                답변
+              </Badge>
+              {card.learned && (
+                <Badge variant="indigo" className="text-xs font-medium flex items-center gap-1">
+                  <Check className="w-3 h-3" />
+                  알아요
+                </Badge>
+              )}
+            </div>
 
             <div className="flex items-center gap-1">
               {onEdit && (

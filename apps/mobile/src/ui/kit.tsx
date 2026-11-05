@@ -17,13 +17,19 @@ export function Button({
 }: {
   title: string;
   onPress: () => void;
-  tone?: "primary" | "secondary" | "danger";
+  tone?: "primary" | "secondary" | "danger" | "success";
   disabled?: boolean;
   busy?: boolean;
   icon?: IconName;
   iconPosition?: "start" | "end";
 }) {
   const { colors, s } = useUI();
+  const isPrimaryOrSuccess = tone === "primary" || tone === "success";
+  const fgColor = isPrimaryOrSuccess
+    ? colors.onPrimary
+    : tone === "danger"
+      ? colors.red
+      : colors.primary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -47,39 +53,28 @@ export function Button({
         backgroundColor:
           tone === "primary"
             ? colors.primary
-            : tone === "danger"
-              ? colors.dangerBg
-              : pressed ? colors.subtle : colors.card,
+            : tone === "success"
+              ? colors.success
+              : tone === "danger"
+                ? colors.dangerBg
+                : pressed ? colors.subtle : colors.card,
       })}
     >
       {busy ? (
-        <ActivityIndicator
-          color={tone === "primary" ? colors.onPrimary : tone === "danger" ? colors.red : colors.primary}
-        />
+        <ActivityIndicator color={fgColor} />
       ) : (
         <>
           {icon && iconPosition === "start" && (
             <Icon
               name={icon}
               size={17}
-              color={
-                tone === "primary"
-                  ? colors.onPrimary
-                  : tone === "danger"
-                    ? colors.red
-                    : colors.primary
-              }
+              color={fgColor}
             />
           )}
           <Text
             style={{
               flexShrink: 1,
-              color:
-                tone === "primary"
-                  ? colors.onPrimary
-                  : tone === "danger"
-                    ? colors.red
-                    : colors.primary,
+              color: fgColor,
               fontWeight: "600",
               fontSize: 14,
               textAlign: "center",
@@ -91,13 +86,7 @@ export function Button({
             <Icon
               name={icon}
               size={17}
-              color={
-                tone === "primary"
-                  ? colors.onPrimary
-                  : tone === "danger"
-                    ? colors.red
-                    : colors.primary
-              }
+              color={fgColor}
             />
           )}
         </>

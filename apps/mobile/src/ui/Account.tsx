@@ -39,7 +39,14 @@ export function Account() {
             <Icon name="user" size={22} />
           </View>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={s.h2}>{state.user?.displayName || "나의 학습 공간"}</Text>
+            <View style={[s.row, { gap: 8 }]}>
+              <Text style={s.h2}>{state.user?.displayName || "나의 학습 공간"}</Text>
+              {state.user && (
+                <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.successBg, borderWidth: 1, borderColor: colors.successBorder }}>
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.success }}>로그인됨</Text>
+                </View>
+              )}
+            </View>
             {state.user?.email && <Text style={s.muted}>{state.user.email}</Text>}
           </View>
         </View>
@@ -100,7 +107,11 @@ export function Account() {
                 height: 42,
                 borderRadius: 10,
                 backgroundColor:
-                  state.status === "error" ? colors.dangerBg : colors.subtle,
+                  state.status === "error"
+                    ? colors.dangerBg
+                    : state.status === "synced"
+                      ? colors.successBg
+                      : colors.subtle,
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -116,11 +127,21 @@ export function Account() {
                   ? "테스트 계정 자료를 기기에 저장해요"
                   : labels[state.status]}
               </Text>
-              <Text style={s.label}>
-                {state.online ? "네트워크 연결됨" : "오프라인"}
-                {!mockAuthEnabled &&
-                  ` · 대기 작업 ${Object.keys(state.outbox).length}개`}
-              </Text>
+              <View style={[s.row, { gap: 6 }]}>
+                <View
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 3.5,
+                    backgroundColor: state.status === "error" ? colors.red : state.online ? colors.success : colors.muted,
+                  }}
+                />
+                <Text style={s.label}>
+                  {state.online ? "네트워크 연결됨 (동기화 정상)" : "오프라인"}
+                  {!mockAuthEnabled &&
+                    ` · 대기 작업 ${Object.keys(state.outbox).length}개`}
+                </Text>
+              </View>
             </View>
           </View>
           {state.lastSyncedAt && (

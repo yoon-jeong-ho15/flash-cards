@@ -80,7 +80,7 @@ test('My display controls update the selected size, theme or defaults and enforc
   const updates=[];
   const react={Fragment:'Fragment',useState:value=>[value,()=>{}],createElement:(type,props,...children)=>({type,props:{...props,children}})};
   const mocks={react,'react-native':{Pressable:'Pressable',View:'View',Text:'NativeText'},'./Typography':{Text:'Text'},'./theme':{useUI:()=>({colors:{},s:{}})},
-    './kit':{Button:'Button',Chips:'Chips',showError:error=>{throw error;}},'../platform/appearance':{useAppearance:()=>settings,appearance:{update:async value=>{updates.push(value);}}}};
+    './kit':{Button:'Button',Chips:'Chips',Sheet:'Sheet',showError:error=>{throw error;}},'../platform/appearance':{useAppearance:()=>settings,appearance:{update:async value=>{updates.push(value);}}}};
   const module={exports:{}};
   new Function('require','module','exports',source)(id=>mocks[id],module,module.exports);
   const nodes=tree=>!tree||typeof tree!=='object'?[]:Array.isArray(tree)?tree.flatMap(nodes):[tree,...nodes(tree.props?.children)];
@@ -95,5 +95,43 @@ test('My display controls update the selected size, theme or defaults and enforc
   assert.deepEqual(updates,[{uiScale:1.1},{questionSize:26},{answerSize:16},{theme:'dark'},defaultAppearance]);
   settings={...settings,questionSize:40};tree=module.exports.DisplaySettings();
   assert.equal(nodes(row('questionSize')).find(node=>node.props.accessibilityLabel==='질문 글자 크기 키우기').props.disabled,true);
+  await Promise.resolve();
+});
+
+test('Study font settings modal allows changing question and answer font sizes during study', async () => {
+  const source = esbuild.buildSync({ entryPoints: [path.resolve(__dirname, '../src/ui/DisplaySettings.tsx')], bundle: true, platform: 'node', format: 'cjs', write: false, external: ['react', 'react-native', './kit', './Typography', './theme', '../platform/appearance'], tsconfigRaw: { compilerOptions: { jsx: 'react' } } }).outputFiles[0].text;
+  let settings = { ...defaultAppearance, ready: true };
+  const updates = [];
+  let closed = false;
+  const react = { Fragment: 'Fragment', useState: value => [value, () => {}], createElement: (type, props, ...children) => ({ type, props: { ...props, children } }) };
+  const mocks = {
+    react,
+    'react-native': { Pressable: 'Pressable', View: 'View', Text: 'NativeText' },
+    './Typography': { Text: 'Text' },
+    './theme': { useUI: () => ({ colors: {}, s: {} }) },
+    './kit': { Button: 'Button', Chips: 'Chips', Sheet: 'Sheet', showError: error => { throw error; } },
+    '../platform/appearance': { useAppearance: () => settings, appearance: { update: async value => { updates.push(value); } } },
+  };
+  const module = { exports: {} };
+  new Function('require', 'module', 'exports', source)(id => mocks[id], module, module.exports);
+  const nodes = tree => !tree || typeof tree !== 'object' ? [] : Array.isArray(tree) ? tree.flatMap(nodes) : [tree, ...nodes(tree.props?.children)];
+  let tree = module.exports.StudyFontSettingsModal({ onClose: () => { closed = true; } });
+  assert.equal(tree.type, 'Sheet');
+  assert.equal(tree.props.title, '글자 크기 설정');
+  const row = key => { const component = nodes(tree).find(node => node.props?.setting === key); return component.type(component.props); };
+  const tap = (key, label) => nodes(row(key)).find(node => node.props?.accessibilityLabel === label).props.onPress();
+  tap('questionSize', '질문 글자 크기 키우기');
+  tap('answerSize', '답변 글자 크기 줄이기');
+  nodes(tree).find(node => node.props?.title === '기본 크기로 초기화').props.onPress();
+  nodes(tree).find(node => node.props?.title === '완료').props.onPress();
+  assert.deepEqual(updates, [
+    { questionSize: 26 },
+    { answerSize: 16 },
+    { questionSize: defaultAppearance.questionSize, answerSize: defaultAppearance.answerSize },
+  ]);
+  assert.equal(closed, true);
+  settings = { ...settings, questionSize: 40 };
+  tree = module.exports.StudyFontSettingsModal({ onClose: () => {} });
+  assert.equal(nodes(row('questionSize')).find(node => node.props?.accessibilityLabel === '질문 글자 크기 키우기').props.disabled, true);
   await Promise.resolve();
 });

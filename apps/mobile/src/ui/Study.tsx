@@ -16,6 +16,7 @@ import { RichText } from "../editor/RichText";
 import { store, useStore } from "../platform/runtime";
 import { Attachment, Button, Empty, Progress, ProgressRing, Sheet, confirm, showError, useImage } from "./kit";
 import { CardComposer, type ComposerHandle } from "./CardComposer";
+import { StudyFontSettingsModal } from "./DisplaySettings";
 import { Icon } from "./Icon";
 import { useSwipeMotion } from "./useSwipeMotion";
 
@@ -101,6 +102,7 @@ export function Study({
     ),
   );
   const [editing, setEditing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const ratingInFlight = useRef(false);
@@ -135,7 +137,7 @@ export function Study({
     round: session.round,
     finished: session.finished,
     first: session.index === 0,
-    disabled: busy || editing,
+    disabled: busy || editing || settingsOpen,
     reduceMotion,
     onNavigate: (delta, sourceId) =>
       setSession((previous) =>
@@ -173,7 +175,7 @@ export function Study({
     if (!flipInFlight.current) rotation.setValue(session.flipped ? 1 : 0);
   }, [session.flipped]);
   const flip = () => {
-    if (busy || editing || flipInFlight.current || !swipe.prepareFlip()) return;
+    if (busy || editing || settingsOpen || flipInFlight.current || !swipe.prepareFlip()) return;
     if (reduceMotion) {
       setSession((previous) => ({ ...previous, flipped: !previous.flipped }));
       return;
@@ -321,30 +323,41 @@ export function Study({
       ratingInFlight.current ||
       busy ||
       editing ||
+      settingsOpen ||
       turning ||
       swipe.transitioning
     )
       return;
-    if (known) {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
     const id = current.id;
     ratingInFlight.current = true;
     setBusy(true);
-    void store
-      .setLearned(id, known)
-      .then(() => {
-        setSession((previous) =>
-          previous.ids[previous.index] === id
-            ? stepSession(previous, 1)
-            : previous,
-        );
-      })
-      .catch(showError)
-      .finally(() => {
-        ratingInFlight.current = false;
-        setBusy(false);
-      });
+
+    if (known) {
+      const nextLearned = !current.learned;
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      void store
+        .setLearned(id, nextLearned)
+        .catch(showError)
+        .finally(() => {
+          ratingInFlight.current = false;
+          setBusy(false);
+        });
+    } else {
+      void store
+        .setLearned(id, false)
+        .then(() => {
+          setSession((previous) =>
+            previous.ids[previous.index] === id
+              ? stepSession(previous, 1)
+              : previous,
+          );
+        })
+        .catch(showError)
+        .finally(() => {
+          ratingInFlight.current = false;
+          setBusy(false);
+        });
+    }
   };
   const renderFace = (back: boolean) => {
     const image = back
@@ -361,7 +374,7 @@ export function Study({
           study.card,
           study.faceLayer,
           {
-            borderColor: back ? colors.border : colors.border,
+            borderColor: current.learned ? colors.accentBorder : colors.border,
             transform: [
               { perspective: 1200 },
               {
@@ -390,14 +403,22 @@ export function Study({
           onPress={flip}
           style={study.cardHeader}
         >
-          <Text
-            style={[
-              study.face,
-              back && { backgroundColor: colors.subtle, color: colors.success },
-            ]}
-          >
-            {back ? "답변" : "질문"}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text
+              style={[
+                study.face,
+                back && { backgroundColor: colors.subtle, color: colors.success },
+              ]}
+            >
+              {back ? "답변" : "질문"}
+            </Text>
+            {current.learned && (
+              <View style={study.knownBadge}>
+                <Icon name="check" size={12} color={colors.success} />
+                <Text style={study.knownBadgeText}>알아요</Text>
+              </View>
+            )}
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="카드 내용 수정"
@@ -474,9 +495,20 @@ export function Study({
               {shuffle ? "랜덤 학습" : "플래시카드"} · {session.round}회차
             </Text>
           </View>
-          <Text accessibilityLiveRegion="polite" style={study.badge}>
-            카드 {session.index + 1}/{session.ids.length}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Text accessibilityLiveRegion="polite" style={study.badge}>
+              카드 {session.index + 1}/{session.ids.length}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="학습 설정"
+              disabled={busy || editing}
+              onPress={() => setSettingsOpen(true)}
+              style={study.smallButton}
+            >
+              <Icon name="settings" size={20} color={colors.icon} />
+            </Pressable>
+          </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingTop: 8, gap: 10 }}>
           <Progress
@@ -575,9 +607,10 @@ export function Study({
             </View>
             <View style={{ flex: 1 }}>
               <Button
-                title="알아요"
-                icon="check"
+                title={current.learned ? "몰라요" : "알아요"}
+                icon={current.learned ? "close" : "check"}
                 iconPosition="end"
+                tone={current.learned ? "secondary" : "primary"}
                 disabled={busy || turning || swipe.transitioning}
                 busy={busy}
                 onPress={() => rate(true)}
@@ -587,6 +620,9 @@ export function Study({
         </View>
       </ScrollView>
       {editing && <EditCard card={current} onClose={() => setEditing(false)} />}
+      {settingsOpen && (
+        <StudyFontSettingsModal onClose={() => setSettingsOpen(false)} />
+      )}
     </>
   );
 }
@@ -649,6 +685,22 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 9,
     overflow: "hidden",
+  },
+  knownBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.successBg,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  knownBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.success,
   },
   smallButton: {
     minWidth: 44,

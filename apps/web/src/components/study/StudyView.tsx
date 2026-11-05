@@ -287,12 +287,25 @@ export const StudyView: React.FC<StudyViewProps> = ({
           </Button>
           <Button
             size="lg"
-            onClick={() => handleRate(true)}
-            leftIcon={<Check className="h-4 w-4" />}
+            onClick={handleToggleKnow}
+            leftIcon={
+              session.isCurrentCardLearned ? (
+                <X className="h-4 w-4" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )
+            }
+            variant={session.isCurrentCardLearned ? "secondary" : "default"}
             className="h-14"
           >
-            알아요
-            <kbd className="ml-2 hidden rounded border border-white/25 px-1.5 py-0.5 text-[10px] sm:inline">
+            {session.isCurrentCardLearned ? '몰라요' : '알아요'}
+            <kbd
+              className={`ml-2 hidden rounded border px-1.5 py-0.5 text-[10px] sm:inline ${
+                session.isCurrentCardLearned
+                  ? 'border-primary/15'
+                  : 'border-white/25'
+              }`}
+            >
               2
             </kbd>
           </Button>
@@ -308,7 +321,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             className="inline-flex min-h-8 items-center gap-1.5 text-[11px] text-muted-foreground hover:text-primary"
           >
             <Bookmark className="h-3.5 w-3.5" />
-            {session.isCurrentCardLearned ? '기억한 표시 해제' : '기억한 표시만 하기'} · Enter
+            {session.isCurrentCardLearned ? '기억한 표시 해제 (몰라요)' : '기억한 표시하기 (알아요)'} · Enter
           </button>
         </div>
         <span role="status" className="sr-only">

@@ -189,7 +189,7 @@ test('deck study still excludes learned cards and keeps the original ordering', 
   } finally { screen.cleanup(); }
 });
 
-test('rating saves progress before advancing and ignores repeated taps while saving', async () => {
+test('rating marks card as learned without advancing and ignores repeated taps while saving', async () => {
   const f = await fixture();
   const screen = screenHarness(f.store, 'Study');
   const props = { deckId: f.first, onExit() {} };
@@ -210,8 +210,22 @@ test('rating saves progress before advancing and ignores repeated taps while sav
     assert.equal(screen.currentId(), id, 'the card stays visible until durable storage succeeds');
     finishSave();
     await new Promise(resolve => setImmediate(resolve));
-    const finished = screen.render(props);
+    f.store.setLearned = original;
+    const currentScreen = screen.render(props);
     assert.equal(f.store.getState().cards.find(card => card.id === id).learned, true);
+    assert.equal(screen.currentId(), id, 'the card stays on screen without advancing');
+    assert.ok(text(currentScreen).includes('알아요'), 'card displays learned badge');
+    assert.ok(button(currentScreen, '몰라요'), 'displays 몰라요 button when card is learned');
+    const cancelRate = button(currentScreen, '몰라요');
+    cancelRate.onPress();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.store.getState().cards.find(card => card.id === id).learned, false);
+    const toggledScreen = screen.render(props);
+    assert.ok(button(toggledScreen, '알아요'), 'reverts to 알아요 button when unlearned');
+    button(toggledScreen, '알아요').onPress();
+    await new Promise(resolve => setImmediate(resolve));
+    screen.next();
+    const finished = screen.render(props);
     assert.ok(text(finished).includes('모두 기억했어요!'));
     assert.ok(button(finished, '미학습 카드 다시 학습').disabled);
   } finally { screen.cleanup(); }
@@ -422,5 +436,25 @@ test('ordered folder study follows the visible deck order and each deck card ord
     button(finished, '전체 카드 다시 학습').onPress();
     screen.render(props);
     assert.equal(screen.currentId(), f.ids[0]);
+  } finally { screen.cleanup(); }
+});
+
+test('settings button in study bar opens font settings modal during study', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'Study');
+  const props = { folderId: f.folder, onExit() {} };
+  try {
+    let tree = screen.render(props);
+    const settingsButton = nodes(tree).find(node => node.props?.accessibilityLabel === '학습 설정');
+    assert.ok(settingsButton, 'Settings button should exist in study bar');
+    settingsButton.props.onPress();
+    tree = screen.render(props);
+    const modal = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'StudyFontSettingsModal');
+    assert.ok(modal, 'Font settings modal should open on tap');
+    assert.equal(screen.swipeDisabled(), true, 'Card swiping should be disabled while settings modal is open');
+    modal.props.onClose();
+    tree = screen.render(props);
+    assert.equal(nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'StudyFontSettingsModal'), undefined);
+    assert.equal(screen.swipeDisabled(), false, 'Card swiping should be re-enabled after closing settings modal');
   } finally { screen.cleanup(); }
 });

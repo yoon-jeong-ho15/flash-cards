@@ -326,7 +326,7 @@ export function DeckDetail({
                   borderRadius: 7,
                   borderWidth: 1.5,
                   borderColor: item.learned ? colors.success : colors.border,
-                  backgroundColor: item.learned ? colors.subtle : colors.card,
+                  backgroundColor: item.learned ? colors.successBg : colors.card,
                   justifyContent: "center",
                   alignItems: "center",
                 }}

@@ -19,7 +19,9 @@ export const lightColors = {
   tint: "#F7F3FF",
   accentBorder: "#D9CFEB",
   ring: "#6155E826",
-  success: "#796794",
+  success: "#16A34A",
+  successBg: "#F0FDF4",
+  successBorder: "#BBF7D0",
   red: "#C83C53",
   dangerBg: "#FFF1F2",
 };
@@ -44,7 +46,9 @@ export const darkColors: typeof lightColors = {
   tint: "#251D32",
   accentBorder: "#4D405F",
   ring: "#A79BF833",
-  success: "#B3A5CA",
+  success: "#34D399",
+  successBg: "#064E3B40",
+  successBorder: "#05966966",
   red: "#F08B9D",
   dangerBg: "#39212B",
 };

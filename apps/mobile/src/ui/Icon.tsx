@@ -30,6 +30,7 @@ export const iconNames = {
   "chevron-down": "chevron-down",
   "arrow-up": "arrow-up",
   "arrow-down": "arrow-down",
+  settings: "settings",
 } as const satisfies Record<string, LucideIconName>;
 export type IconName = keyof typeof iconNames;
 

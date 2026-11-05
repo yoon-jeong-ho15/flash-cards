@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Pressable, View, Text as NativeText } from 'react-native';
 import { appearance, useAppearance } from '../platform/appearance';
 import { defaultAppearance, type AppearanceSettings } from '../core/appearance';
-import { Button, Chips, showError } from './kit';
+import { Button, Chips, Sheet, showError } from './kit';
 import { Text } from './Typography';
 import { useUI } from './theme';
 
-function FontSetting({ label, setting, value, min, max, step, suffix, preview }: {
+export function FontSetting({ label, setting, value, min, max, step, suffix, preview }: {
   label: string; setting: 'uiScale' | 'questionSize' | 'answerSize'; value: number;
   min: number; max: number; step: number; suffix: string; preview: React.ReactNode;
 }) {
@@ -54,4 +54,75 @@ export function DisplaySettings() {
       <Button title="화면 설정 초기화" tone="secondary" onPress={() => { void appearance.update(defaultAppearance).catch(showError); }} />
     </View>
   </View>;
+}
+
+export function StudyFontSettingsModal({ onClose }: { onClose: () => void }) {
+  const settings = useAppearance();
+  const { colors, s } = useUI();
+  return (
+    <Sheet title="글자 크기 설정" onClose={onClose}>
+      <View style={{ gap: 16 }}>
+        <Text style={s.muted}>
+          학습 중 카드의 질문과 답변 글자 크기를 조절할 수 있습니다.
+        </Text>
+        <FontSetting
+          label="질문 글자 크기"
+          setting="questionSize"
+          value={settings.questionSize}
+          min={12}
+          max={40}
+          step={2}
+          suffix="px"
+          preview={
+            <NativeText
+              allowFontScaling={false}
+              style={{
+                color: colors.ink,
+                fontSize: settings.questionSize,
+                lineHeight: settings.questionSize * 1.625,
+                fontWeight: "700",
+                textAlign: "center",
+              }}
+            >
+              질문 Aa 123
+            </NativeText>
+          }
+        />
+        <FontSetting
+          label="답변 글자 크기"
+          setting="answerSize"
+          value={settings.answerSize}
+          min={12}
+          max={40}
+          step={2}
+          suffix="px"
+          preview={
+            <NativeText
+              allowFontScaling={false}
+              style={{
+                color: colors.ink,
+                fontSize: settings.answerSize,
+                lineHeight: settings.answerSize * 1.625,
+              }}
+            >
+              답변 Aa 123
+            </NativeText>
+          }
+        />
+        <Button
+          title="기본 크기로 초기화"
+          tone="secondary"
+          onPress={() => {
+            void appearance
+              .update({
+                questionSize: defaultAppearance.questionSize,
+                answerSize: defaultAppearance.answerSize,
+              })
+              .catch(showError);
+          }}
+        />
+        <Button title="완료" onPress={onClose} />
+      </View>
+    </Sheet>
+  );
 }
