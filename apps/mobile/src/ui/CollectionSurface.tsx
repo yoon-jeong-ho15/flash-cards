@@ -18,7 +18,7 @@ export function DeckSummary({ title, count, learned, detail, description, presse
   const { colors, s } = useUI();
   return (
     <CollectionSurface kind="deck" pressed={pressed} style={{ minHeight: 152, padding: 10, gap: 8 }}>
-      <DeckCardHeader title={title} />
+      <DeckCardHeader title={title} pressed={pressed} />
       <View style={{ flex: 1, gap: 4 }}>
         {hideDetails ? <View style={{ minHeight: 18 }} /> : (
           <Text style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>{detail || (count ? `카드 ${count}장 · 기억한 카드 ${learned}장` : '학습할 카드가 없어요')}</Text>
@@ -57,7 +57,7 @@ function folderOutline(width: number, height: number) {
   ].join(' ');
 }
 
-/** A clean, modern surface for folders and decks with minimal clutter. */
+/** Warm folders and blue deck edges keep collection types easy to recognize. */
 export function CollectionSurface({ kind, children, style, pressed = false }: {
   kind: 'folder' | 'deck';
   pressed?: boolean;
@@ -82,8 +82,8 @@ export function CollectionSurface({ kind, children, style, pressed = false }: {
             {folder ? (
               <Path
                 d={folderOutline(size.width, size.height)}
-                fill={colors.card}
-                stroke={pressed ? colors.primary : colors.border}
+                fill={pressed ? colors.warmPressed : colors.warmBg}
+                stroke={pressed ? colors.warmPressedBorder : colors.warmBorder}
                 strokeWidth={1}
               />
             ) : (
@@ -97,8 +97,8 @@ export function CollectionSurface({ kind, children, style, pressed = false }: {
                   height={Math.max(0, size.height - 9)}
                   rx={radius.card}
                   ry={radius.card}
-                  fill={offset === 0 ? colors.card : '#FFFFFF'}
-                  stroke={offset === 0 && pressed ? colors.primary : colors.border}
+                  fill={offset === 0 ? (pressed ? colors.infoBg : colors.card) : colors.infoBg}
+                  stroke={offset === 0 && pressed ? colors.info : colors.infoBorder}
                   strokeWidth={1}
                 />
               ))
@@ -119,7 +119,7 @@ export function CollectionSurface({ kind, children, style, pressed = false }: {
 }
 
 /** Full-width heading for the compact deck cards, whose content padding is 10. */
-export function DeckCardHeader({ title }: { title: string }) {
+export function DeckCardHeader({ title, pressed = false }: { title: string; pressed?: boolean }) {
   const { colors, s } = useUI();
   return (
     <View style={{
@@ -132,9 +132,10 @@ export function DeckCardHeader({ title }: { title: string }) {
       borderTopLeftRadius: radius.card - 1,
       borderTopRightRadius: radius.card - 1,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      borderBottomColor: colors.infoBorder,
+      backgroundColor: pressed ? colors.infoPressed : colors.infoBg,
     }}>
-      <Text numberOfLines={2} style={[s.h2, { fontSize: 14, lineHeight: 20 }]}>{title}</Text>
+      <Text numberOfLines={2} style={[s.h2, { fontSize: 14, lineHeight: 20, color: colors.info }]}>{title}</Text>
     </View>
   );
 }
@@ -145,8 +146,8 @@ export function CollectionIcon({ kind, size = 36 }: { kind: 'folder' | 'deck'; s
   return (
     <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
       style={{ width: size, height: size, flexShrink: 0, borderRadius: size >= 56 ? 16 : radius.control,
-        backgroundColor: colors.iconBg, alignItems: 'center', justifyContent: 'center' }}>
-      <Icon name={kind === 'folder' ? 'folder' : 'layers'} size={Math.round(size * 0.55)} color={colors.icon} />
+        backgroundColor: kind === 'folder' ? colors.warmBg : colors.infoBg, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon name={kind === 'folder' ? 'folder' : 'layers'} size={Math.round(size * 0.55)} color={kind === 'folder' ? colors.warm : colors.info} />
     </View>
   );
 }

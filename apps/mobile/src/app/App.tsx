@@ -63,17 +63,17 @@ function Workspace() {
   const activeTab = ['study-folder', 'study-options'].includes(route.type) ? 'study-library' : ['all-decks', 'folder', 'deck'].includes(route.type) ? 'all-folders' : route.type;
   const title = ['study-library', 'study-folder', 'study-options'].includes(route.type) ? '학습하기' : route.type === 'dashboard' ? 'Flashcards' : route.type === 'all-decks' || route.type === 'all-folders' ? '라이브러리' : route.type === 'search' ? '검색' : route.type === 'account' ? '마이 페이지' : route.type === 'edit-deck' ? '카드 만들기' : route.type === 'folder' ? '폴더' : '학습 세트';
   return <View style={{ flex: 1 }}>
-    {!isStudying && <View style={styles.header}>
-      {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={colors.icon} /></Pressable>}
+    {!isStudying && <View style={[styles.header, studyArea && { backgroundColor: colors.primary, borderBottomColor: colors.primary }]}>
+      {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={studyArea ? colors.onPrimary : colors.icon} /></Pressable>}
       {route.type === 'dashboard' && <View style={styles.brand}><Icon name="layers" color={colors.onPrimary} size={20} /></View>}
-      <Text numberOfLines={1} style={[styles.headerTitle, { flex: 1 }]}>{title}</Text>
-      {!immersive && <Pressable accessibilityRole="button" accessibilityLabel="계정 및 동기화 상태" onPress={() => nav.go({ type: 'account' })} style={styles.avatar}>
+      <Text numberOfLines={1} style={[styles.headerTitle, { flex: 1 }, studyArea && { color: colors.onPrimary }]}>{title}</Text>
+      {!immersive && <Pressable accessibilityRole="button" accessibilityLabel="계정 및 동기화 상태" onPress={() => nav.go({ type: 'account' })} style={[styles.avatar, studyArea && { borderColor: '#FFFFFF', borderWidth: 2 }]}>
         <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 14 }}>{(state.user?.displayName || state.user?.email || '나')[0].toUpperCase()}</Text>
-        <View style={[styles.statusDot, { backgroundColor: state.status === 'error' ? colors.red : state.online ? colors.success : colors.muted }]} />
+        <View style={[styles.statusDot, { backgroundColor: state.status === 'error' ? colors.red : state.online ? colors.success : colors.muted }, studyArea && { borderColor: '#FFFFFF' }]} />
       </Pressable>}
       {immersive && <View style={[s.row, { gap: 5 }]}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.success }} /><Text style={s.label}>자동 임시 저장</Text></View>}
     </View>}
-    {(!state.online || state.status === 'error') && <Pressable accessibilityRole="button" disabled={immersive} onPress={() => nav.go({ type: 'account' })} style={styles.notice}><Text style={[s.label, { color: state.status === 'error' ? colors.red : colors.muted }]}>{state.status === 'error' ? '동기화를 확인해 주세요 · 자세히 보기' : '오프라인이에요. 학습 내용은 기기에 저장돼요.'}</Text></Pressable>}
+    {(!state.online || state.status === 'error') && <Pressable accessibilityRole="button" disabled={immersive} onPress={() => nav.go({ type: 'account' })} style={[styles.notice, state.status === 'error' && { backgroundColor: colors.dangerBg }]}><Text style={[s.label, { color: state.status === 'error' ? colors.red : colors.warm }]}>{state.status === 'error' ? '동기화를 확인해 주세요 · 자세히 보기' : '오프라인이에요. 학습 내용은 기기에 저장돼요.'}</Text></Pressable>}
     {state.error && state.status !== 'error' && <Text accessibilityRole="alert" style={[s.error, { padding: 12 }]}>{state.error}</Text>}
     <View style={{ flex: 1 }}>
       {studyArea && <StudyBackground />}
@@ -139,9 +139,9 @@ const createStyles = (colors: Palette) => StyleSheet.create({
   headerTitle: { color: colors.ink, fontSize: 18, letterSpacing: -0.5, fontWeight: '700' },
   brand: { width: 32, height: 32, borderRadius: radius.control, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
-  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
+  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.accentBorder },
   statusDot: { position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: colors.bg },
-  notice: { paddingHorizontal: 16, paddingVertical: 6, backgroundColor: colors.subtle },
+  notice: { paddingHorizontal: 16, paddingVertical: 6, backgroundColor: colors.warmBg },
   tabArea: { backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border },
   tabs: { width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', paddingHorizontal: 10, paddingTop: 5, paddingBottom: 4, alignItems: 'center' },
   tab: { flex: 1, minHeight: 56, gap: 4, alignItems: 'center', justifyContent: 'center' },

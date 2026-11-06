@@ -144,11 +144,11 @@ export function Dashboard({
         <Text style={[s.muted, { flex: 1 }]}>어떤 내용을 공부할까요?</Text>
       </Pressable>
       <View style={l.stats}>
-        {[
-          [decks.length, "학습 세트"],
-          [cards.length, "전체 카드"],
-          [learned, "기억한 카드"],
-        ].map(([value, label], i) => (
+        {([
+          [decks.length, "학습 세트", colors.primary],
+          [cards.length, "전체 카드", colors.info],
+          [learned, "기억한 카드", colors.success],
+        ] as const).map(([value, label, color], i) => (
           <View
             key={label}
             style={[
@@ -159,7 +159,7 @@ export function Dashboard({
             <Text
               style={[
                 s.h2,
-                { fontSize: 22, lineHeight: 28, color: colors.ink },
+                { fontSize: 22, lineHeight: 28, color },
               ]}
             >
               {value}
@@ -184,8 +184,8 @@ export function Dashboard({
         {!recent.length && (
           <View style={[s.box, { gap: 12 }]}>
             <View style={s.row}>
-              <View style={[l.deckIcon, { backgroundColor: colors.iconBg }]}>
-                <Icon name="book" color={colors.icon} />
+              <View style={[l.deckIcon, { backgroundColor: colors.infoBg }]}>
+                <Icon name="book" color={colors.info} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.h2}>처음이라면 가볍게</Text>
@@ -236,7 +236,7 @@ export function Dashboard({
             onPress={onNewFolder}
             style={[s.box, s.row, { gap: 10 }]}
           >
-            <Icon name="folder" size={26} color={colors.icon} />
+            <Icon name="folder" size={26} color={colors.warm} />
             <View style={{ flex: 1 }}>
               <Text style={[s.text, { fontWeight: "600" }]}>
                 배우는 주제마다, 나만의 폴더
@@ -346,7 +346,7 @@ export function DeckLibrary({
                 <View style={[s.row, { flexWrap: "nowrap" }]}>
                   <View style={{ flex: 1, gap: 6 }}>
                     <View style={s.row}>
-                      <Icon name="folder" color={colors.icon} />
+                      <Icon name="folder" color={colors.warm} />
                       <Text style={s.label}>내 폴더</Text>
                     </View>
                     <Text style={s.title}>{folder.title}</Text>
@@ -777,8 +777,8 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderRadius: radius.control,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
+    borderColor: colors.accentBorder,
+    backgroundColor: colors.pale,
     overflow: "hidden",
   },
   libraryTabAction: { flex: 1, minHeight: 44, paddingVertical: 11, alignItems: "center", justifyContent: "center" },
@@ -795,8 +795,8 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     justifyContent: "center",
   },
   filterChipActive: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
+    backgroundColor: colors.pale,
+    borderColor: colors.accentBorder,
     boxShadow: `0px 1px 2px ${colors.shadow}`,
   },
   filterChipText: {

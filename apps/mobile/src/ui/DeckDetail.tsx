@@ -50,13 +50,13 @@ function renderDomNode(
         return <Text key={key} style={{ textDecorationLine: 'line-through' }}>{children}</Text>;
       case 'mark':
         return (
-          <Text key={key} style={{ backgroundColor: '#FEF08A', color: '#18181B', borderRadius: 2, paddingHorizontal: 2 }}>
+          <Text key={key} style={{ backgroundColor: colors.highlight, color: colors.highlightInk, borderRadius: 2, paddingHorizontal: 2 }}>
             {children}
           </Text>
         );
       case 'code':
         return (
-          <Text key={key} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', backgroundColor: colors.subtle, color: colors.primary, fontSize: 13 }}>
+          <Text key={key} style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', backgroundColor: colors.infoBg, color: colors.info, fontSize: 13 }}>
             {children}
           </Text>
         );
@@ -188,7 +188,7 @@ export function DeckDetail({
                 }
                 style={[s.row, { minHeight: 44, flexShrink: 1 }]}
               >
-                <Icon name="folder" size={16} color={colors.icon} />
+                <Icon name="folder" size={16} color={colors.warm} />
                 <Text numberOfLines={1} style={[s.label, { flexShrink: 1 }]}>
                   {folder?.title || "미분류"}
                 </Text>

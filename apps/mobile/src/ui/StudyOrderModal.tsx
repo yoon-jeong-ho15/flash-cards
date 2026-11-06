@@ -60,8 +60,8 @@ export function StudyOrderModal({ title, onClose, onChoose }: {
                       backgroundColor: pressed ? colors.pale : colors.card })}
                   >
                     <View style={{ width: 40, height: 40, borderRadius: radius.control,
-                      backgroundColor: colors.iconBg, alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name={icon} size={22} color={colors.primary} />
+                      backgroundColor: shuffle ? colors.pale : colors.infoBg, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name={icon} size={22} color={shuffle ? colors.primary : colors.info} />
                     </View>
                     <View style={{ flex: 1, gap: 4 }}>
                       <Text style={s.h2}>{label}</Text>

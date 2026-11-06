@@ -249,7 +249,7 @@ export function Study({
       <ScrollView contentContainerStyle={[s.page, { paddingTop: 44, gap: 24 }]}>
         <View style={{ alignItems: "center", gap: 20 }}>
           <View style={study.celebration}>
-            <Icon name="check" size={42} color={colors.primary} />
+            <Icon name="check" size={42} color={colors.success} />
           </View>
           <Text style={s.label}>
             {source.title} · {session.round}회차
@@ -283,7 +283,7 @@ export function Study({
               style={{ width: 1, height: 42, backgroundColor: colors.border }}
             />
             <View style={{ alignItems: "center", gap: 6 }}>
-              <Text style={[s.title, { color: colors.muted }]}>
+              <Text style={[s.title, { color: colors.warm }]}>
                 {own.length - learned}
               </Text>
               <Text style={s.muted}>다시 볼 카드</Text>
@@ -374,7 +374,7 @@ export function Study({
           study.card,
           study.faceLayer,
           {
-            borderColor: current.learned ? colors.accentBorder : colors.border,
+            borderColor: current.learned ? colors.successBorder : colors.border,
             transform: [
               { perspective: 1200 },
               {
@@ -407,7 +407,7 @@ export function Study({
             <Text
               style={[
                 study.face,
-                back && { backgroundColor: colors.subtle, color: colors.success },
+                back && { backgroundColor: colors.successBg, color: colors.success },
               ]}
             >
               {back ? "답변" : "질문"}
@@ -721,7 +721,7 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 24,
-    backgroundColor: colors.pale,
+    backgroundColor: colors.successBg,
     alignItems: "center",
     justifyContent: "center",
   },

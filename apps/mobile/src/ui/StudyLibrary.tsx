@@ -138,7 +138,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                   <CollectionSurface pressed={pressed} kind="folder" style={styles.folder}>
                     <View style={styles.folderTop}>
                       <CollectionIcon kind="folder" size={30} />
-                      <Icon name="chevron" size={15} color={colors.icon} />
+                      <Icon name="chevron" size={15} color={colors.warm} />
                     </View>
                     <View style={styles.folderInfo}>
                       <Text numberOfLines={2} style={styles.folderTitle}>
@@ -149,7 +149,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                     <View style={styles.progressArea}>
                       <View style={styles.progressLabels}>
                         <Text style={styles.progressLabel}>기억한 카드</Text>
-                        <Text style={[styles.progressValue, { color: colors.primary }]}>
+                        <Text style={[styles.progressValue, { color: colors.success }]}>
                           {item.learned}
                           <Text style={styles.progressTotal}>/{item.count}</Text>
                         </Text>
@@ -158,7 +158,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                         <View
                           style={[
                             styles.fill,
-                            { width: `${percent}%`, backgroundColor: colors.primary },
+                            { width: `${percent}%`, backgroundColor: colors.success },
                           ]}
                         />
                       </View>

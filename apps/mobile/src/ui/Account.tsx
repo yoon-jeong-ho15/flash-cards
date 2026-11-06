@@ -79,14 +79,14 @@ export function Account() {
         <Text style={s.h2}>지금까지 쌓은 배움</Text>
         <View style={[s.box, { gap: 12 }]}>
           <View style={[s.row, { justifyContent: "space-around" }]}>
-            {[
-              [state.decks.length, "학습 세트"],
-              [state.cards.length, "전체 카드"],
-              [learned, "기억한 카드"],
-            ].map(([value, label]) => (
+            {([
+              [state.decks.length, "학습 세트", colors.primary],
+              [state.cards.length, "전체 카드", colors.info],
+              [learned, "기억한 카드", colors.success],
+            ] as const).map(([value, label, color]) => (
               <View key={label} style={{ alignItems: "center", gap: 6 }}>
                 <Text
-                  style={[s.title, { color: colors.ink, fontSize: 22, lineHeight: 28 }]}
+                  style={[s.title, { color, fontSize: 22, lineHeight: 28 }]}
                 >
                   {value}
                 </Text>
@@ -111,14 +111,14 @@ export function Account() {
                     ? colors.dangerBg
                     : state.status === "synced"
                       ? colors.successBg
-                      : colors.subtle,
+                      : colors.infoBg,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
               <Icon
                 name={state.status === "syncing" ? "rotate" : "check"}
-                color={state.status === "error" ? colors.red : colors.success}
+                color={state.status === "error" ? colors.red : state.status === "synced" ? colors.success : colors.info}
               />
             </View>
             <View style={{ flex: 1, gap: 3 }}>

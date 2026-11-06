@@ -24,12 +24,13 @@ export function Button({
   iconPosition?: "start" | "end";
 }) {
   const { colors, s } = useUI();
-  const isPrimaryOrSuccess = tone === "primary" || tone === "success";
-  const fgColor = isPrimaryOrSuccess
+  const fgColor = tone === "primary"
     ? colors.onPrimary
-    : tone === "danger"
-      ? colors.red
-      : colors.primary;
+    : tone === "success"
+      ? colors.onSuccess
+      : tone === "danger"
+        ? colors.red
+        : colors.primary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -139,9 +140,9 @@ export function Chips<T extends string>({
             paddingHorizontal: 14,
             paddingVertical: 10,
             borderRadius: radius.control,
-            backgroundColor: key === value ? colors.card : "transparent",
+            backgroundColor: key === value ? colors.pale : "transparent",
             borderWidth: 1,
-            borderColor: key === value ? colors.border : "transparent",
+            borderColor: key === value ? colors.accentBorder : "transparent",
             boxShadow: key === value ? `0px 1px 2px ${colors.shadow}` : undefined,
             opacity: pressed ? 0.7 : 1,
           })}
@@ -294,7 +295,7 @@ export function Progress({
           <Text style={s.muted}>
             {learned} / {total}장 학습
           </Text>
-          <Text style={[s.label, { color: colors.primary }]}>{percent}%</Text>
+          <Text style={[s.label, { color: colors.success }]}>{percent}%</Text>
         </View>
       )}
       <View
@@ -317,7 +318,7 @@ export function Progress({
             height: 4,
             borderRadius: 4,
             width: `${percent}%`,
-            backgroundColor: colors.primary,
+            backgroundColor: colors.success,
           }}
         />
       </View>
@@ -348,7 +349,7 @@ export function ProgressRing({ percent }: { percent: number }) {
               top: 36.5 + Math.sin(angle) * 36.5,
               width: 2.5,
               height: 7,
-              backgroundColor: i < percent ? colors.primary : colors.track,
+              backgroundColor: i < percent ? colors.success : colors.track,
               transform: [{ rotate: `${i * 3.6}deg` }],
             }}
           />

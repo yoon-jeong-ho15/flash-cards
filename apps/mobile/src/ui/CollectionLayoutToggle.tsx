@@ -42,7 +42,7 @@ export function CollectionLayoutToggle() {
             borderRadius: radius.control - 2,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: layout === value ? colors.card : 'transparent',
+            backgroundColor: layout === value ? colors.pale : 'transparent',
           }}
         >
           <Icon name={icon} size={18} color={layout === value ? colors.primary : colors.muted} />
