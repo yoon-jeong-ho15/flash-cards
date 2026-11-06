@@ -1,5 +1,8 @@
+import { radius, useUI, useThemedStyles, type Palette } from '../ui/theme';
+import { appearance, useAppearance } from '../platform/appearance';
+import { Text } from '../ui/Typography';
 import React, { Component, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Appearance, AppState, BackHandler, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -10,23 +13,31 @@ import { store, useStore } from '../platform/runtime';
 import { Account } from '../ui/Account';
 import { DeckDetail } from '../ui/DeckDetail';
 import { DeckEditor } from '../ui/DeckEditor';
-import { Dashboard, DeckLibrary, FolderLibrary, Search } from '../ui/Library';
+import { Dashboard, DeckLibrary, FolderLibrary, Search, StudyLibrary } from '../ui/Library';
 import { FolderForm } from '../ui/FolderForm';
 import { Study } from '../ui/Study';
-import { Button, ImageProvider, colors, s, showError } from '../ui/kit';
+import { StudyBackground } from '../ui/StudyBackground';
+import { StudyFolder, DeckStudyOptions } from '../ui/StudySetup';
+import { Button, ImageProvider, showError } from '../ui/kit';
 import type { Navigation, Route } from '../ui/navigation';
 import { Icon, iconFonts, type IconName } from '../ui/Icon';
 
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? <View style={s.page}><Text style={s.title}>화면을 불러오지 못했어요</Text><Text style={s.text}>앱을 다시 시작해 주세요. 기기에 저장된 자료와 임시 저장본은 유지됩니다.</Text><Button title="화면 다시 열기" onPress={() => this.setState({ failed: false })} /></View> : this.props.children; }
+  render() { return this.state.failed ? <ErrorMessage onRetry={() => this.setState({ failed: false })} /> : this.props.children; }
+}
+function ErrorMessage({ onRetry }: { onRetry: () => void }) {
+  const { s } = useUI();
+  return <View style={s.page}><Text style={s.title}>화면을 불러오지 못했어요</Text><Button title="화면 다시 열기" onPress={onRetry} /></View>;
 }
 const tabs: Array<[Route, string, IconName]> = [
-  [{ type: 'dashboard' }, '홈', 'home'], [{ type: 'all-decks' }, '라이브러리', 'layers'],
-  [{ type: 'edit-deck' }, '만들기', 'plus'], [{ type: 'search' }, '검색', 'search'], [{ type: 'account' }, '마이', 'user'],
+  [{ type: 'dashboard' }, '홈', 'home'], [{ type: 'all-folders' }, '라이브러리', 'layers'],
+  [{ type: 'study-library' }, '학습하기', 'play'], [{ type: 'search' }, '검색', 'search'], [{ type: 'account' }, '마이', 'user'],
 ];
 function Workspace() {
+  const { colors, s } = useUI();
+  const styles = useThemedStyles(createStyles);
   const state = useStore();
   const [history, setHistory] = useState<Route[]>([{ type: 'dashboard' }]);
   const [folderForm, setFolderForm] = useState(false);
@@ -46,49 +57,60 @@ function Workspace() {
     return () => listener.remove();
   }, [history, folderForm]);
   const isStudying = route.type === 'study' || route.type === 'folder-study';
+  const studyArea = isStudying || ['study-library', 'study-folder', 'study-options'].includes(route.type);
   const immersive = isStudying || route.type === 'edit-deck';
-  const topLevel = ['dashboard', 'all-decks', 'all-folders', 'search', 'account'].includes(route.type);
-  const activeTab = ['all-folders', 'folder', 'deck'].includes(route.type) ? 'all-decks' : route.type;
-  const title = route.type === 'dashboard' ? 'Flashcards' : route.type === 'all-decks' || route.type === 'all-folders' ? '라이브러리' : route.type === 'search' ? '검색' : route.type === 'account' ? '마이 페이지' : route.type === 'edit-deck' ? '카드 만들기' : route.type === 'folder' ? '폴더' : '학습 세트';
+  const topLevel = ['dashboard', 'all-decks', 'all-folders', 'study-library', 'search', 'account'].includes(route.type);
+  const activeTab = ['study-folder', 'study-options'].includes(route.type) ? 'study-library' : ['all-decks', 'folder', 'deck'].includes(route.type) ? 'all-folders' : route.type;
+  const title = ['study-library', 'study-folder', 'study-options'].includes(route.type) ? '학습하기' : route.type === 'dashboard' ? 'Flashcards' : route.type === 'all-decks' || route.type === 'all-folders' ? '라이브러리' : route.type === 'search' ? '검색' : route.type === 'account' ? '마이 페이지' : route.type === 'edit-deck' ? '카드 만들기' : route.type === 'folder' ? '폴더' : '학습 세트';
   return <View style={{ flex: 1 }}>
-    {!isStudying && <View style={styles.header}>
-      {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={colors.ink} /></Pressable>}
-      {route.type === 'dashboard' && <View style={styles.brand}><Icon name="layers" color="#FFFFFF" size={20} /></View>}
-      <Text numberOfLines={1} style={[styles.headerTitle, { flex: 1 }]}>{title}</Text>
-      {!immersive && <Pressable accessibilityRole="button" accessibilityLabel="계정 및 동기화 상태" onPress={() => nav.go({ type: 'account' })} style={styles.avatar}>
-        <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14 }}>{(state.user?.displayName || state.user?.email || '나')[0].toUpperCase()}</Text>
-        <View style={[styles.statusDot, { backgroundColor: state.status === 'error' ? colors.red : state.online ? colors.success : colors.muted }]} />
+    {!isStudying && <View style={[styles.header, studyArea && { backgroundColor: colors.primary, borderBottomColor: colors.primary }]}>
+      {(!topLevel || immersive) && <Pressable accessibilityRole="button" accessibilityLabel="뒤로" onPress={nav.back} style={styles.iconButton}><Icon name={immersive ? 'close' : 'back'} color={studyArea ? colors.onPrimary : colors.icon} /></Pressable>}
+      {route.type === 'dashboard' && <View style={styles.brand}><Icon name="layers" color={colors.onPrimary} size={20} /></View>}
+      <Text numberOfLines={1} style={[styles.headerTitle, { flex: 1 }, studyArea && { color: colors.onPrimary }]}>{title}</Text>
+      {!immersive && <Pressable accessibilityRole="button" accessibilityLabel="계정 및 동기화 상태" onPress={() => nav.go({ type: 'account' })} style={[styles.avatar, studyArea && { borderColor: '#FFFFFF', borderWidth: 2 }]}>
+        <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 14 }}>{(state.user?.displayName || state.user?.email || '나')[0].toUpperCase()}</Text>
+        <View style={[styles.statusDot, { backgroundColor: state.status === 'error' ? colors.red : state.online ? colors.success : colors.muted }, studyArea && { borderColor: '#FFFFFF' }]} />
       </Pressable>}
       {immersive && <View style={[s.row, { gap: 5 }]}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.success }} /><Text style={s.label}>자동 임시 저장</Text></View>}
     </View>}
-    {(!state.online || state.status === 'error') && <Pressable accessibilityRole="button" disabled={immersive} onPress={() => nav.go({ type: 'account' })} style={styles.notice}><Text style={[s.label, { color: state.status === 'error' ? colors.red : colors.muted }]}>{state.status === 'error' ? '동기화를 확인해 주세요 · 자세히 보기' : '오프라인이에요. 학습 내용은 기기에 저장돼요.'}</Text></Pressable>}
+    {(!state.online || state.status === 'error') && <Pressable accessibilityRole="button" disabled={immersive} onPress={() => nav.go({ type: 'account' })} style={[styles.notice, state.status === 'error' && { backgroundColor: colors.dangerBg }]}><Text style={[s.label, { color: state.status === 'error' ? colors.red : colors.warm }]}>{state.status === 'error' ? '동기화를 확인해 주세요 · 자세히 보기' : '오프라인이에요. 학습 내용은 기기에 저장돼요.'}</Text></Pressable>}
     {state.error && state.status !== 'error' && <Text accessibilityRole="alert" style={[s.error, { padding: 12 }]}>{state.error}</Text>}
     <View style={{ flex: 1 }}>
+      {studyArea && <StudyBackground />}
       {route.type === 'dashboard' && <Dashboard nav={nav} onNewFolder={() => setFolderForm(true)} />}
+      {route.type === 'study-library' && <StudyLibrary nav={nav} />}
+      {route.type === 'study-folder' && <StudyFolder key={route.folderId} folderId={route.folderId} nav={nav} />}
+      {route.type === 'study-options' && <DeckStudyOptions key={route.deckId} deckId={route.deckId} nav={nav} />}
       {route.type === 'all-decks' && <DeckLibrary nav={nav} onFolders={() => setHistory([{ type: 'all-folders' }])} />}
       {route.type === 'all-folders' && <FolderLibrary nav={nav} onNewFolder={() => setFolderForm(true)} onDecks={() => setHistory([{ type: 'all-decks' }])} />}
       {route.type === 'folder' && <DeckLibrary key={route.folderId} folderId={route.folderId} nav={nav} />}
       {route.type === 'deck' && <DeckDetail key={route.deckId} deckId={route.deckId} nav={nav} />}
       {route.type === 'search' && <Search nav={nav} />}
       {route.type === 'account' && <Account />}
-      {route.type === 'edit-deck' && <DeckEditor key={`${route.deckId || 'new'}:${route.folderId || ''}`} deckId={route.deckId} folderId={route.folderId} focusCardId={route.focusCardId} onClose={pop} guard={guard}
+      {route.type === 'edit-deck' && <DeckEditor key={`${route.deckId || 'new'}:${route.folderId || ''}`} deckId={route.deckId} folderId={route.folderId} focusCardId={route.focusCardId} appendCard={route.appendCard} onClose={pop} guard={guard}
         onSaved={id => setHistory(previous => [...previous.slice(0, -1), { type: 'deck', deckId: id }])} />}
-      {route.type === 'study' && <Study key={`${route.deckId}:${route.shuffle}`} deckId={route.deckId} shuffle={route.shuffle}
-        onExit={() => setHistory(previous => [...previous.slice(0, -1), { type: 'deck', deckId: route.deckId }])} />}
-      {route.type === 'folder-study' && <Study key={`folder:${route.folderId}`} folderId={route.folderId} shuffle onExit={pop} />}
+      {route.type === 'study' && <Study key={`${route.deckId}:${route.shuffle}`} deckId={route.deckId} shuffle={route.shuffle} unlearnedOnly={route.onlyDifficult}
+        onExit={() => setHistory(previous => {
+          const origin = previous[previous.length - 2]?.type;
+          return origin && ['study-options', 'study-folder', 'study-library', 'deck'].includes(origin)
+            ? previous.slice(0, -1)
+            : [...previous.slice(0, -1), { type: 'deck', deckId: route.deckId }];
+        })} />}
+      {route.type === 'folder-study' && <Study key={`folder:${route.folderId}:${route.shuffle ?? true}`} folderId={route.folderId} shuffle={route.shuffle ?? true} onExit={pop} />}
     </View>
     {!immersive ? <SafeAreaView edges={['bottom']} style={styles.tabArea}><View style={styles.tabs}>{tabs.map(([target, label, icon]) => {
       const selected = activeTab === target.type;
-      const create = target.type === 'edit-deck';
-      return <Pressable key={label} accessibilityRole="button" accessibilityLabel={create ? '새 학습 세트 만들기' : label} accessibilityState={{ selected }} onPress={() => create ? nav.go(target) : setHistory([target])} style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.6 : 1 }]}>
-        <View style={create ? styles.create : [styles.tabIcon, selected && { backgroundColor: colors.pale }]}><Icon name={icon} color={create ? '#FFFFFF' : selected ? colors.primary : colors.muted} size={22} /></View>
-        <Text style={{ fontSize: 10, fontWeight: selected ? '800' : '500', color: selected ? colors.primary : colors.muted }}>{label}</Text>
+      const study = target.type === 'study-library';
+      return <Pressable key={label} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected }} onPress={() => setHistory([target])} style={({ pressed }) => [styles.tab, { opacity: pressed ? 0.6 : 1 }]}>
+        <View style={[styles.tabIcon, selected && { backgroundColor: colors.pale }, study && styles.studyTabIcon, study && selected && styles.studyTabSelected]}><Icon name={icon} color={study ? colors.onPrimary : selected ? colors.primary : colors.icon} size={22} /></View>
+        <Text style={{ fontSize: 11, fontWeight: selected ? '700' : study ? '600' : '500', color: selected || study ? colors.primary : colors.muted }}>{label}</Text>
       </Pressable>;
     })}</View></SafeAreaView> : <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.card }} />}
     {folderForm && <FolderForm onClose={() => setFolderForm(false)} onSaved={id => { setFolderForm(false); nav.go({ type: 'folder', folderId: id }); }} />}
   </View>;
 }
 function Bootstrap() {
+  const { colors, s } = useUI();
   const state = useStore();
   const [iconsReady, iconError] = useFonts(iconFonts);
   useEffect(() => {
@@ -105,19 +127,25 @@ function Bootstrap() {
   return <Workspace key={state.session} />;
 }
 export default function App() {
-  return <SafeAreaProvider><SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.bg }}><StatusBar style="dark" /><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ErrorBoundary><ImageProvider><Bootstrap /></ImageProvider></ErrorBoundary></KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
+  const { colors, dark } = useUI();
+  const settings = useAppearance();
+  useEffect(() => { void appearance.load(); }, []);
+  useEffect(() => { Appearance.setColorScheme(settings.theme === 'system' ? 'auto' : settings.theme); }, [settings.theme]);
+  if (!settings.ready) return null;
+  return <SafeAreaProvider><SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.bg }}><StatusBar style={dark ? "light" : "dark"} /><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ErrorBoundary><ImageProvider><Bootstrap /></ImageProvider></ErrorBoundary></KeyboardAvoidingView></SafeAreaView></SafeAreaProvider>;
 }
-const styles = StyleSheet.create({
-  header: { paddingHorizontal: 22, minHeight: 66, paddingVertical: 10, gap: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg },
-  headerTitle: { color: colors.ink, fontSize: 20, letterSpacing: -0.6, fontWeight: '800' },
-  brand: { width: 34, height: 36, borderRadius: 11, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+const createStyles = (colors: Palette) => StyleSheet.create({
+  header: { paddingHorizontal: 16, minHeight: 56, paddingVertical: 6, gap: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg, borderBottomWidth: 1, borderBottomColor: colors.border },
+  headerTitle: { color: colors.ink, fontSize: 18, letterSpacing: -0.5, fontWeight: '700' },
+  brand: { width: 32, height: 32, borderRadius: radius.control, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -10 },
-  avatar: { width: 38, height: 38, borderRadius: 15, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFFFFF' },
+  avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.pale, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.accentBorder },
   statusDot: { position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: colors.bg },
-  notice: { paddingHorizontal: 22, paddingVertical: 7, backgroundColor: colors.peach },
+  notice: { paddingHorizontal: 16, paddingVertical: 6, backgroundColor: colors.warmBg },
   tabArea: { backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border },
-  tabs: { width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 7, alignItems: 'center' },
-  tab: { flex: 1, minHeight: 58, gap: 4, alignItems: 'center', justifyContent: 'center' },
-  tabIcon: { width: 48, height: 32, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  create: { width: 44, height: 38, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
+  tabs: { width: '100%', maxWidth: 720, alignSelf: 'center', flexDirection: 'row', paddingHorizontal: 10, paddingTop: 5, paddingBottom: 4, alignItems: 'center' },
+  tab: { flex: 1, minHeight: 56, gap: 4, alignItems: 'center', justifyContent: 'center' },
+  tabIcon: { width: 48, height: 32, borderRadius: radius.control, alignItems: 'center', justifyContent: 'center' },
+  studyTabIcon: { width: 52, height: 36, borderRadius: 12, backgroundColor: colors.primary, boxShadow: `0px 2px 6px ${colors.ring}` },
+  studyTabSelected: { boxShadow: `0px 0px 0px 3px ${colors.ring}` },
 });

@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ArrowUpRight, Check, Layers, Play, Folder } from 'lucide-react';
 import { deckAccent } from '@/lib/learning';
-import { cn } from '@/lib/utils';
 
 interface DeckCardProps {
   deck: Deck;
@@ -13,7 +12,6 @@ interface DeckCardProps {
   learnedCount: number;
   parentFolderTitle?: string | null;
   showFolderBadge?: boolean;
-  layout?: 'grid' | 'list';
   onNavigateDeck: (deckId: string) => void;
   onStartStudy: (deckId: string) => void;
 }
@@ -24,31 +22,23 @@ export const DeckCard: React.FC<DeckCardProps> = memo(
     learnedCount,
     parentFolderTitle,
     showFolderBadge = true,
-    layout = 'grid',
     onNavigateDeck,
     onStartStudy,
   }) => {
     const progress = cardsCount ? Math.round((learnedCount / cardsCount) * 100) : 0;
     const complete = cardsCount > 0 && learnedCount === cardsCount;
     const accent = deckAccent(deck.title);
-    const compact = layout === 'list';
     return (
       <Card
-        className={cn(
-          'group relative flex overflow-hidden transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5',
-          compact ? 'flex-col sm:flex-row sm:items-center' : 'flex-col'
-        )}
+        className="group relative flex flex-col overflow-hidden transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5"
       >
         <button
           type="button"
           onClick={() => onNavigateDeck(deck.id)}
           aria-label={`${deck.title} 학습 세트 열기`}
-          className={cn(
-            'min-w-0 flex-1 p-5 text-left after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring',
-            compact && 'flex items-center gap-4'
-          )}
+          className="min-w-0 flex-1 p-5 text-left after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
         >
-          <span className={cn('flex items-center justify-between gap-3', !compact && 'mb-5')}>
+          <span className="mb-5 flex items-center justify-between gap-3">
             <span
               style={{
                 backgroundColor: accent.background,
@@ -58,9 +48,7 @@ export const DeckCard: React.FC<DeckCardProps> = memo(
             >
               <Layers className="h-6 w-6" />
             </span>
-            {!compact && (
-              <ArrowUpRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary" />
-            )}
+            <ArrowUpRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary" />
           </span>
           <span className="block min-w-0">
             <span className="block line-clamp-2 text-base font-bold leading-relaxed tracking-tight group-hover:text-primary">
@@ -76,14 +64,14 @@ export const DeckCard: React.FC<DeckCardProps> = memo(
                 </>
               )}
             </span>
-            {!compact && deck.description && (
+            {deck.description && (
               <span className="mt-3 block min-h-10 line-clamp-2 text-xs leading-5 text-muted-foreground">
                 {deck.description}
               </span>
             )}
           </span>
         </button>
-        <div className={cn('px-5 pb-5', compact && 'sm:w-64 sm:shrink-0 sm:py-4')}>
+        <div className="px-5 pb-5">
           <div className="mb-2 flex justify-between text-xs">
             <span className="text-muted-foreground">
               {learnedCount}/{cardsCount}장 학습

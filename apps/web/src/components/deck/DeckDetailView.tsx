@@ -1,3 +1,5 @@
+import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
+import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 import React, { useState, useMemo, useDeferredValue } from 'react';
 import { selectDeckCards } from '../../store/cardSelectors';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
@@ -43,6 +45,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
   onNavigateFolder,
   onBack,
 }) => {
+  const { layout, collectionClassName } = useCollectionLayout();
   const decks = useFlashcardStore((state) => state.decks);
   const folders = useFlashcardStore((state) => state.folders);
   const deleteDeck = useFlashcardStore((state) => state.deleteDeck);
@@ -267,9 +270,10 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
               </button>
             ))}
           </div>
-          <p role="status" className="text-xs text-muted-foreground">
-            {filteredCards.length}장의 카드
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{filteredCards.length}장의 카드</p>
+            <CollectionLayoutToggle />
+          </div>
           {!filteredCards.length ? (
             <EmptyState
               icon={<Layers className="h-7 w-7 text-primary" />}
@@ -295,10 +299,11 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
               }
             />
           ) : (
-            <div className="space-y-3">
+            <div className={collectionClassName}>
               {filteredCards.map((card) => (
                 <DeckCardPreviewItem
                   key={card.id}
+                  layout={layout}
                   card={card}
                   index={indices.get(card.id) || 0}
                   onEdit={(id) => onEditDeck(deck.id, id)}

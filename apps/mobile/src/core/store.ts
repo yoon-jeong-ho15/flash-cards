@@ -82,6 +82,17 @@ export class FlashcardStore {
       decks: deleteContents ? s.decks.filter(d => !ids.has(d.id)) : s.decks.map(d => ids.has(d.id) ? { ...d, folderId: null, updatedAt: Date.now() } : d),
       cards: deleteContents ? s.cards.filter(c => !ids.has(c.deckId)) : s.cards }, result: undefined };
   });
+  reorderCards = (deckId: string, ids: string[]) => this.mutate(s => {
+    const own = s.cards.filter(card => card.deckId === deckId);
+    const order = new Map(ids.map((id, index) => [id, index]));
+    if (order.size !== ids.length || own.length !== ids.length || own.some(card => !order.has(card.id))) {
+      throw new Error('카드 구성이 변경되었습니다. 순서 변경 화면을 다시 열어 주세요.');
+    }
+    return { data: { ...s,
+      cards: s.cards.map(card => card.deckId === deckId ? { ...card, order: order.get(card.id)! } : card),
+      decks: s.decks.map(deck => deck.id === deckId ? { ...deck, updatedAt: Date.now() } : deck),
+    }, result: undefined };
+  });
   saveDeck = (id: string | undefined, input: DeckInput, items: CardInput[]) => this.mutate(s => {
     if (!input.title.trim()) throw new Error('덱 제목을 입력해 주세요.');
     if (id && !s.decks.some(d => d.id === id)) throw new Error('덱을 찾을 수 없습니다. 다른 기기에서 삭제되었을 수 있습니다.');

@@ -1,9 +1,9 @@
+import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
+import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 import { indexCards } from '../../store/cardSelectors';
 import React, { useState, useMemo, useDeferredValue } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { LibraryHeader } from '../common/LibraryHeader';
-import { cn } from '@/lib/utils';
-import { LayoutGrid, List } from 'lucide-react';
 import { DeckCard } from './DeckCard';
 import { EmptyState } from '../common/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -27,26 +27,12 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
   onBack,
   onNavigateAllFolders,
 }) => {
+  const { collectionClassName } = useCollectionLayout();
   const decks = useFlashcardStore((state) => state.decks);
   const folders = useFlashcardStore((state) => state.folders);
   const cards = useFlashcardStore((state) => state.cards);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
-  const [layout, setLayout] = useState<'grid' | 'list'>(() => {
-    try {
-      return localStorage.getItem('flashcard_library_layout') === 'list' ? 'list' : 'grid';
-    } catch {
-      return 'grid';
-    }
-  });
-  const changeLayout = (value: 'grid' | 'list') => {
-    setLayout(value);
-    try {
-      localStorage.setItem('flashcard_library_layout', value);
-    } catch {
-      /* The view still works without storage. */
-    }
-  };
   const [activeTab, setActiveTab] = useState<'all' | 'root'>('all');
   const [studyFilter, setStudyFilter] = useState('all');
   const cardIndex = useMemo(() => indexCards(cards).byDeck, [cards]);
@@ -210,38 +196,11 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
         </div>
       </div>
       <div className="flex items-center justify-between gap-4">
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
           전체 {decks.length}개 중{' '}
           <strong className="font-semibold text-foreground">{filteredDecks.length}개</strong> 표시
         </p>
-        <div
-          className="flex rounded-xl border border-border bg-card p-1"
-          aria-label="목록 표시 방식"
-        >
-          {(
-            [
-              ['grid', LayoutGrid, '격자 보기'],
-              ['list', List, '목록 보기'],
-            ] as const
-          ).map(([value, Icon, label]) => (
-            <button
-              key={value}
-              type="button"
-              aria-label={label}
-              title={label}
-              aria-pressed={layout === value}
-              onClick={() => changeLayout(value)}
-              className={cn(
-                'rounded-lg p-2 transition-colors',
-                layout === value
-                  ? 'bg-secondary text-primary'
-                  : 'text-muted-foreground hover:text-primary'
-              )}
-            >
-              <Icon className="h-4 w-4" />
-            </button>
-          ))}
-        </div>
+        <CollectionLayoutToggle />
       </div>
       {!filteredDecks.length ? (
         <EmptyState
@@ -263,10 +222,7 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
         />
       ) : (
         <div
-          className={cn(
-            'grid gap-4',
-            layout === 'grid' ? 'sm:grid-cols-2 2xl:grid-cols-3' : 'grid-cols-1'
-          )}
+          className={collectionClassName}
           aria-busy={searchQuery !== deferredQuery}
         >
           {filteredDecks.map((deck) => {
@@ -278,7 +234,6 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
                 cardsCount={own.length}
                 learnedCount={own.filter((card) => card.learned).length}
                 parentFolderTitle={folders.find((folder) => folder.id === deck.folderId)?.title}
-                layout={layout}
                 onNavigateDeck={onNavigateDeck}
                 onStartStudy={onStartStudy}
               />

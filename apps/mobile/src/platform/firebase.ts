@@ -3,6 +3,7 @@ import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { mockAuthEnabled } from './testAuth';
 
 const config = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -12,7 +13,7 @@ const config = {
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
-export const configured = Boolean(config.apiKey && config.projectId && !config.apiKey.startsWith('your_'));
+export const configured = !mockAuthEnabled && Boolean(config.apiKey && config.projectId && !config.apiKey.startsWith('your_'));
 const app = configured ? (getApps().length ? getApp() : initializeApp(config)) : null;
 export const auth = app ? (() => {
   try { return initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) }); }
