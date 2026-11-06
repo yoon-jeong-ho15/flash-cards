@@ -11,6 +11,8 @@ import { store, useStore } from "../platform/runtime";
 import { Attachment, Button, Chips, Empty, Field, Sheet, attempt, confirm, useImage } from "./kit";
 import { Icon } from "./Icon";
 import { FolderPicker } from "./FolderPicker";
+import { CardOrderSheet } from "./CardOrderSheet";
+import { StudyOrderModal } from "./StudyOrderModal";
 import type { Navigation } from "./navigation";
 
 type DomNode = {
@@ -133,6 +135,8 @@ export function DeckDetail({
   const [filter, setFilter] = useState<"all" | "learned" | "unlearned">("all");
   const [moving, setMoving] = useState(false);
   const [actions, setActions] = useState(false);
+  const [ordering, setOrdering] = useState(false);
+  const [studyOptionsOpen, setStudyOptionsOpen] = useState(false);
   const openImage = useImage();
   const own = orderedCards(cards, deckId);
   const visible = own.filter(
@@ -369,14 +373,41 @@ export function DeckDetail({
         </View>
         <View style={{ flex: 1 }}>
           <Button
-            title="학습하기"
-            icon="play"
+            title="카드 순서 변경"
             tone="secondary"
-            disabled={!own.length}
-            onPress={() => nav.go({ type: "study-options", deckId })}
+            disabled={own.length < 2}
+            onPress={() => setOrdering(true)}
           />
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="학습하기"
+          accessibilityState={{ disabled: !own.length }}
+          disabled={!own.length}
+          onPress={() => setStudyOptionsOpen(true)}
+          style={{ width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.subtle, opacity: own.length ? 1 : 0.4 }}
+        >
+          <Icon name="play" size={20} color={colors.primary} />
+        </Pressable>
       </View>
+      {studyOptionsOpen && (
+        <StudyOrderModal
+          title={deck.title}
+          onClose={() => setStudyOptionsOpen(false)}
+          onChoose={shuffle => {
+            setStudyOptionsOpen(false);
+            nav.go({ type: 'study', deckId, shuffle, onlyDifficult: false });
+          }}
+        />
+      )}
+      {ordering && (
+        <CardOrderSheet
+          cards={own}
+          deckTitle={deck.title}
+          onClose={() => setOrdering(false)}
+          onSave={ids => store.reorderCards(deckId, ids)}
+        />
+      )}
       {moving && (
         <FolderPicker
           value={deck.folderId || null}

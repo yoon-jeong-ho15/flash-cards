@@ -92,7 +92,7 @@ function Workspace() {
       {route.type === 'study' && <Study key={`${route.deckId}:${route.shuffle}`} deckId={route.deckId} shuffle={route.shuffle} unlearnedOnly={route.onlyDifficult}
         onExit={() => setHistory(previous => {
           const origin = previous[previous.length - 2]?.type;
-          return origin && ['study-options', 'study-folder', 'study-library'].includes(origin)
+          return origin && ['study-options', 'study-folder', 'study-library', 'deck'].includes(origin)
             ? previous.slice(0, -1)
             : [...previous.slice(0, -1), { type: 'deck', deckId: route.deckId }];
         })} />}

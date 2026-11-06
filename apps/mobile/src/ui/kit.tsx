@@ -393,10 +393,14 @@ export function Sheet({
   title,
   children,
   onClose,
+  scrollable = true,
+  footer,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  scrollable?: boolean;
+  footer?: React.ReactNode;
 }) {
   const { colors, s } = useUI();
   return (
@@ -428,12 +432,15 @@ export function Sheet({
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={s.page}
-          >
-            {children}
-          </ScrollView>
+          {scrollable ? (
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={s.page}
+            >
+              {children}
+            </ScrollView>
+          ) : <View style={{ flex: 1 }}>{children}</View>}
+          {footer && <View style={s.dock}>{footer}</View>}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
