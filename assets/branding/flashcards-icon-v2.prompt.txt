@@ -1,0 +1,8 @@
+Generated with the built-in image_gen tool.
+
+Use case: logo-brand.
+Asset type: a single production-ready square app icon master for Flashcards, a personal flashcard study app, shared between native mobile and web.
+Primary request: create a fresh, memorable app icon: two overlapping rounded flashcards suggesting a card flip. A pale lavender rear card tilts gently behind a bright white upright front card. The front card has one bold purple folded/turning corner detail that conveys flipping and recall. Keep the mark extremely simple, confident and recognizable at favicon size.
+Style: refined minimal flat vector-like graphic with precise smooth edges and balanced negative space. No 3D, no glossy effects, no tiny strokes, no text, no letters, no numerals, no sparkles, no extra objects.
+Palette: edge-to-edge solid vivid violet background #6155E8, white front card, pale lavender rear card, violet fold detail.
+Composition: 1024 by 1024 square, centered generous symbol occupying about 60 percent of canvas; all essential artwork safely within the central 65 percent so circular masks work. Background must fill the entire square to all four edges, fully opaque, square canvas corners with no pre-rounded outer icon boundary. Output only the icon artwork, not a presentation board, device mockup, layout, labels, or multiple variations.
