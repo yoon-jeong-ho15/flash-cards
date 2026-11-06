@@ -5,7 +5,7 @@ const esbuild = require('esbuild');
 const { harness: storeHarness, item, load } = require('./helpers.cjs');
 const { folderCards } = load('core/content.ts');
 
-const externals = ['react', 'react-native', 'expo-haptics', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library', './Typography', './theme'];
+const externals = ['react-native-safe-area-context', 'react-native-svg', 'react', 'react-native', 'expo-haptics', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library', './Typography', './theme'];
 const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail', 'StudySetup'].map(name => [name, esbuild.buildSync({
   entryPoints: [path.resolve(__dirname, `../src/ui/${name}.tsx`)], bundle: true, platform: 'node', format: 'cjs',
   write: false, external: externals, tsconfigRaw: { compilerOptions: { jsx: 'react' } },
@@ -40,13 +40,15 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     ...Object.fromEntries(['View', 'Text', 'Pressable', 'ScrollView', 'FlatList', 'ActivityIndicator'].map(name => [name, name])),
   };
   const mocks = {
+    'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' },
+    'react-native-svg': { __esModule: true, default: 'Svg', Path: 'Svg.Path', Rect: 'Svg.Rect' },
     './Typography': { Text: 'Text', TextInput: 'TextInput' },
     './theme': { useUI: () => ({ colors: {}, s: {}, uiScale: 1, dark: false }), useThemedStyles: factory => factory({}), radius: { control: 10, card: 12, sheet: 20 } },
     react, 'react-native': native, '../platform/runtime': { store, useStore: () => store.getState() },
     '../editor/RichText': { RichText: 'RichText' }, './CardComposer': { CardComposer: 'CardComposer' },
     './Library': { deckAccent: () => ({ bg: '#FFFFFF', ink: '#000000' }) }, './FolderPicker': { FolderPicker: 'FolderPicker' },
     './Icon': { Icon: 'Icon' }, './FolderForm': { FolderForm: 'FolderForm' },
-    './kit': { colors: {}, s: {}, useImage: () => () => {}, showError: error => { throw error; },
+    './kit': { colors: {}, s: {}, useImage: () => () => {}, attempt: fn => fn(), showError: error => { throw error; },
       ...Object.fromEntries(['Attachment', 'Button', 'Empty', 'Progress', 'Chips', 'Field', 'Select', 'ProgressRing', 'Sheet'].map(name => [name, name])),
     },
     './useSwipeMotion': { useSwipeMotion: props => { swipeProps = props; return { panHandlers: {}, style: {}, transitioning: false, prepareFlip: () => true }; } },
@@ -290,7 +292,10 @@ test('study picker separates folder tiles from unfiled decks and preserves setup
     assert.equal(unfiled.length, 2);
     const deck = unfiled.find(node => node.props.accessibilityLabel.startsWith('미분류 덱,'));
     deck.props.onPress();
-    assert.deepEqual(destination, { type: 'study-options', deckId: f.store.getState().decks.find(deck => deck.title === '미분류 덱').id });
+    const modal = nodes(screen.render({ nav: { go: route => { destination = route; } } })).find(node => node.props?.title === '미분류 덱' && node.props.onChoose);
+    assert.ok(modal, 'the unfiled deck opens its study order chooser');
+    modal.props.onChoose(true);
+    assert.deepEqual(destination, { type: 'study', deckId: f.store.getState().decks.find(deck => deck.title === '미분류 덱').id, shuffle: true, onlyDifficult: false });
     assert.equal(unfiled.find(node => node.props.accessibilityLabel.startsWith('빈 미분류 덱,')).props.disabled, true);
   } finally { screen.cleanup(); }
 });
@@ -303,18 +308,18 @@ test('study picker adapts to narrow screens and enlarged text and supports unfil
     [{ width: 390, fontScale: 1.5 }, 1], [{ width: 768, fontScale: 1 }, 3],
   ]) {
     const screen = screenHarness(f.store, 'Library', 'StudyLibrary', dimensions);
-    assert.equal(screen.render({ nav }).props.numColumns, columns);
+    assert.equal(nodes(screen.render({ nav })).find(node => node.type === 'FlatList').props.numColumns, columns);
     screen.cleanup();
   }
   for (const folder of f.store.getState().folders) await f.store.deleteFolder(folder.id);
   const screen = screenHarness(f.store, 'Library', 'StudyLibrary');
   try {
-    const tree = screen.render({ nav });
+    const tree = nodes(screen.render({ nav })).find(node => node.type === 'FlatList');
     assert.equal(tree.props.data.length, 0);
     assert.equal(tree.props.ListEmptyComponent, undefined);
     assert.equal(nodes(tree.props.ListFooterComponent).filter(node => node.type === 'Pressable').length, f.store.getState().decks.length);
     for (const deck of f.store.getState().decks) await f.store.deleteDeck(deck.id);
-    const empty = screen.render({ nav });
+    const empty = nodes(screen.render({ nav })).find(node => node.type === 'FlatList');
     assert.equal(empty.props.ListFooterComponent, undefined);
     assert.ok(empty.props.ListEmptyComponent);
   } finally { screen.cleanup(); }
@@ -364,10 +369,13 @@ test('study folder offers ordered and random study plus compact per-deck setup a
     assert.deepEqual(destination, { type: 'folder-study', folderId: f.folder, shuffle: true });
     const list = nodes(tree).find(node => node.type === 'FlatList');
     assert.deepEqual(new Set(list.props.data.map(deck => deck.id)), new Set([f.first, f.second]));
-    const play = nodes(list.props.renderItem({ item: list.props.data[0] })).find(node => node.props?.accessibilityLabel === `${list.props.data[0].title} 학습하기`);
+    const play = nodes(list.props.renderItem({ item: list.props.data[0] })).find(node => node.props?.accessibilityLabel?.startsWith(`${list.props.data[0].title}, 카드`));
     assert.equal(play.props.accessibilityRole, 'button');
     play.props.onPress();
-    assert.deepEqual(destination, { type: 'study-options', deckId: list.props.data[0].id });
+    const modal = nodes(screen.render(props)).find(node => node.props?.onChoose);
+    assert.ok(modal, 'the folder deck opens its study order chooser');
+    modal.props.onChoose(false);
+    assert.deepEqual(destination, { type: 'study', deckId: list.props.data[0].id, shuffle: false, onlyDifficult: false });
     const empty = screen.render({ ...props, folderId: f.empty });
     assert.equal(nodes(empty).find(node => node.type === 'FlatList').props.data.length, 0);
     assert.equal(button(empty, '폴더 전체 정방향 학습').disabled, true);
@@ -457,4 +465,38 @@ test('settings button in study bar opens font settings modal during study', asyn
     assert.equal(nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'StudyFontSettingsModal'), undefined);
     assert.equal(screen.swipeDisabled(), false, 'Card swiping should be re-enabled after closing settings modal');
   } finally { screen.cleanup(); }
+});
+
+test('the shared layout control changes every library and study collection without dropping filters or items', async () => {
+  const f = await fixture();
+  const nav = { go() {}, back() {} };
+  for (const [file, name, props] of [
+    ['Library', 'FolderLibrary', { nav, onNewFolder() {} }],
+    ['Library', 'DeckLibrary', { nav }],
+    ['Library', 'DeckLibrary', { nav, folderId: f.folder }],
+    ['Library', 'StudyLibrary', { nav }],
+    ['Library', 'Search', { nav }],
+    ['StudySetup', 'StudyFolder', { nav, folderId: f.folder }],
+    ['DeckDetail', 'DeckDetail', { nav, deckId: f.first }],
+  ]) {
+    await f.store.setPreferences({ collectionLayout: 'grid' });
+    const screen = screenHarness(f.store, file, name);
+    try {
+      let tree = screen.render(props);
+      const list = nodes(tree).find(node => node.type === 'FlatList');
+      const ids = list.props.data.map(item => item.id);
+      assert.equal(list.props.numColumns, 2, name);
+      const selector = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'CollectionLayoutToggle');
+      assert.ok(selector, `${name} offers a layout choice`);
+      const control = selector.type(selector.props);
+      await nodes(control).find(node => node.props?.accessibilityLabel === '목록 보기').props.onPress();
+      // The component handles the promise; wait for the store's durable serial write.
+      await new Promise(resolve => setImmediate(resolve));
+      tree = screen.render(props);
+      const updated = nodes(tree).find(node => node.type === 'FlatList');
+      assert.equal(updated.props.numColumns, 1, name);
+      assert.deepEqual(updated.props.data.map(item => item.id), ids, `${name} keeps the same items and order`);
+      assert.equal(f.store.getState().preferences.collectionLayout, 'list');
+    } finally { screen.cleanup(); }
+  }
 });

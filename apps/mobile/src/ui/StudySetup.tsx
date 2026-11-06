@@ -1,4 +1,5 @@
-import { CollectionIcon, CollectionSurface, DeckCardHeader } from './CollectionSurface';
+import { CollectionLayoutToggle } from './CollectionLayoutToggle';
+import { CollectionIcon, DeckSummary } from './CollectionSurface';
 import { StudyOrderModal } from './StudyOrderModal';
 import { useCollectionGrid } from './useCollectionGrid';
 import { useUI } from './theme';
@@ -7,7 +8,7 @@ import React, { useState } from "react";
 import { FlatList, Pressable, ScrollView, View } from 'react-native';
 import { folderCards, sortDecks } from "../core/content";
 import { useStore } from "../platform/runtime";
-import { Button, Empty, Progress } from "./kit";
+import { Button, Empty } from "./kit";
 import { Icon } from "./Icon";
 import type { Navigation } from "./navigation";
 
@@ -80,8 +81,9 @@ export function StudyFolder({
                 }
               />
             </View>
-            <View style={{ gap: 6 }}>
-              <Text style={s.h2}>덱별 학습</Text>
+            <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
+              <Text numberOfLines={1} style={[s.h2, { flex: 1, minWidth: 0 }]}>덱별 학습</Text>
+              <CollectionLayoutToggle />
             </View>
           </View>
         }
@@ -105,17 +107,7 @@ export function StudyFolder({
                 onPress={() => setSelectedDeckId(item.id)}
               >
                 {({ pressed }) => (
-                  <CollectionSurface pressed={pressed} kind="deck" style={{ minHeight: 136, padding: 10, gap: 6 }}>
-                    <DeckCardHeader title={item.title} pressed={pressed} />
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Text style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>
-                        {cards.length
-                          ? `카드 ${cards.length}장\n기억한 카드 ${learned}장`
-                          : "학습할 카드가 없어요"}
-                      </Text>
-                    </View>
-                    <Progress learned={learned} total={cards.length} compact />
-                  </CollectionSurface>
+                  <DeckSummary hideDetails pressed={pressed} title={item.title} count={cards.length} learned={learned} />
                 )}
               </Pressable>
             </View>

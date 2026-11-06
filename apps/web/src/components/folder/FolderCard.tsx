@@ -16,9 +16,9 @@ export const FolderCard: React.FC<FolderCardProps> = memo(({ folder, decksCount,
         type="button"
         onClick={onClick}
         aria-label={`${folder.title} 폴더 열기`}
-        className="flex h-full w-full flex-col justify-between p-6 text-left"
+        className="flex h-full min-h-36 w-full flex-col justify-between gap-4 p-5 text-left"
       >
-        <div className="flex items-start gap-3.5 mb-6">
+        <div className="mb-2 flex min-w-0 flex-1 items-start gap-3.5">
           <div className="w-11 h-11 rounded-xl bg-[#fff0e7] text-[#ba7549] flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
             <FolderIcon className="w-5 h-5" />
           </div>
@@ -38,7 +38,7 @@ export const FolderCard: React.FC<FolderCardProps> = memo(({ folder, decksCount,
           </div>
         </div>
 
-        <div className="flex w-full items-center justify-between pt-3 border-t border-border text-xs text-muted-foreground">
+        <div className="flex w-full items-center justify-between gap-4 border-t border-border pt-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5 font-medium text-foreground">
             <Layers className="w-3.5 h-3.5 text-primary" />
             학습 세트 {decksCount}개

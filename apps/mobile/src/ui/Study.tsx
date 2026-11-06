@@ -530,25 +530,6 @@ export function Study({
           )}
           <View style={{ flex: 1, minHeight: 180 }}>
             <View
-              pointerEvents="none"
-              style={[
-                study.stack,
-                {
-                  left: 18,
-                  right: 18,
-                  bottom: -10,
-                  backgroundColor: colors.stackBack,
-                },
-              ]}
-            />
-            <View
-              pointerEvents="none"
-              style={[
-                study.stack,
-                { left: 9, right: 9, bottom: -5, backgroundColor: colors.stackFront },
-              ]}
-            />
-            <View
               {...swipe.panHandlers}
               pointerEvents={busy ? "none" : "auto"}
               style={{ flex: 1 }}
@@ -718,7 +699,6 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     gap: 8,
     minHeight: 42,
   },
-  stack: { position: "absolute", height: 100, borderRadius: radius.card },
   dock: {
     width: "100%",
     maxWidth: 720,

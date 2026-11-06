@@ -1,4 +1,5 @@
-import { CollectionIcon, CollectionSurface, DeckCardHeader } from './CollectionSurface';
+import { CollectionLayoutToggle } from './CollectionLayoutToggle';
+import { CollectionIcon, CollectionSurface, DeckSummary } from './CollectionSurface';
 import { StudyOrderModal } from './StudyOrderModal';
 import { useCollectionGrid } from './useCollectionGrid';
 import { useUI, useThemedStyles, type Palette } from './theme';
@@ -7,7 +8,7 @@ import React, { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { sortDecks } from "../core/content";
 import { useStore } from "../platform/runtime";
-import { Button, Empty, Progress } from "./kit";
+import { Button, Empty } from "./kit";
 import { Icon } from "./Icon";
 import type { Navigation } from "./navigation";
 
@@ -75,7 +76,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
         data={topics}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[s.page, styles.page]}
-        columnWrapperStyle={columns > 1 ? styles.columns : undefined}
+        columnWrapperStyle={columns > 1 ? grid.rowStyle : undefined}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.header}>
@@ -94,10 +95,11 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                 </Text>
               </View>
             )}
-            {topics.length > 0 && (
+            {hasContent && (
               <View style={styles.sectionHeading}>
-                <Text style={styles.sectionTitle}>폴더</Text>
-                <Text style={styles.sectionCount}>{topics.length}개</Text>
+                <Text numberOfLines={1} style={[styles.sectionTitle, { flex: 1, minWidth: 0 }]}>{topics.length ? '폴더' : '미분류 덱'}</Text>
+                <Text numberOfLines={1} style={styles.sectionCount}>{topics.length || unfiled.length}개</Text>
+                <CollectionLayoutToggle />
               </View>
             )}
           </View>
@@ -122,11 +124,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
             : 0;
           return (
             <View
-              style={{
-                width: `${100 / columns}%`,
-                paddingHorizontal: columns > 1 ? 4 : 0,
-                paddingBottom: 10,
-              }}
+              style={grid.itemStyle}
             >
               <Pressable
                 accessibilityRole="button"
@@ -146,10 +144,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                       <Text numberOfLines={2} style={styles.folderTitle}>
                         {item.title}
                       </Text>
-                      <Text style={styles.metadata}>
-                        덱 {item.deckCount}개<Text style={styles.separator}> · </Text>
-                        카드 {item.count}장
-                      </Text>
+                      <View style={{ minHeight: 18 }} />
                     </View>
                     <View style={styles.progressArea}>
                       <View style={styles.progressLabels}>
@@ -179,10 +174,12 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
             <View
               style={[styles.unfiledSection, !topics.length && { marginTop: 0 }]}
             >
-              <View style={[styles.sectionHeading, styles.unfiledHeading]}>
-                <Text style={styles.sectionTitle}>미분류 덱</Text>
-                <Text style={styles.sectionCount}>{unfiled.length}개</Text>
-              </View>
+              {topics.length > 0 && (
+                <View style={[styles.sectionHeading, styles.unfiledHeading]}>
+                  <Text style={styles.sectionTitle}>미분류 덱</Text>
+                  <Text style={styles.sectionCount}>{unfiled.length}개</Text>
+                </View>
+              )}
               <View style={grid.wrapStyle}>
                 {unfiled.map((deck) => (
                   <View key={deck.id} style={grid.itemStyle}>
@@ -195,17 +192,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                       onPress={() => setSelectedDeckId(deck.id)}
                     >
                       {({ pressed }) => (
-                        <CollectionSurface pressed={pressed} kind="deck" style={styles.deck}>
-                          <DeckCardHeader title={deck.title} pressed={pressed} />
-                          <View style={styles.deckInfo}>
-                            <Text style={styles.metadata}>
-                              {deck.count
-                                ? `카드 ${deck.count}장\n기억한 카드 ${deck.learned}장`
-                                : "학습할 카드가 없어요"}
-                            </Text>
-                          </View>
-                          <Progress learned={deck.learned} total={deck.count} compact />
-                        </CollectionSurface>
+                        <DeckSummary hideDetails pressed={pressed} title={deck.title} count={deck.count} learned={deck.learned} />
                       )}
                     </Pressable>
                   </View>
@@ -231,7 +218,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
 
 const createStyles = (colors: Palette) => StyleSheet.create({
   page: { paddingTop: 16, paddingHorizontal: 16, paddingBottom: 24, gap: 0 },
-  header: { paddingBottom: 10 },
+  header: { paddingBottom: 10, gap: 12 },
   summary: {
     flexDirection: "row",
     alignItems: "center",
@@ -245,6 +232,7 @@ const createStyles = (colors: Palette) => StyleSheet.create({
   dot: { width: 3, height: 4, borderRadius: 2, backgroundColor: colors.border },
   sectionHeading: {
     flexDirection: "row",
+    flexWrap: "nowrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
@@ -257,7 +245,6 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     color: colors.ink,
   },
   sectionCount: { fontSize: 12, lineHeight: 18, color: colors.muted },
-  columns: { marginHorizontal: -4 },
   folder: { minHeight: 144, padding: 12, gap: 8 },
   folderTop: {
     flexDirection: "row",
@@ -293,11 +280,5 @@ const createStyles = (colors: Palette) => StyleSheet.create({
   fill: { height: "100%", borderRadius: 2 },
   unfiledSection: { marginTop: 14 },
   unfiledHeading: { marginBottom: 10 },
-  deck: {
-    gap: 6,
-    padding: 10,
-    minHeight: 136,
-  },
-  deckInfo: { flex: 1, gap: 3 },
   empty: { paddingTop: 16, gap: 12 },
 });

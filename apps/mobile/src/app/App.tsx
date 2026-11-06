@@ -16,6 +16,7 @@ import { DeckEditor } from '../ui/DeckEditor';
 import { Dashboard, DeckLibrary, FolderLibrary, Search, StudyLibrary } from '../ui/Library';
 import { FolderForm } from '../ui/FolderForm';
 import { Study } from '../ui/Study';
+import { StudyBackground } from '../ui/StudyBackground';
 import { StudyFolder, DeckStudyOptions } from '../ui/StudySetup';
 import { Button, ImageProvider, showError } from '../ui/kit';
 import type { Navigation, Route } from '../ui/navigation';
@@ -56,6 +57,7 @@ function Workspace() {
     return () => listener.remove();
   }, [history, folderForm]);
   const isStudying = route.type === 'study' || route.type === 'folder-study';
+  const studyArea = isStudying || ['study-library', 'study-folder', 'study-options'].includes(route.type);
   const immersive = isStudying || route.type === 'edit-deck';
   const topLevel = ['dashboard', 'all-decks', 'all-folders', 'study-library', 'search', 'account'].includes(route.type);
   const activeTab = ['study-folder', 'study-options'].includes(route.type) ? 'study-library' : ['all-decks', 'folder', 'deck'].includes(route.type) ? 'all-folders' : route.type;
@@ -74,6 +76,7 @@ function Workspace() {
     {(!state.online || state.status === 'error') && <Pressable accessibilityRole="button" disabled={immersive} onPress={() => nav.go({ type: 'account' })} style={styles.notice}><Text style={[s.label, { color: state.status === 'error' ? colors.red : colors.muted }]}>{state.status === 'error' ? '동기화를 확인해 주세요 · 자세히 보기' : '오프라인이에요. 학습 내용은 기기에 저장돼요.'}</Text></Pressable>}
     {state.error && state.status !== 'error' && <Text accessibilityRole="alert" style={[s.error, { padding: 12 }]}>{state.error}</Text>}
     <View style={{ flex: 1 }}>
+      {studyArea && <StudyBackground />}
       {route.type === 'dashboard' && <Dashboard nav={nav} onNewFolder={() => setFolderForm(true)} />}
       {route.type === 'study-library' && <StudyLibrary nav={nav} />}
       {route.type === 'study-folder' && <StudyFolder key={route.folderId} folderId={route.folderId} nav={nav} />}

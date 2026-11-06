@@ -1,3 +1,5 @@
+import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
+import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { FolderCard } from './FolderCard';
@@ -21,6 +23,7 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
   onNavigateAllDecks,
 }) => {
   const folders = useFlashcardStore((state) => state.folders);
+  const { layout, collectionClassName } = useCollectionLayout();
   const decks = useFlashcardStore((state) => state.decks);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -53,14 +56,17 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
           내 폴더{' '}
           <strong className="ml-1 font-semibold text-foreground">{filteredFolders.length}개</strong>
         </p>
-        <div className="w-full sm:max-w-sm">
-          <Input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="폴더 이름이나 설명으로 찾아보세요"
-            aria-label="폴더 이름, 설명 검색"
-            leftIcon={<Search className="h-4 w-4" />}
-          />
+        <div className="flex w-full items-center gap-2 sm:max-w-xl">
+          <div className="min-w-0 flex-1">
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="폴더 이름이나 설명으로 찾아보세요"
+              aria-label="폴더 이름, 설명 검색"
+              leftIcon={<Search className="h-4 w-4" />}
+            />
+          </div>
+          <CollectionLayoutToggle />
         </div>
       </div>
       {!filteredFolders.length ? (
@@ -82,7 +88,7 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className={collectionClassName}>
           {filteredFolders.map((folder) => (
             <FolderCard
               key={folder.id}
@@ -95,7 +101,7 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
             <button
               type="button"
               onClick={onCreateFolder}
-              className="flex min-h-44 flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-input text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              className={`flex flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-input p-5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary ${layout === 'grid' ? 'min-h-44' : 'min-h-36'}`}
             >
               <FolderIcon className="h-7 w-7" />새 폴더 만들기
             </button>

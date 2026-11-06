@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { richTextToText } from '../../utils/search';
 import { deckAccent } from '@/lib/learning';
 import { cn } from '@/lib/utils';
+import { CollectionLayoutToggle } from './CollectionLayoutToggle';
+import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 
 interface GlobalSearchProps {
   onClose: () => void;
@@ -17,6 +19,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
   onNavigateDeck,
   onNavigateFolder,
 }) => {
+  const { layout } = useCollectionLayout();
   const [query, setQuery] = useState('');
   const deferred = useDeferredValue(query);
   const [selected, setSelected] = useState(0);
@@ -127,9 +130,12 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
           </button>
         )}
       </div>
-      <p role="status" className="mb-3 mt-5 text-xs text-muted-foreground">
-        {deferred.trim() ? `검색 결과 ${results.total}개` : '최근 수정한 학습 세트'}
-      </p>
+      <div className="mb-3 mt-5 flex items-center justify-between gap-3">
+        <p role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {deferred.trim() ? `검색 결과 ${results.total}개` : '최근 수정한 학습 세트'}
+        </p>
+        <CollectionLayoutToggle />
+      </div>
       {!results.items.length && (
         <div className="py-9 text-center">
           <Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
@@ -148,7 +154,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
         role="listbox"
         aria-label="학습 자료 검색 결과"
         aria-busy={query !== deferred}
-        className="max-h-[min(52dvh,440px)] space-y-1 overflow-y-auto"
+        className={cn('max-h-[min(52dvh,440px)] overflow-y-auto', layout === 'grid' ? 'grid gap-2 sm:grid-cols-2' : 'flex flex-col gap-1')}
       >
         {results.items.map((item, index) => {
           const accent =

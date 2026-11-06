@@ -31,6 +31,8 @@ export const iconNames = {
   "arrow-up": "arrow-up",
   "arrow-down": "arrow-down",
   settings: "settings",
+  grid: "layout-grid",
+  list: "list",
 } as const satisfies Record<string, LucideIconName>;
 export type IconName = keyof typeof iconNames;
 

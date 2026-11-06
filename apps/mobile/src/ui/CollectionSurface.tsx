@@ -4,6 +4,34 @@ import Svg, { Path, Rect } from 'react-native-svg';
 import { radius, useUI } from './theme';
 import { Icon } from './Icon';
 import { Text } from './Typography';
+import { Progress } from './kit';
+
+export function DeckSummary({ title, count, learned, detail, description, pressed = false, hideDetails = false }: {
+  title: string;
+  count: number;
+  learned: number;
+  detail?: string;
+  description?: string;
+  pressed?: boolean;
+  hideDetails?: boolean;
+}) {
+  const { colors, s } = useUI();
+  return (
+    <CollectionSurface kind="deck" pressed={pressed} style={{ minHeight: 152, padding: 10, gap: 8 }}>
+      <DeckCardHeader title={title} />
+      <View style={{ flex: 1, gap: 4 }}>
+        {hideDetails ? <View style={{ minHeight: 18 }} /> : (
+          <Text style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>{detail || (count ? `카드 ${count}장 · 기억한 카드 ${learned}장` : '학습할 카드가 없어요')}</Text>
+        )}
+        {Boolean(description) && <Text numberOfLines={2} style={s.muted}>{description}</Text>}
+      </View>
+      <Text style={[s.label, { fontSize: 11, color: count && learned === count ? colors.success : colors.muted }]}>
+        {count && learned === count ? '학습 완료' : `${learned}/${count} 학습`}
+      </Text>
+      <Progress learned={learned} total={count} compact />
+    </CollectionSurface>
+  );
+}
 
 function folderOutline(width: number, height: number) {
   // Use layout coordinates so the stroke and corners stay the same size in every layout.
@@ -54,7 +82,7 @@ export function CollectionSurface({ kind, children, style, pressed = false }: {
             {folder ? (
               <Path
                 d={folderOutline(size.width, size.height)}
-                fill={pressed ? colors.pale : colors.card}
+                fill={colors.card}
                 stroke={pressed ? colors.primary : colors.border}
                 strokeWidth={1}
               />
@@ -69,7 +97,7 @@ export function CollectionSurface({ kind, children, style, pressed = false }: {
                   height={Math.max(0, size.height - 9)}
                   rx={radius.card}
                   ry={radius.card}
-                  fill={offset === 0 ? (pressed ? colors.pale : colors.card) : '#FFFFFF'}
+                  fill={offset === 0 ? colors.card : '#FFFFFF'}
                   stroke={offset === 0 && pressed ? colors.primary : colors.border}
                   strokeWidth={1}
                 />
@@ -91,7 +119,7 @@ export function CollectionSurface({ kind, children, style, pressed = false }: {
 }
 
 /** Full-width heading for the compact deck cards, whose content padding is 10. */
-export function DeckCardHeader({ title, pressed = false }: { title: string; pressed?: boolean }) {
+export function DeckCardHeader({ title }: { title: string }) {
   const { colors, s } = useUI();
   return (
     <View style={{
@@ -101,11 +129,10 @@ export function DeckCardHeader({ title, pressed = false }: { title: string; pres
       paddingVertical: 8,
       minHeight: 40,
       justifyContent: 'center',
-      backgroundColor: pressed ? colors.deckHeaderPressed : colors.iconBg,
       borderTopLeftRadius: radius.card - 1,
       borderTopRightRadius: radius.card - 1,
       borderBottomWidth: 1,
-      borderBottomColor: colors.accentBorder,
+      borderBottomColor: colors.border,
     }}>
       <Text numberOfLines={2} style={[s.h2, { fontSize: 14, lineHeight: 20 }]}>{title}</Text>
     </View>

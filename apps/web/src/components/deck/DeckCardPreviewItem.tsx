@@ -6,28 +6,30 @@ import { Check, Edit3 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ImageWithSkeleton } from '../common/ImageWithSkeleton';
+import { cn } from '@/lib/utils';
 
 interface DeckCardPreviewItemProps {
   card: CardType;
   index: number;
+  layout?: 'grid' | 'list';
   onEdit: (cardId: string) => void;
 }
 
 export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(
-  ({ card, index, onEdit }) => {
+  ({ card, index, onEdit, layout = 'list' }) => {
     const setLearned = useFlashcardStore((state) => state.setCardLearned);
     const backImage = card.backImageUrl || card.imageUrl;
 
     return (
       <Card className="p-5 sm:p-6 hover:border-primary/20 transition-all flex flex-col gap-3">
         {/* 본문 영역: 앞면 & 뒷면 */}
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className={cn('flex flex-col justify-between gap-4', layout === 'list' && 'md:flex-row md:items-start')}>
           {/* 좌측: 번호 & 앞면 단어 및 이미지 */}
-          <div className="md:w-[42%] min-w-0 flex items-start gap-3">
+          <div className={cn('min-w-0 flex items-start gap-3', layout === 'list' && 'md:w-[42%]')}>
             <span className="w-6 h-6 rounded-md bg-muted text-muted-foreground flex items-center justify-center text-xs font-mono font-semibold shrink-0 mt-0.5 border border-border">
               {index + 1}
             </span>
-            <div className="flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className={cn('min-w-0 flex-1 flex flex-col gap-3', layout === 'list' && 'sm:flex-row sm:items-start')}>
               <div className="flex-1 font-semibold text-foreground text-sm sm:text-base tracking-tight">
                 <RichTextViewer html={card.termRichText} textSize="base" />
               </div>
@@ -44,10 +46,10 @@ export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(
             </div>
           </div>
 
-          <div className="hidden md:block w-px self-stretch bg-border my-1 shrink-0" />
+          <div className={layout === 'list' ? 'hidden md:block w-px self-stretch bg-border my-1 shrink-0' : 'h-px bg-border'} />
 
           {/* 중앙/우측: 뒷면 정의 & 이미지 */}
-          <div className="flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
+          <div className={cn('min-w-0 flex-1 flex flex-col gap-3', layout === 'list' && 'sm:flex-row sm:items-start')}>
             <div className="min-w-0 flex-1 text-sm text-muted-foreground">
               <RichTextViewer html={card.definitionRichText} textSize="sm" />
             </div>
@@ -66,7 +68,7 @@ export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(
         </div>
 
         {/* 카드 학습 상태와 수정 */}
-        <div className="flex items-center justify-between border-t border-border/60 pt-3">
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
           <button
             type="button"
             role="checkbox"

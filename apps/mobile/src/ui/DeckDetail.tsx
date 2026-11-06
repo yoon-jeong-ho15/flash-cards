@@ -1,3 +1,5 @@
+import { CollectionLayoutToggle } from './CollectionLayoutToggle';
+import { useCollectionGrid } from './useCollectionGrid';
 import { CollectionIcon } from './CollectionSurface';
 import { type Palette, useUI } from './theme';
 import { Text } from './Typography';
@@ -125,6 +127,7 @@ export function DeckDetail({
 }) {
   const { colors, s } = useUI();
   const { decks, folders, cards } = useStore();
+  const grid = useCollectionGrid();
   const deck = decks.find((d) => d.id === deckId);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "learned" | "unlearned">("all");
@@ -151,9 +154,13 @@ export function DeckDetail({
   return (
     <>
       <FlatList
+        key={grid.columns}
+        numColumns={grid.columns}
+        columnWrapperStyle={grid.columns > 1 ? grid.rowStyle : undefined}
         data={visible}
         keyExtractor={(c) => c.id}
-        contentContainerStyle={s.page}
+        contentContainerStyle={[s.page, { gap: 0 }]}
+        ListHeaderComponentStyle={{ marginBottom: 12 }}
         windowSize={3}
         initialNumToRender={3}
         maxToRenderPerBatch={3}
@@ -242,9 +249,10 @@ export function DeckDetail({
               ]}
               onChange={setFilter}
             />
-            <Text style={[s.label, { marginBottom: 6 }]}>
-              {visible.length}장의 카드
-            </Text>
+            <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap', marginBottom: 6 }]}>
+              <Text numberOfLines={1} style={[s.label, { flex: 1, minWidth: 0 }]}>{visible.length}장의 카드</Text>
+              <CollectionLayoutToggle />
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -273,77 +281,79 @@ export function DeckDetail({
           </View>
         }
         renderItem={({ item }) => (
-          <View style={[s.box, { marginBottom: 0, padding: 14, gap: 10 }]}>
-            <View style={[s.row, { justifyContent: "space-between" }]}>
-              <Text style={s.label}>
-                {String(own.findIndex((c) => c.id === item.id) + 1).padStart(
-                  2,
-                  "0",
-                )}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="카드 수정"
-                onPress={() =>
-                  nav.go({ type: "edit-deck", deckId, focusCardId: item.id })
-                }
-                style={{
-                  minWidth: 44,
-                  minHeight: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Icon name="pencil" size={16} color={colors.icon} />
-              </Pressable>
-            </View>
-            <View style={{ gap: 6 }}>
-              <Text style={s.label}>질문</Text>
-              <CardPreview html={item.termRichText} onImage={openImage} />
-              <Attachment url={item.frontImageUrl} />
-            </View>
-            <View style={{ height: 1, backgroundColor: colors.border }} />
-            <View style={{ gap: 6 }}>
-              <Text style={s.label}>답변</Text>
-              <CardPreview html={item.definitionRichText} onImage={openImage} />
-              <Attachment url={item.backImageUrl || item.imageUrl} />
-            </View>
-            <Pressable
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: item.learned }}
-              onPress={() => {
-                void attempt(() => store.setLearned(item.id, !item.learned));
-              }}
-              style={[
-                s.row,
-                { minHeight: 44, alignSelf: "flex-start", gap: 8 },
-              ]}
-            >
-              <View
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 7,
-                  borderWidth: 1.5,
-                  borderColor: item.learned ? colors.success : colors.border,
-                  backgroundColor: item.learned ? colors.successBg : colors.card,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                {item.learned && (
-                  <Icon name="check" size={13} color={colors.success} />
-                )}
+          <View style={grid.itemStyle}>
+            <View style={[s.box, { flex: 1, marginBottom: 0, padding: 14, gap: 10 }]}>
+              <View style={[s.row, { justifyContent: "space-between" }]}>
+                <Text style={s.label}>
+                  {String(own.findIndex((c) => c.id === item.id) + 1).padStart(
+                    2,
+                    "0",
+                  )}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="카드 수정"
+                  onPress={() =>
+                    nav.go({ type: "edit-deck", deckId, focusCardId: item.id })
+                  }
+                  style={{
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Icon name="pencil" size={16} color={colors.icon} />
+                </Pressable>
               </View>
-              <Text
+              <View style={{ gap: 6 }}>
+                <Text style={s.label}>질문</Text>
+                <CardPreview html={item.termRichText} onImage={openImage} />
+                <Attachment url={item.frontImageUrl} />
+              </View>
+              <View style={{ height: 1, backgroundColor: colors.border }} />
+              <View style={{ gap: 6 }}>
+                <Text style={s.label}>답변</Text>
+                <CardPreview html={item.definitionRichText} onImage={openImage} />
+                <Attachment url={item.backImageUrl || item.imageUrl} />
+              </View>
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: item.learned }}
+                onPress={() => {
+                  void attempt(() => store.setLearned(item.id, !item.learned));
+                }}
                 style={[
-                  s.label,
-                  { color: item.learned ? colors.success : colors.muted },
+                  s.row,
+                  { minHeight: 44, alignSelf: "flex-start", gap: 8 },
                 ]}
               >
-                {item.learned ? "기억했어요" : "기억한 카드로 표시"}
-              </Text>
-            </Pressable>
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 7,
+                    borderWidth: 1.5,
+                    borderColor: item.learned ? colors.success : colors.border,
+                    backgroundColor: item.learned ? colors.successBg : colors.card,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  {item.learned && (
+                    <Icon name="check" size={13} color={colors.success} />
+                  )}
+                </View>
+                <Text
+                  style={[
+                    s.label,
+                    { color: item.learned ? colors.success : colors.muted },
+                  ]}
+                >
+                  {item.learned ? "기억했어요" : "기억한 카드로 표시"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         )}
       />

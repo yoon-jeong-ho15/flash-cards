@@ -1,3 +1,5 @@
+import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
+import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 import { indexCards, selectFolderCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
@@ -42,6 +44,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   onCreateDeckInFolder,
   onBack,
 }) => {
+  const { collectionClassName } = useCollectionLayout();
   const folders = useFlashcardStore((state) => state.folders);
   const decks = useFlashcardStore((state) => state.decks);
   const cards = useFlashcardStore((state) => state.cards);
@@ -235,13 +238,18 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
           <option value="name-desc">이름 내림차순</option>
         </select>
       </div>
-      <Input
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        aria-label="폴더 안 세트와 카드 검색"
-        placeholder="이 폴더에서 세트나 카드를 찾아보세요"
-        leftIcon={<Search className="h-4 w-4" />}
-      />
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            aria-label="폴더 안 세트와 카드 검색"
+            placeholder="이 폴더에서 세트나 카드를 찾아보세요"
+            leftIcon={<Search className="h-4 w-4" />}
+          />
+        </div>
+        <CollectionLayoutToggle />
+      </div>
       {!sortedDecks.length ? (
         <EmptyState
           icon={<Layers className="h-8 w-8 text-primary" />}
@@ -259,7 +267,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+        <div className={collectionClassName}>
           {sortedDecks.map((deck) => {
             const own = cardIndex.get(deck.id) || [];
             return (

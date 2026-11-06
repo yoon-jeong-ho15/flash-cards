@@ -1,4 +1,5 @@
-import { CollectionIcon, CollectionSurface, DeckCardHeader } from './CollectionSurface';
+import { CollectionLayoutToggle } from './CollectionLayoutToggle';
+import { CollectionIcon, CollectionSurface, DeckSummary } from './CollectionSurface';
 import { useCollectionGrid } from './useCollectionGrid';
 import { radius, useUI, useThemedStyles, type Palette } from './theme';
 import { Text } from './Typography';
@@ -7,7 +8,7 @@ import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import type { Deck, DeckSortOption } from "../core/types";
 import { cardMatches, folderCards, matches, sortDecks } from "../core/content";
 import { store, useStore } from "../platform/runtime";
-import { Button, Chips, Empty, Field, Progress, Select, Sheet, attempt, confirm } from "./kit";
+import { Button, Chips, Empty, Field, Select, Sheet, attempt, confirm } from "./kit";
 import { Icon } from "./Icon";
 import { FolderForm } from "./FolderForm";
 import type { Navigation } from "./navigation";
@@ -22,10 +23,12 @@ function Section({
   title,
   action,
   onPress,
+  accessory,
 }: {
   title: string;
   action?: string;
   onPress?: () => void;
+  accessory?: React.ReactNode;
 }) {
   const { colors, s } = useUI();
   const l = useThemedStyles(createStyles);
@@ -33,7 +36,8 @@ function Section({
     <View
       style={[s.row, { justifyContent: "space-between", flexWrap: "nowrap" }]}
     >
-      <Text style={[s.h2, { flex: 1 }]}>{title}</Text>
+      <Text numberOfLines={1} style={[s.h2, { flex: 1, minWidth: 0 }]}>{title}</Text>
+      {accessory}
       {onPress && (
         <Pressable
           accessibilityRole="button"
@@ -50,7 +54,6 @@ function Section({
   );
 }
 export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
-  const { colors, s } = useUI();
   const { cards, folders } = useStore();
   const own = cards.filter((c) => c.deckId === deck.id);
   const learned = own.filter((c) => c.learned).length;
@@ -62,40 +65,14 @@ export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
       style={{ flex: 1 }}
     >
       {({ pressed }) => (
-        <CollectionSurface pressed={pressed} kind="deck" style={{ minHeight: 152, padding: 10, gap: 6 }}>
-          <DeckCardHeader title={deck.title} pressed={pressed} />
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text numberOfLines={1} style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>
-              카드 {own.length}장 ·{' '}
-              {folders.find((f) => f.id === deck.folderId)?.title || "미분류"}
-            </Text>
-          </View>
-          {Boolean(deck.description) && (
-            <Text numberOfLines={1} style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>
-              {deck.description}
-            </Text>
-          )}
-          <View style={{ gap: 4 }}>
-            <Text
-              style={[
-                s.label,
-                {
-                  color:
-                    learned === own.length && own.length
-                      ? colors.success
-                      : colors.muted,
-                  fontSize: 11,
-                  lineHeight: 16,
-                },
-              ]}
-            >
-              {learned === own.length && own.length
-                ? "학습 완료"
-                : `${learned}/${own.length} 학습`}
-            </Text>
-            <Progress learned={learned} total={own.length} compact />
-          </View>
-        </CollectionSurface>
+        <DeckSummary
+          pressed={pressed}
+          title={deck.title}
+          count={own.length}
+          learned={learned}
+          detail={`카드 ${own.length}장 · ${folders.find((f) => f.id === deck.folderId)?.title || "미분류"}`}
+          description={deck.description}
+        />
       )}
     </Pressable>
   );
@@ -194,6 +171,7 @@ export function Dashboard({
       <View style={{ gap: 10 }}>
         <Section
           title="최근 학습 세트"
+          accessory={<CollectionLayoutToggle />}
           onPress={() => nav.go({ type: "all-decks" })}
         />
         <View style={grid.wrapStyle}>
@@ -230,32 +208,28 @@ export function Dashboard({
           onPress={onNewFolder}
         />
         {folders.length ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 12 }}
-          >
+          <View style={grid.wrapStyle}>
             {folders.slice(0, 6).map((folder) => (
               <Pressable
                 key={folder.id}
                 accessibilityRole="button"
                 onPress={() => nav.go({ type: "folder", folderId: folder.id })}
-                style={{ width: 170 }}
+                style={grid.itemStyle}
               >
                 {({ pressed }) => (
                   <CollectionSurface pressed={pressed} kind="folder">
-                    <CollectionIcon kind="folder" size={32} />
-                    <Text numberOfLines={1} style={[s.text, { fontWeight: "700" }]}>
-                      {folder.title}
-                    </Text>
-                    <Text style={s.muted}>
-                      세트 {decks.filter((d) => d.folderId === folder.id).length}개
-                    </Text>
+                    <View style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 10 }}>
+                      <CollectionIcon kind="folder" size={32} />
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text numberOfLines={2} style={[s.text, { fontWeight: "700" }]}>{folder.title}</Text>
+                        <Text style={s.muted}>세트 {decks.filter((d) => d.folderId === folder.id).length}개</Text>
+                      </View>
+                    </View>
                   </CollectionSurface>
                 )}
               </Pressable>
             ))}
-          </ScrollView>
+          </View>
         ) : (
           <Pressable
             accessibilityRole="button"
@@ -278,7 +252,6 @@ export function Dashboard({
 export function DeckLibrary({
   nav,
   folderId,
-  onFolders,
 }: {
   nav: Navigation;
   folderId?: string;
@@ -287,7 +260,7 @@ export function DeckLibrary({
   const { colors, s } = useUI();
   const l = useThemedStyles(createStyles);
   const state = useStore();
-  const grid = useCollectionGrid();
+  const grid = useCollectionGrid('list');
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
   const [filter, setFilter] = useState<"all" | "root" | "unlearned" | "completed">("all");
@@ -394,19 +367,7 @@ export function DeckLibrary({
             ) : (
               <>
                 <Text style={s.title}>나의 배움이 모이는 곳</Text>
-                <View style={l.libraryTabs}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="폴더 보기"
-                    onPress={
-                      onFolders || (() => nav.go({ type: "all-folders" }))
-                    }
-                    style={l.libraryTabAction}
-                  >
-                    <Text style={l.unselectedTab}>폴더</Text>
-                  </Pressable>
-                  <Text accessibilityRole="tab" accessibilityState={{ selected: true }} style={l.selectedTab}>학습 세트</Text>
-                </View>
+
               </>
             )}
             <Field
@@ -468,17 +429,17 @@ export function DeckLibrary({
             <View
               style={[
                 s.row,
-                { justifyContent: "space-between", marginBottom: 4 },
+                { justifyContent: "space-between", flexWrap: "nowrap", marginBottom: 4 },
               ]}
             >
-              <Text style={s.label}>학습 세트 {decks.length}개</Text>
+              <Text numberOfLines={1} style={[s.label, { flex: 1, minWidth: 0 }]}>학습 세트 {decks.length}개</Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => nav.go({ type: "edit-deck", folderId })}
-                style={l.textAction}
+                style={[l.textAction, { flexShrink: 0 }]}
               >
                 <Icon name="plus" size={16} />
-                <Text style={[s.label, { color: colors.primary }]}>
+                <Text numberOfLines={1} style={[s.label, { color: colors.primary }]}>
                   새 세트
                 </Text>
               </Pressable>
@@ -557,40 +518,34 @@ export function DeckLibrary({
 export function FolderLibrary({
   nav,
   onNewFolder,
-  onDecks,
 }: {
   nav: Navigation;
   onNewFolder: () => void;
   onDecks?: () => void;
 }) {
   const { colors, s } = useUI();
-  const l = useThemedStyles(createStyles);
   const { folders, decks, preferences } = useStore();
-  const [query, setQuery] = useState("");
+  const grid = useCollectionGrid('list');
   const sort = preferences.folderSort || "date-desc";
-  const visible = sortDecks(
-    folders.filter((f) => matches(`${f.title} ${f.description || ""}`, query)),
-    sort,
+  const visible = sortDecks(folders, sort);
+  const folderIds = new Set(folders.map((folder) => folder.id));
+  const unfiled = sortDecks(
+    decks.filter((deck) => !deck.folderId || !folderIds.has(deck.folderId)),
+    preferences.deckSort || "date-desc",
   );
   return (
     <FlatList
-      contentContainerStyle={[s.page, l.listPage]}
+      key={grid.columns}
+      numColumns={grid.columns}
+      columnWrapperStyle={grid.columns > 1 ? grid.rowStyle : undefined}
+      contentContainerStyle={[s.page, { gap: 0 }]}
+      ListHeaderComponentStyle={{ marginBottom: 12 }}
       data={visible}
       keyExtractor={(f) => f.id}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={
         <View style={{ gap: 12 }}>
-          <View style={l.libraryTabs}>
-            <Text accessibilityRole="tab" accessibilityState={{ selected: true }} style={l.selectedTab}>폴더</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onDecks || (() => nav.go({ type: "all-decks" }))}
-              style={l.libraryTabAction}
-            >
-              <Text style={l.unselectedTab}>학습 세트</Text>
-            </Pressable>
-          </View>
           <View style={[s.row, { flexWrap: "nowrap" }]}>
             <Select
               label="폴더 정렬"
@@ -602,38 +557,66 @@ export function FolderLibrary({
             />
             <Button title="새 폴더" icon="plus" onPress={onNewFolder} />
           </View>
-          <Text style={[s.label, { marginBottom: 4 }]}>
-            폴더 {visible.length}개
-          </Text>
+          <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap', marginBottom: 4 }]}>
+            <Text numberOfLines={1} style={[s.label, { flex: 1, minWidth: 0 }]}>폴더 {visible.length}개</Text>
+          </View>
         </View>
       }
       ListEmptyComponent={
-        <Empty title={query ? "검색 결과가 없어요" : "폴더가 없어요"} />
+        !unfiled.length && !visible.length ? <Empty title="아직 학습 자료가 없어요" /> : undefined
+      }
+      ListFooterComponent={
+        <View style={{ gap: 12, marginTop: visible.length ? 12 : 0 }}>
+          <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
+            <Text numberOfLines={1} style={[s.h2, { flex: 1 }]}>미분류 세트 {unfiled.length}개</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="새 미분류 세트 만들기"
+              onPress={() => nav.go({ type: 'edit-deck' })}
+              style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            >
+              <Icon name="plus" size={16} />
+              <Text style={[s.label, { color: colors.primary }]}>새 세트</Text>
+            </Pressable>
+          </View>
+          <View style={grid.wrapStyle}>
+            {unfiled.map((deck) => (
+              <View key={deck.id} style={grid.itemStyle}>
+                <DeckTile deck={deck} nav={nav} />
+              </View>
+            ))}
+          </View>
+        </View>
       }
       renderItem={({ item }) => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${item.title} 폴더 열기`}
-              onPress={() => nav.go({ type: "folder", folderId: item.id })}
-        >
-          {({ pressed }) => (
-            <CollectionSurface pressed={pressed} kind="folder">
-              <View style={[s.row, { gap: 10, flexWrap: "nowrap" }]}>
-                <CollectionIcon kind="folder" />
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={s.h2}>{item.title}</Text>
-                  <Text style={s.muted}>
-                    학습 세트 {decks.filter((d) => d.folderId === item.id).length}개
-                  </Text>
+        <View style={grid.itemStyle}>
+          <Pressable
+            style={{ flex: 1 }}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.title} 폴더 열기`}
+            onPress={() => nav.go({ type: "folder", folderId: item.id })}
+          >
+            {({ pressed }) => (
+              <CollectionSurface pressed={pressed} kind="folder" style={{ minHeight: 144 }}>
+                <View style={{ flex: 1, gap: 10 }}>
+                  <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
+                    <CollectionIcon kind="folder" />
+                    <Icon name="chevron" size={18} color={colors.icon} />
+                  </View>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={s.h2}>{item.title}</Text>
+                    <Text style={s.muted}>
+                      학습 세트 {decks.filter((d) => d.folderId === item.id).length}개
+                    </Text>
+                  </View>
                 </View>
-                <Icon name="chevron" size={18} color={colors.icon} />
-              </View>
-              {Boolean(item.description) && (
-                <Text style={s.muted}>{item.description}</Text>
-              )}
-            </CollectionSurface>
-          )}
-        </Pressable>
+                {Boolean(item.description) && (
+                  <Text style={s.muted}>{item.description}</Text>
+                )}
+              </CollectionSurface>
+            )}
+          </Pressable>
+        </View>
       )}
     />
   );
@@ -672,8 +655,9 @@ export function Search({ nav }: { nav: Navigation }) {
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={
         <View style={{ gap: 12 }}>
-          <View style={{ gap: 6 }}>
-            <Text style={s.title}>검색</Text>
+          <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
+            <Text numberOfLines={1} style={[s.title, { flex: 1, minWidth: 0 }]}>검색</Text>
+            <CollectionLayoutToggle />
           </View>
           <Field
             label="내 학습 자료 검색"
@@ -696,14 +680,17 @@ export function Search({ nav }: { nav: Navigation }) {
           {matchingFolders.length > 0 && (
             <View style={{ gap: 8 }}>
               <Text style={s.label}>폴더 {matchingFolders.length}개</Text>
-              {matchingFolders.map((f) => (
-                <Button
-                  key={f.id}
-                  title={`폴더 · ${f.title}`}
-                  tone="secondary"
-                  onPress={() => nav.go({ type: "folder", folderId: f.id })}
-                />
-              ))}
+              <View style={grid.wrapStyle}>
+                {matchingFolders.map((f) => (
+                  <View key={f.id} style={grid.itemStyle}>
+                    <Button
+                      title={`폴더 · ${f.title}`}
+                      tone="secondary"
+                      onPress={() => nav.go({ type: "folder", folderId: f.id })}
+                    />
+                  </View>
+                ))}
+              </View>
             </View>
           )}
           <Text
@@ -737,7 +724,6 @@ export function Search({ nav }: { nav: Navigation }) {
   );
 }
 const createStyles = (colors: Palette) => StyleSheet.create({
-  listPage: { gap: 8 },
   textAction: {
     minHeight: 44,
     paddingHorizontal: 4,

@@ -195,15 +195,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
             </p>
           )}
         </div>
-        <div className="relative isolate mb-7">
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-5 -bottom-2 -z-10 h-24 rounded-3xl bg-[#e8e5f7]"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-2.5 -bottom-1 -z-10 h-24 rounded-3xl bg-[#f0eefb]"
-          />
+        <div className="mb-7">
           <div className="relative h-[clamp(300px,48dvh,520px)] overflow-x-clip rounded-3xl">
             <AnimatePresence initial={false} mode="popLayout">
               {currentCard && (

@@ -1,11 +1,14 @@
 import { useWindowDimensions, type ViewStyle } from 'react-native';
 import { useUI } from './theme';
+import { useStore } from '../platform/runtime';
+import { collectionColumns } from '../core/collectionLayout';
 
-export function useCollectionGrid() {
+export function useCollectionGrid(fixedLayout?: 'grid' | 'list') {
   const { width, fontScale } = useWindowDimensions();
   const { uiScale } = useUI();
-  const availableWidth = Math.min(width, 720);
-  const columns = availableWidth < 350 || fontScale * uiScale > 1.3 ? 1 : availableWidth >= 600 ? 3 : 2;
+  const { preferences } = useStore();
+  const layout = fixedLayout ?? (preferences.collectionLayout === 'list' ? 'list' : 'grid');
+  const columns = collectionColumns(layout, width, fontScale, uiScale);
   const itemStyle: ViewStyle = {
     width: `${100 / columns}%`,
     paddingHorizontal: columns > 1 ? 4 : 0,
@@ -13,5 +16,5 @@ export function useCollectionGrid() {
   };
   const rowStyle: ViewStyle = { marginHorizontal: columns > 1 ? -4 : 0 };
   const wrapStyle: ViewStyle = { ...rowStyle, flexDirection: 'row', flexWrap: 'wrap' };
-  return { columns, itemStyle, rowStyle, wrapStyle };
+  return { layout, columns, itemStyle, rowStyle, wrapStyle };
 }

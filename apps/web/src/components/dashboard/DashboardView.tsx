@@ -1,3 +1,5 @@
+import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
+import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 import React, { useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateFolder,
   onNavigateAllFolders,
 }) => {
+  const { collectionClassName } = useCollectionLayout();
   const decks = useFlashcardStore((state) => state.decks);
   const cards = useFlashcardStore((state) => state.cards);
   const folders = useFlashcardStore((state) => state.folders);
@@ -143,24 +146,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </Card>
       <section>
         <div className="mb-5 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold tracking-tight">최근 학습 세트</h2>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-lg font-bold tracking-tight">최근 학습 세트</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               가장 최근에 다듬은 배움부터 만나보세요.
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onNavigateAllDecks}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
-            className="text-xs text-primary"
-          >
-            전체 보기
-          </Button>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <CollectionLayoutToggle />
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="최근 학습 세트 전체 보기"
+              onClick={onNavigateAllDecks}
+              rightIcon={<ArrowRight className="h-4 w-4" />}
+              className="text-xs text-primary"
+            >
+              <span className="hidden sm:inline">전체 보기</span>
+            </Button>
+          </div>
         </div>
         {summaries.length ? (
-          <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+          <div className={collectionClassName}>
             {summaries.slice(0, 6).map(({ deck, total: count, learned: known }) => (
               <DeckCard
                 key={deck.id}
@@ -211,7 +218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {folders.length ? '모든 폴더' : '폴더 만들기'}
           </Button>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className={collectionClassName}>
           {folders.slice(0, 5).map((folder) => (
             <button
               key={folder.id}
