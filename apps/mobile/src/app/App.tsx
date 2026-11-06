@@ -87,7 +87,12 @@ function Workspace() {
       {route.type === 'edit-deck' && <DeckEditor key={`${route.deckId || 'new'}:${route.folderId || ''}`} deckId={route.deckId} folderId={route.folderId} focusCardId={route.focusCardId} appendCard={route.appendCard} onClose={pop} guard={guard}
         onSaved={id => setHistory(previous => [...previous.slice(0, -1), { type: 'deck', deckId: id }])} />}
       {route.type === 'study' && <Study key={`${route.deckId}:${route.shuffle}`} deckId={route.deckId} shuffle={route.shuffle} unlearnedOnly={route.onlyDifficult}
-        onExit={() => setHistory(previous => previous[previous.length - 2]?.type === 'study-options' ? previous.slice(0, -1) : [...previous.slice(0, -1), { type: 'deck', deckId: route.deckId }])} />}
+        onExit={() => setHistory(previous => {
+          const origin = previous[previous.length - 2]?.type;
+          return origin && ['study-options', 'study-folder', 'study-library'].includes(origin)
+            ? previous.slice(0, -1)
+            : [...previous.slice(0, -1), { type: 'deck', deckId: route.deckId }];
+        })} />}
       {route.type === 'folder-study' && <Study key={`folder:${route.folderId}:${route.shuffle ?? true}`} folderId={route.folderId} shuffle={route.shuffle ?? true} onExit={pop} />}
     </View>
     {!immersive ? <SafeAreaView edges={['bottom']} style={styles.tabArea}><View style={styles.tabs}>{tabs.map(([target, label, icon]) => {

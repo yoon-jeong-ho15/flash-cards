@@ -1,4 +1,6 @@
-import { CollectionIcon, CollectionSurface } from './CollectionSurface';
+import { CollectionIcon, CollectionSurface, DeckCardHeader } from './CollectionSurface';
+import { StudyOrderModal } from './StudyOrderModal';
+import { useCollectionGrid } from './useCollectionGrid';
 import { useUI } from './theme';
 import { Text } from './Typography';
 import React, { useState } from "react";
@@ -16,14 +18,17 @@ export function StudyFolder({
   folderId: string;
   nav: Navigation;
 }) {
-  const { colors, s } = useUI();
+  const { s } = useUI();
   const state = useStore();
+  const grid = useCollectionGrid();
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
   const folder = state.folders.find((item) => item.id === folderId);
   const decks = sortDecks(
     state.decks.filter((deck) => deck.folderId === folderId),
     state.preferences.folderDeckSort || "date-desc",
   );
   const count = folderCards(state.cards, state.decks, folderId).length;
+  const selectedDeck = decks.find((deck) => deck.id === selectedDeckId);
   if (!folder)
     return (
       <View style={s.page}>
@@ -32,98 +37,102 @@ export function StudyFolder({
       </View>
     );
   return (
-    <FlatList
-      data={decks}
-      keyExtractor={(deck) => deck.id}
-      contentContainerStyle={[s.page, { gap: 10 }]}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={
-        <View style={{ gap: 14, marginBottom: 4 }}>
-          <View style={[s.row, { flexWrap: "nowrap", alignItems: "flex-start", gap: 12 }]}>
-            <CollectionIcon kind="folder" size={40} />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.title}>{folder.title}</Text>
-              {Boolean(folder.description) && (
-                <Text style={s.muted}>{folder.description}</Text>
-              )}
-              <Text style={s.label}>
-                학습 세트 {decks.length}개 · 카드 {count}장
-              </Text>
+    <>
+      <FlatList
+        key={grid.columns}
+        numColumns={grid.columns}
+        columnWrapperStyle={grid.columns > 1 ? grid.rowStyle : undefined}
+        data={decks}
+        keyExtractor={(deck) => deck.id}
+        contentContainerStyle={[s.page, { gap: 0 }]}
+        ListHeaderComponentStyle={{ marginBottom: 12 }}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={{ gap: 14, marginBottom: 4 }}>
+            <View style={[s.row, { flexWrap: "nowrap", alignItems: "flex-start", gap: 12 }]}>
+              <CollectionIcon kind="folder" size={40} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={s.title}>{folder.title}</Text>
+                {Boolean(folder.description) && (
+                  <Text style={s.muted}>{folder.description}</Text>
+                )}
+                <Text style={s.label}>
+                  학습 세트 {decks.length}개 · 카드 {count}장
+                </Text>
+              </View>
+            </View>
+            <View style={{ gap: 8 }}>
+              <Button
+                title="폴더 전체 정방향 학습"
+                icon="layers"
+                disabled={!count}
+                onPress={() =>
+                  nav.go({ type: "folder-study", folderId, shuffle: false })
+                }
+              />
+              <Button
+                title="폴더 전체 랜덤 학습"
+                icon="shuffle"
+                tone="secondary"
+                disabled={!count}
+                onPress={() =>
+                  nav.go({ type: "folder-study", folderId, shuffle: true })
+                }
+              />
+            </View>
+            <View style={{ gap: 6 }}>
+              <Text style={s.h2}>덱별 학습</Text>
             </View>
           </View>
-          <View style={{ gap: 8 }}>
-            <Button
-              title="폴더 전체 정방향 학습"
-              icon="layers"
-              disabled={!count}
-              onPress={() =>
-                nav.go({ type: "folder-study", folderId, shuffle: false })
-              }
-            />
-            <Button
-              title="폴더 전체 랜덤 학습"
-              icon="shuffle"
-              tone="secondary"
-              disabled={!count}
-              onPress={() =>
-                nav.go({ type: "folder-study", folderId, shuffle: true })
-              }
-            />
-          </View>
-          <View style={{ gap: 6 }}>
-            <Text style={s.h2}>덱별 학습</Text>
-          </View>
-        </View>
-      }
-      ListEmptyComponent={
-        <Empty
-          title="아직 학습 세트가 없어요"
-          detail="라이브러리에서 이 폴더에 학습 세트를 추가해 주세요."
-        />
-      }
-      renderItem={({ item }) => {
-        const cards = state.cards.filter((card) => card.deckId === item.id);
-        const learned = cards.filter((card) => card.learned).length;
-        return (
-          <CollectionSurface kind="deck" style={{ gap: 12 }}>
-            <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
-              <CollectionIcon kind="deck" />
-              <View style={{ flex: 1, gap: 4 }}>
-                  <Text style={s.h2}>{item.title}</Text>
-                  <Text style={s.muted}>
-                    {cards.length
-                      ? `카드 ${cards.length}장 · 기억한 카드 ${learned}장`
-                      : "학습할 카드가 없어요"}
-                  </Text>
-              </View>
+        }
+        ListEmptyComponent={
+          <Empty
+            title="아직 학습 세트가 없어요"
+            detail="라이브러리에서 이 폴더에 학습 세트를 추가해 주세요."
+          />
+        }
+        renderItem={({ item }) => {
+          const cards = state.cards.filter((card) => card.deckId === item.id);
+          const learned = cards.filter((card) => card.learned).length;
+          return (
+            <View style={grid.itemStyle}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${item.title} 학습하기`}
+                accessibilityLabel={`${item.title}, 카드 ${cards.length}장, ${cards.length ? "학습 순서 선택" : "학습할 카드 없음"}`}
                 accessibilityState={{ disabled: !cards.length }}
-                hitSlop={4}
                 disabled={!cards.length}
-                style={({ pressed }) => ({
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  flexShrink: 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: colors.subtle,
-                  opacity: !cards.length ? 0.4 : pressed ? 0.7 : 1,
-                })}
-                onPress={() =>
-                  nav.go({ type: "study-options", deckId: item.id })
-                }
+                style={{ flex: 1 }}
+                onPress={() => setSelectedDeckId(item.id)}
               >
-                <Icon name="play" size={17} />
+                {({ pressed }) => (
+                  <CollectionSurface pressed={pressed} kind="deck" style={{ minHeight: 136, padding: 10, gap: 6 }}>
+                    <DeckCardHeader title={item.title} pressed={pressed} />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>
+                        {cards.length
+                          ? `카드 ${cards.length}장\n기억한 카드 ${learned}장`
+                          : "학습할 카드가 없어요"}
+                      </Text>
+                    </View>
+                    <Progress learned={learned} total={cards.length} compact />
+                  </CollectionSurface>
+                )}
               </Pressable>
             </View>
-            <Progress learned={learned} total={cards.length} compact />
-          </CollectionSurface>
-        );
-      }}
-    />
+          );
+        }}
+      />
+      {selectedDeck && (
+        <StudyOrderModal
+          title={selectedDeck.title}
+          onClose={() => setSelectedDeckId(null)}
+          onChoose={(shuffle) => {
+            setSelectedDeckId(null);
+            nav.go({ type: "study", deckId: selectedDeck.id, shuffle, onlyDifficult: false });
+          }}
+        />
+      )}
+    </>
   );
 }
 

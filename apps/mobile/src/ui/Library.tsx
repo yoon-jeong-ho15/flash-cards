@@ -1,4 +1,5 @@
-import { CollectionIcon, CollectionSurface } from './CollectionSurface';
+import { CollectionIcon, CollectionSurface, DeckCardHeader } from './CollectionSurface';
+import { useCollectionGrid } from './useCollectionGrid';
 import { radius, useUI, useThemedStyles, type Palette } from './theme';
 import { Text } from './Typography';
 import React, { useDeferredValue, useMemo, useState } from "react";
@@ -58,34 +59,23 @@ export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
       accessibilityRole="button"
       accessibilityLabel={`${deck.title} 덱 열기, 카드 ${own.length}장, ${learned}장 학습 완료`}
       onPress={() => nav.go({ type: "deck", deckId: deck.id })}
+      style={{ flex: 1 }}
     >
       {({ pressed }) => (
-        <CollectionSurface pressed={pressed} kind="deck" style={{ gap: 12 }}>
-          <View style={[s.row, { flexWrap: "nowrap", gap: 10 }]}>
-            <CollectionIcon kind="deck" />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text
-                numberOfLines={2}
-                style={[s.h2, { fontSize: 16, lineHeight: 23 }]}
-              >
-                {deck.title}
-              </Text>
-              <Text numberOfLines={1} style={s.muted}>
-                {own.length}장 ·{" "}
-                {folders.find((f) => f.id === deck.folderId)?.title || "미분류"}
-              </Text>
-            </View>
-            <Icon name="chevron" size={18} color={colors.icon} />
+        <CollectionSurface pressed={pressed} kind="deck" style={{ minHeight: 152, padding: 10, gap: 6 }}>
+          <DeckCardHeader title={deck.title} pressed={pressed} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text numberOfLines={1} style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>
+              카드 {own.length}장 ·{' '}
+              {folders.find((f) => f.id === deck.folderId)?.title || "미분류"}
+            </Text>
           </View>
           {Boolean(deck.description) && (
-            <Text numberOfLines={2} style={s.muted}>
+            <Text numberOfLines={1} style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>
               {deck.description}
             </Text>
           )}
-          <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
-            <View style={{ flex: 1 }}>
-              <Progress learned={learned} total={own.length} compact />
-            </View>
+          <View style={{ gap: 4 }}>
             <Text
               style={[
                 s.label,
@@ -94,6 +84,8 @@ export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
                     learned === own.length && own.length
                       ? colors.success
                       : colors.muted,
+                  fontSize: 11,
+                  lineHeight: 16,
                 },
               ]}
             >
@@ -101,6 +93,7 @@ export function DeckTile({ deck, nav }: { deck: Deck; nav: Navigation }) {
                 ? "학습 완료"
                 : `${learned}/${own.length} 학습`}
             </Text>
+            <Progress learned={learned} total={own.length} compact />
           </View>
         </CollectionSurface>
       )}
@@ -119,6 +112,7 @@ export function Dashboard({
   const { cards, decks, folders, user } = useStore();
   const [creating, setCreating] = useState(false);
   const recent = sortDecks(decks, "date-desc");
+  const grid = useCollectionGrid();
   const learned = cards.filter((c) => c.learned).length;
   const sample = () => {
     setCreating(true);
@@ -202,9 +196,13 @@ export function Dashboard({
           title="최근 학습 세트"
           onPress={() => nav.go({ type: "all-decks" })}
         />
-        {recent.slice(0, 3).map((d) => (
-          <DeckTile key={d.id} deck={d} nav={nav} />
-        ))}
+        <View style={grid.wrapStyle}>
+          {recent.slice(0, 3).map((d) => (
+            <View key={d.id} style={grid.itemStyle}>
+              <DeckTile deck={d} nav={nav} />
+            </View>
+          ))}
+        </View>
         {!recent.length && (
           <View style={[s.box, { gap: 12 }]}>
             <View style={s.row}>
@@ -289,6 +287,7 @@ export function DeckLibrary({
   const { colors, s } = useUI();
   const l = useThemedStyles(createStyles);
   const state = useStore();
+  const grid = useCollectionGrid();
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
   const [filter, setFilter] = useState<"all" | "root" | "unlearned" | "completed">("all");
@@ -354,9 +353,13 @@ export function DeckLibrary({
   return (
     <>
       <FlatList
+        key={grid.columns}
+        numColumns={grid.columns}
+        columnWrapperStyle={grid.columns > 1 ? grid.rowStyle : undefined}
         data={decks}
         keyExtractor={(d) => d.id}
-        contentContainerStyle={[s.page, l.listPage]}
+        contentContainerStyle={[s.page, { gap: 0 }]}
+        ListHeaderComponentStyle={{ marginBottom: 12 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshing={state.status === "syncing"}
@@ -508,7 +511,11 @@ export function DeckLibrary({
             )}
           </View>
         }
-        renderItem={({ item }) => <DeckTile deck={item} nav={nav} />}
+        renderItem={({ item }) => (
+          <View style={grid.itemStyle}>
+            <DeckTile deck={item} nav={nav} />
+          </View>
+        )}
       />
       {actions && folder && (
         <Sheet title="폴더 관리" onClose={() => setActions(false)}>
@@ -637,6 +644,7 @@ export function Search({ nav }: { nav: Navigation }) {
   const { colors, s } = useUI();
   const l = useThemedStyles(createStyles);
   const { decks, folders, cards } = useStore();
+  const grid = useCollectionGrid();
   const [query, setQuery] = useState("");
   const q = useDeferredValue(query);
   const matchingDecks = sortDecks(
@@ -652,9 +660,13 @@ export function Search({ nav }: { nav: Navigation }) {
     : [];
   return (
     <FlatList
+      key={grid.columns}
+      numColumns={grid.columns}
+      columnWrapperStyle={grid.columns > 1 ? grid.rowStyle : undefined}
       data={matchingDecks}
       keyExtractor={(d) => d.id}
-      contentContainerStyle={[s.page, l.listPage]}
+      contentContainerStyle={[s.page, { gap: 0 }]}
+      ListHeaderComponentStyle={{ marginBottom: 12 }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       showsVerticalScrollIndicator={false}
@@ -716,7 +728,11 @@ export function Search({ nav }: { nav: Navigation }) {
           />
         ) : undefined
       }
-      renderItem={({ item }) => <DeckTile deck={item} nav={nav} />}
+      renderItem={({ item }) => (
+        <View style={grid.itemStyle}>
+          <DeckTile deck={item} nav={nav} />
+        </View>
+      )}
     />
   );
 }
