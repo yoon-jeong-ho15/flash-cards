@@ -37,7 +37,10 @@ test('study shortcuts preserve native button activation, select inputs, and hand
   const dispatch = (key, tagName = 'DIV', extra = {}) =>
     keydown({
       key,
-      target: { tagName, closest: () => (tagName === 'BUTTON' ? {} : null) },
+      target: {
+        tagName,
+        closest: (selector) => (tagName === 'BUTTON' && selector.includes('button') ? {} : null),
+      },
       preventDefault() {},
       ...extra,
     });
@@ -53,6 +56,10 @@ test('study shortcuts preserve native button activation, select inputs, and hand
     assert.equal(render().currentIndex, 0, 'select arrow keys must not change cards');
     dispatch('Escape', 'DIV', { defaultPrevented: true });
     assert.equal(exits, 0, 'Escape already handled by a dialog must not exit study');
+    dispatch('ArrowRight', 'BUTTON', {
+      target: { tagName: 'BUTTON', closest: (selector) => selector === '[role="dialog"]' ? {} : null },
+    });
+    assert.equal(render().currentIndex, 0, 'navigation dialogs must not change study cards');
     dispatch('Enter', 'DIV', { isComposing: true });
     assert.equal(h.store.getState().cards[0].learned, false, 'IME input must not trigger study');
     dispatch(' ', 'BUTTON');

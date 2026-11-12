@@ -85,7 +85,6 @@ export const App: React.FC = () => {
   const currentView = routeView ?? { type: 'dashboard' as const };
   const status = useFlashcardStore(state => routeStatus(routeView, state));
   const loginWithGoogle = useFlashcardStore(state => state.loginWithGoogle);
-  const authError = useFlashcardStore(state => state.authError);
   const [lastStudiedDeckId, setLastStudiedDeckId] = useState<string | null>(() => {
     try {
       return localStorage.getItem('flashcard_last_studied_deck_id');
@@ -160,36 +159,33 @@ export const App: React.FC = () => {
   const openNewFolderModal = () => setFolderModalState({ isOpen: true });
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
 
-  // 학습 모드일 때는 화면 전체 몰입을 위해 사이드바 숨김
-  const showSidebar =
-    currentView.type !== 'study' &&
-    currentView.type !== 'folder-study' &&
-    currentView.type !== 'edit-deck';
+  const readyView = status === 'ready' ? routeView : null;
+  const showBottomNavigation = readyView &&
+    readyView.type !== 'study' &&
+    readyView.type !== 'folder-study' &&
+    readyView.type !== 'edit-deck';
 
-  if (status !== 'ready') {
-    return (
-      <div className="page-container py-16">
-        {status === 'loading' ? (
-          <p role="status" className="text-center text-muted-foreground">자료를 불러오는 중…</p>
-        ) : (
-          <EmptyState
-            title={status === 'not-found' ? '페이지를 찾을 수 없어요' : status === 'unavailable' ? '자료를 불러오지 못했어요' : '자료를 찾을 수 없어요'}
-            description={status === 'unavailable'
-              ? '인터넷 연결을 확인하고 다시 시도해 주세요. 주소는 그대로 유지됩니다.'
-              : status === 'missing'
-                ? '삭제된 자료이거나 현재 계정에서 접근할 수 없는 자료입니다. 자료를 만든 계정으로 로그인해 주세요.'
-                : '주소를 확인해 주세요.'}
-            action={<>
-              <Link to="/" className="text-sm text-primary underline">홈으로</Link>
-              {status === 'unavailable' && <Button onClick={() => void initCloudSync()}>다시 시도</Button>}
-              {status === 'missing' && auth && <Button onClick={() => void loginWithGoogle().catch(() => {})}>{user ? '계정 변경' : '로그인'}</Button>}
-            </>}
-          />
-        )}
-        {authError && <p role="alert" className="mt-4 text-center text-sm text-destructive">{authError}</p>}
-      </div>
-    );
-  }
+  const routeFeedback = status !== 'ready' && (
+    <div className="page-container py-16">
+      {status === 'loading' ? (
+        <p role="status" className="text-center text-muted-foreground">자료를 불러오는 중…</p>
+      ) : (
+        <EmptyState
+          title={status === 'not-found' ? '페이지를 찾을 수 없어요' : status === 'unavailable' ? '자료를 불러오지 못했어요' : '자료를 찾을 수 없어요'}
+          description={status === 'unavailable'
+            ? '인터넷 연결을 확인하고 다시 시도해 주세요. 주소는 그대로 유지됩니다.'
+            : status === 'missing'
+              ? '삭제된 자료이거나 현재 계정에서 접근할 수 없는 자료입니다. 자료를 만든 계정으로 로그인해 주세요.'
+              : '주소를 확인해 주세요.'}
+          action={<>
+            <Link to="/" className="text-sm text-primary underline">홈으로</Link>
+            {status === 'unavailable' && <Button onClick={() => void initCloudSync()}>다시 시도</Button>}
+            {status === 'missing' && auth && <Button onClick={() => void loginWithGoogle().catch(() => {})}>{user ? '계정 변경' : '로그인'}</Button>}
+          </>}
+        />
+      )}
+    </div>
+  );
 
   return (
     <MotionConfig reducedMotion="user">
@@ -198,44 +194,40 @@ export const App: React.FC = () => {
           본문으로 바로가기
         </a>
         {/* 1. 글로벌 좌측 접이식 사이드바 */}
-        {showSidebar && (
-          <Sidebar
-            currentView={currentView}
-            isCollapsed={isSidebarCollapsed}
-            isMobileOpen={isMobileSidebarOpen}
-            onToggleCollapse={toggleSidebar}
-            onCloseMobile={() => setIsMobileSidebarOpen(false)}
-            onNavigateHome={navigateHome}
-            onNavigateAllFolders={navigateAllFolders}
-            onNavigateAllDecks={navigateAllDecks}
-            onNavigateFolder={navigateFolder}
-            onNavigateDeck={navigateDeck}
-            onCreateDeck={() => navigateEditDeck()}
-            onCreateFolder={openNewFolderModal}
-          />
-        )}
+        <Sidebar
+          currentView={currentView}
+          isCollapsed={isSidebarCollapsed}
+          isMobileOpen={isMobileSidebarOpen}
+          onToggleCollapse={toggleSidebar}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          onNavigateHome={navigateHome}
+          onNavigateAllFolders={navigateAllFolders}
+          onNavigateAllDecks={navigateAllDecks}
+          onNavigateFolder={navigateFolder}
+          onNavigateDeck={navigateDeck}
+          onCreateDeck={() => navigateEditDeck()}
+          onCreateFolder={openNewFolderModal}
+        />
 
         {/* 2. 메인 화면 영역 (Navbar + 콘텐츠) */}
         <div className="flex-1 flex flex-col min-w-0">
-          {showSidebar && (
-            <Navbar
-              currentView={currentView}
-              isSidebarCollapsed={isSidebarCollapsed}
-              onToggleSidebar={toggleSidebar}
-              onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
-              onNavigateHome={navigateHome}
-              onNavigateFolder={navigateFolder}
-              onNavigateDeck={navigateDeck}
-              onCreateDeck={() => navigateEditDeck()}
-            />
-          )}
+          <Navbar
+            currentView={currentView}
+            isSidebarCollapsed={isSidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+            onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
+            onNavigateHome={navigateHome}
+            onNavigateFolder={navigateFolder}
+            onNavigateDeck={navigateDeck}
+            onCreateDeck={() => navigateEditDeck()}
+          />
 
           {/* 메인 뷰 컨테이너 */}
           <main
             id="main-content"
             tabIndex={-1}
             key={`${user?.uid || 'guest'}:${location.pathname}`}
-            className={`flex-1 outline-none ${showSidebar ? 'pb-24 lg:pb-10' : ''}`}
+            className={`flex-1 outline-none ${showBottomNavigation ? 'pb-24 lg:pb-10' : ''}`}
           >
             <Suspense
               fallback={
@@ -250,7 +242,9 @@ export const App: React.FC = () => {
                 </div>
               }
             >
-              {currentView.type === 'dashboard' && (
+              {routeFeedback}
+
+              {readyView?.type === 'dashboard' && (
                 <DashboardView
                   lastStudiedDeckId={lastStudiedDeckId}
                   onNavigateDeck={navigateDeck}
@@ -263,7 +257,7 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {currentView.type === 'all-folders' && (
+              {readyView?.type === 'all-folders' && (
                 <AllFoldersView
                   onNavigateAllDecks={navigateAllDecks}
                   onNavigateFolder={navigateFolder}
@@ -272,7 +266,7 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {currentView.type === 'all-decks' && (
+              {readyView?.type === 'all-decks' && (
                 <AllDecksView
                   onNavigateAllFolders={navigateAllFolders}
                   onNavigateDeck={navigateDeck}
@@ -282,9 +276,9 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {currentView.type === 'folder' && (
+              {readyView?.type === 'folder' && (
                 <FolderDetailView
-                  folderId={currentView.folderId}
+                  folderId={readyView.folderId}
                   onNavigateDeck={navigateDeck}
                   onStartStudy={(deckId) => navigateStudy(deckId)}
                   onCreateDeckInFolder={(folderId) => navigateEditDeck(undefined, folderId)}
@@ -295,9 +289,9 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {currentView.type === 'deck' && (
+              {readyView?.type === 'deck' && (
                 <DeckDetailView
-                  deckId={currentView.deckId}
+                  deckId={readyView.deckId}
                   onStartStudy={(deckId, shuffle) => navigateStudy(deckId, false, shuffle)}
                   onEditDeck={(deckId, focusCardId) =>
                     navigateEditDeck(deckId, undefined, focusCardId)
@@ -307,17 +301,17 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {currentView.type === 'edit-deck' && (
+              {readyView?.type === 'edit-deck' && (
                 <DeckEditor
-                  key={`${user?.uid || 'guest'}:${currentView.deckId || 'new'}:${currentView.folderId || 'root'}`}
-                  deckId={currentView.deckId}
-                  initialFolderId={currentView.folderId}
-                  focusCardId={currentView.focusCardId}
+                  key={`${user?.uid || 'guest'}:${readyView.deckId || 'new'}:${readyView.folderId || 'root'}`}
+                  deckId={readyView.deckId}
+                  initialFolderId={readyView.folderId}
+                  focusCardId={readyView.focusCardId}
                   onClose={() => {
-                    if (currentView.deckId) {
-                      navigateDeck(currentView.deckId);
-                    } else if (currentView.folderId) {
-                      navigateFolder(currentView.folderId);
+                    if (readyView.deckId) {
+                      navigateDeck(readyView.deckId);
+                    } else if (readyView.folderId) {
+                      navigateFolder(readyView.folderId);
                     } else {
                       navigateHome();
                     }
@@ -326,30 +320,30 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {currentView.type === 'study' && (
+              {readyView?.type === 'study' && (
                 <StudyView
                   key={`${location.pathname}:${location.search}`}
-                  deckId={currentView.deckId}
-                  onlyDifficult={currentView.onlyDifficult}
-                  shuffle={currentView.shuffle}
-                  onExit={() => navigateDeck(currentView.deckId)}
+                  deckId={readyView.deckId}
+                  onlyDifficult={readyView.onlyDifficult}
+                  shuffle={readyView.shuffle}
+                  onExit={() => navigateDeck(readyView.deckId)}
                   onEditDeck={(deckId) => navigateEditDeck(deckId)}
                 />
               )}
 
-              {currentView.type === 'folder-study' && (
+              {readyView?.type === 'folder-study' && (
                 <StudyView
                   key={`${location.pathname}:${location.search}`}
-                  folderId={currentView.folderId}
+                  folderId={readyView.folderId}
                   shuffle
-                  onExit={() => navigateFolder(currentView.folderId)}
+                  onExit={() => navigateFolder(readyView.folderId)}
                   onEditDeck={(deckId) => navigateEditDeck(deckId)}
                 />
               )}
             </Suspense>
           </main>
 
-          {showSidebar && (
+          {showBottomNavigation && (
             <BottomNavigation
               currentView={currentView}
               onHome={navigateHome}

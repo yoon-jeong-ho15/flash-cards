@@ -63,15 +63,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   useEffect(() => setSearchOpen(false), [user?.uid]);
   const deck =
     'deckId' in currentView ? decks.find((item) => item.id === currentView.deckId) : undefined;
-  const folder = folders.find(
-    (item) => item.id === (currentView.type === 'folder' ? currentView.folderId : deck?.folderId)
-  );
+  const folderId = 'folderId' in currentView ? currentView.folderId : deck?.folderId;
+  const folder = folders.find((item) => item.id === folderId);
   const label =
     currentView.type === 'all-decks'
       ? '학습 세트'
       : currentView.type === 'all-folders'
         ? '폴더'
-        : deck?.title || folder?.title || '학습 홈';
+        : currentView.type === 'edit-deck' && !currentView.deckId
+          ? '새 학습 세트'
+          : deck?.title || folder?.title || '학습 홈';
   const handleLogin = async () => {
     setIsLoggingIn(true);
     try {

@@ -174,7 +174,7 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(
     return (
       <aside
         className={cn(
-          'w-56 xl:w-64 shrink-0 h-[calc(100dvh-8.5rem)] flex flex-col bg-card rounded-3xl border border-border p-3.5 shadow-xs select-none',
+          'w-56 xl:w-64 shrink-0 h-[calc(100dvh-12.5rem)] flex flex-col bg-card rounded-3xl border border-border p-3.5 shadow-xs select-none',
           className
         )}
       >
