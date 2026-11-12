@@ -9,6 +9,7 @@ import { useFlashcardStore } from './store/useFlashcardStore';
 import { BottomNavigation } from './components/common/BottomNavigation';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
+import { GlobalSearch } from './components/common/GlobalSearch';
 import { AccountView } from './components/account/AccountView';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { FolderDetailView } from './components/folder/FolderDetailView';
@@ -107,6 +108,23 @@ export const App: React.FC = () => {
     }
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === 'k' &&
+        !event.isComposing &&
+        !document.querySelector('[role="dialog"]')
+      ) {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => {
@@ -132,6 +150,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     setFolderModalState({ isOpen: false });
     setIsMobileSidebarOpen(false);
+    setSearchOpen(false);
   }, [user?.uid, location.key]);
 
   // 네비게이션 헬퍼
@@ -204,6 +223,14 @@ export const App: React.FC = () => {
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
           onNavigateHome={navigateHome}
           onNavigateAccount={navigateAccount}
+          onOpenSearch={() => {
+            if (isMobileSidebarOpen) {
+              // Let the drawer restore focus before the search dialog takes it.
+              requestAnimationFrame(() => setSearchOpen(true));
+            } else {
+              setSearchOpen(true);
+            }
+          }}
           onChooseStudyDeck={navigateAllDecks}
           onNavigateFolder={navigateFolder}
           onNavigateDeck={navigateDeck}
@@ -220,8 +247,6 @@ export const App: React.FC = () => {
             onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
             onNavigateHome={navigateHome}
             onNavigateFolder={navigateFolder}
-            onNavigateDeck={navigateDeck}
-            onCreateDeck={() => navigateEditDeck()}
           />
 
           {/* 메인 뷰 컨테이너 */}
@@ -354,6 +379,14 @@ export const App: React.FC = () => {
               onDecks={navigateAllDecks}
               onFolders={navigateAllFolders}
               onCreate={() => navigateEditDeck()}
+            />
+          )}
+
+          {searchOpen && (
+            <GlobalSearch
+              onClose={() => setSearchOpen(false)}
+              onNavigateDeck={navigateDeck}
+              onNavigateFolder={navigateFolder}
             />
           )}
 

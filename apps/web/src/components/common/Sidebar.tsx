@@ -8,6 +8,7 @@ import {
   Layers,
   Folder,
   Home,
+  Search,
   UserRound,
   Play,
   SquarePlus,
@@ -36,6 +37,7 @@ interface SidebarProps {
   onCloseMobile: () => void;
   onNavigateHome: () => void;
   onNavigateAccount: () => void;
+  onOpenSearch: () => void;
   onChooseStudyDeck: () => void;
   onNavigateFolder: (folderId: string) => void;
   onNavigateDeck: (deckId: string) => void;
@@ -51,6 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   onNavigateHome,
   onNavigateAccount,
+  onOpenSearch,
   onChooseStudyDeck,
   onNavigateFolder,
   onNavigateDeck,
@@ -186,6 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
       <nav aria-label="주 메뉴" className={cn('space-y-1', collapsed ? 'px-2' : 'px-3')}>
         {[
+          { type: 'search', label: '검색', icon: Search, action: onOpenSearch },
           { type: 'dashboard', label: '학습 홈', icon: Home, action: onNavigateHome },
           { type: 'account', label: '마이페이지', icon: UserRound, action: onNavigateAccount },
         ].map((item) => (
@@ -196,6 +200,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             aria-current={currentView.type === item.type ? 'page' : undefined}
             title={item.label}
             aria-label={collapsed ? item.label : undefined}
+            aria-haspopup={item.type === 'search' ? 'dialog' : undefined}
+            aria-keyshortcuts={item.type === 'search' ? 'Meta+K Control+K' : undefined}
             className={cn(
               'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors',
               currentView.type === item.type
