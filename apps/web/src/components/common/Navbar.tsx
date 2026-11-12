@@ -17,6 +17,12 @@ import { Modal } from './Modal';
 import { GlobalSearch } from './GlobalSearch';
 import { Button } from '@/components/ui/button';
 
+const viewLabels: Partial<Record<ViewMode['type'], string>> = {
+  'all-decks': '학습 세트',
+  'all-folders': '폴더',
+  account: '마이페이지',
+};
+
 interface NavbarProps {
   currentView: ViewMode;
   isSidebarCollapsed?: boolean;
@@ -66,13 +72,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   const folderId = 'folderId' in currentView ? currentView.folderId : deck?.folderId;
   const folder = folders.find((item) => item.id === folderId);
   const label =
-    currentView.type === 'all-decks'
-      ? '학습 세트'
-      : currentView.type === 'all-folders'
-        ? '폴더'
-        : currentView.type === 'edit-deck' && !currentView.deckId
-          ? '새 학습 세트'
-          : deck?.title || folder?.title || '학습 홈';
+    viewLabels[currentView.type] ??
+    (currentView.type === 'edit-deck' && !currentView.deckId
+      ? '새 학습 세트'
+      : deck?.title || folder?.title || '학습 홈');
   const handleLogin = async () => {
     setIsLoggingIn(true);
     try {

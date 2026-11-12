@@ -15,7 +15,7 @@ function harness(service) {
 test('all screen URLs round-trip IDs, focused cards and study options', () => {
   const h = harness();
   const views = [
-    { type: 'dashboard' }, { type: 'all-decks' }, { type: 'all-folders' },
+    { type: 'dashboard' }, { type: 'account' }, { type: 'all-decks' }, { type: 'all-folders' },
     { type: 'deck', deckId: 'deck 한글' }, { type: 'folder', folderId: 'folder-1' },
     { type: 'folder-study', folderId: 'folder-1' },
     { type: 'edit-deck', folderId: 'folder & 한글' },
@@ -38,9 +38,11 @@ test('deep link stays intact throughout auth restoration and delayed cloud load'
   const router = createMemoryRouter([{ path: '*', element: null }], { initialEntries: ['/decks/d1/edit?cardId=c1'] });
   const view = () => h.resolveView(router.state.location.pathname, router.state.location.search);
   assert.equal(h.routeStatus(view(), h.store.getState()), 'loading');
+  assert.equal(h.routeStatus(h.resolveView('/account'), h.store.getState()), 'loading');
   h.store.getState().setUser({ uid: 'a' });
   // No flash of missing data between auth and the first sync microtask.
   assert.equal(h.routeStatus(view(), h.store.getState()), 'loading');
+  assert.equal(h.routeStatus(h.resolveView('/account'), h.store.getState()), 'ready');
   const sync = h.store.getState().initCloudSync();
   await tick();
   assert.equal(h.routeStatus(view(), h.store.getState()), 'loading');

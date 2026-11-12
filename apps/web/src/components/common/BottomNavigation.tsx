@@ -21,7 +21,9 @@ export function BottomNavigation({
       ? 'home'
       : ['folder', 'all-folders'].includes(currentView.type)
         ? 'folders'
-        : 'decks';
+        : currentView.type === 'account'
+          ? undefined
+          : 'decks';
   return (
     <nav
       aria-label="빠른 탐색"

@@ -4,6 +4,7 @@ import type { FlashcardStoreState } from './store/types';
 
 const routes = [
   { path: '/', id: 'dashboard' },
+  { path: '/account', id: 'account' },
   { path: '/folders', id: 'all-folders' },
   { path: '/folders/:folderId', id: 'folder' },
   { path: '/folders/:folderId/study', id: 'folder-study' },
@@ -23,6 +24,7 @@ export function resolveView(pathname: string, search = ''): ViewMode | null {
   const query = new URLSearchParams(search);
   switch (match.route.id) {
     case 'dashboard': return { type: 'dashboard' };
+    case 'account': return { type: 'account' };
     case 'all-folders': return { type: 'all-folders' };
     case 'all-decks': return { type: 'all-decks' };
     case 'folder': return { type: 'folder', folderId: folderId! };
@@ -40,6 +42,7 @@ export function viewUrl(view: ViewMode): string {
   let path: string;
   switch (view.type) {
     case 'dashboard': return '/';
+    case 'account': return '/account';
     case 'all-folders': return '/folders';
     case 'all-decks': return '/decks';
     case 'folder': return `/folders/${encodeURIComponent(view.folderId)}`;
@@ -63,7 +66,9 @@ type RouteData = Pick<FlashcardStoreState,
   'isAuthInitialized' | 'isInitialSyncComplete' | 'user' | 'syncStatus' | 'decks' | 'folders'>;
 
 export function routeStatus(view: ViewMode | null, state: RouteData) {
-  if (!state.isAuthInitialized || (state.user && !state.isInitialSyncComplete)) return 'loading';
+  if (!state.isAuthInitialized) return 'loading';
+  if (view?.type === 'account') return 'ready';
+  if (state.user && !state.isInitialSyncComplete) return 'loading';
   if (!view) return 'not-found';
   const deckId = 'deckId' in view ? view.deckId : undefined;
   const folderId = 'folderId' in view ? view.folderId : undefined;

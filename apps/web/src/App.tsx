@@ -9,6 +9,7 @@ import { useFlashcardStore } from './store/useFlashcardStore';
 import { BottomNavigation } from './components/common/BottomNavigation';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
+import { AccountView } from './components/account/AccountView';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { FolderDetailView } from './components/folder/FolderDetailView';
 import { FolderModal } from './components/folder/FolderModal';
@@ -135,6 +136,7 @@ export const App: React.FC = () => {
 
   // 네비게이션 헬퍼
   const navigateHome = () => navigate(viewUrl({ type: 'dashboard' }));
+  const navigateAccount = () => navigate(viewUrl({ type: 'account' }));
   const navigateAllFolders = () => navigate(viewUrl({ type: 'all-folders' }));
   const navigateAllDecks = () => navigate(viewUrl({ type: 'all-decks' }));
   const navigateFolder = (folderId: string) => navigate(viewUrl({ type: 'folder', folderId }));
@@ -201,8 +203,8 @@ export const App: React.FC = () => {
           onToggleCollapse={toggleSidebar}
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
           onNavigateHome={navigateHome}
-          onNavigateAllFolders={navigateAllFolders}
-          onNavigateAllDecks={navigateAllDecks}
+          onNavigateAccount={navigateAccount}
+          onChooseStudyDeck={navigateAllDecks}
           onNavigateFolder={navigateFolder}
           onNavigateDeck={navigateDeck}
           onCreateDeck={() => navigateEditDeck()}
@@ -243,6 +245,8 @@ export const App: React.FC = () => {
               }
             >
               {routeFeedback}
+
+              {readyView?.type === 'account' && <AccountView />}
 
               {readyView?.type === 'dashboard' && (
                 <DashboardView
