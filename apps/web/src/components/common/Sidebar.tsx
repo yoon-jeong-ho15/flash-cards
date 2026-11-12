@@ -8,7 +8,10 @@ import {
   Layers,
   Folder,
   Home,
-  Plus,
+  Search,
+  UserRound,
+  Play,
+  SquarePlus,
   FolderPlus,
   ChevronDown,
   ChevronRight,
@@ -33,8 +36,9 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   onCloseMobile: () => void;
   onNavigateHome: () => void;
-  onNavigateAllFolders: () => void;
-  onNavigateAllDecks: () => void;
+  onNavigateAccount: () => void;
+  onOpenSearch: () => void;
+  onChooseStudyDeck: () => void;
   onNavigateFolder: (folderId: string) => void;
   onNavigateDeck: (deckId: string) => void;
   onCreateDeck: () => void;
@@ -48,8 +52,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   onCloseMobile,
   onNavigateHome,
-  onNavigateAllFolders,
-  onNavigateAllDecks,
+  onNavigateAccount,
+  onOpenSearch,
+  onChooseStudyDeck,
   onNavigateFolder,
   onNavigateDeck,
   onCreateDeck,
@@ -78,6 +83,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     () => [...decks].sort((a, b) => a.title.localeCompare(b.title, 'ko', { numeric: true })),
     [decks]
   );
+  const rootDecks = useMemo(() => {
+    const folderIds = new Set(folders.map((folder) => folder.id));
+    return sortedDecks.filter((deck) => !deck.folderId || !folderIds.has(deck.folderId));
+  }, [folders, sortedDecks]);
   const pendingCount = Object.values(pendingSync ?? {}).reduce((sum, ids) => sum + ids.length, 0);
   const navigate = (action: () => void) => {
     action();
@@ -94,25 +103,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
   const isCurrentDeck = (id: string) =>
-    (currentView.type === 'deck' || currentView.type === 'edit-deck') && currentView.deckId === id;
-  const renderDeck = (deck: (typeof decks)[number]) => (
+    'deckId' in currentView && currentView.deckId === id;
+  const renderDeck = (deck: (typeof decks)[number], collapsed: boolean) => (
     <button
       key={deck.id}
       type="button"
       onClick={() => navigate(() => onNavigateDeck(deck.id))}
       aria-current={isCurrentDeck(deck.id) ? 'page' : undefined}
+      aria-label={collapsed ? deck.title : undefined}
+      title={collapsed ? deck.title : undefined}
       className={cn(
-        'group flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted',
+        'flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
         isCurrentDeck(deck.id)
-          ? 'bg-primary font-semibold text-primary-foreground shadow-sm shadow-primary/20'
-          : 'text-muted-foreground'
+          ? 'bg-secondary font-semibold text-secondary-foreground'
+          : 'text-muted-foreground hover:bg-muted',
+        collapsed && 'h-10 justify-center px-0'
       )}
     >
       <FileText className="h-3.5 w-3.5 shrink-0 opacity-65" />
-      <span className="min-w-0 flex-1 truncate">{deck.title}</span>
-      <span className="shrink-0 tabular-nums text-[10px] opacity-75">
-        {counts.get(deck.id)?.length ?? 0}
-      </span>
+      {!collapsed && (
+        <>
+          <span className="min-w-0 flex-1 truncate">{deck.title}</span>
+          <span className="shrink-0 tabular-nums text-[10px] opacity-75">
+            {counts.get(deck.id)?.length ?? 0}
+          </span>
+        </>
+      )}
     </button>
   );
   const content = (collapsed: boolean) => (
@@ -161,38 +177,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
       <div className={cn('px-4 pb-5 pt-6', collapsed && 'px-2')}>
         <Button
-          onClick={() => navigate(onCreateDeck)}
+          onClick={() => navigate(onChooseStudyDeck)}
           className={cn('w-full gap-2', collapsed ? 'px-0' : 'justify-start')}
-          aria-label="새 학습 세트"
-          title="새 학습 세트"
+          aria-label="학습하기"
+          aria-current={currentView.type === 'all-decks' ? 'page' : undefined}
+          title="학습하기"
         >
-          <Plus className="h-4 w-4" />
-          {!collapsed && <span>새 학습 세트</span>}
+          <Play className="h-4 w-4" />
+          {!collapsed && <span>학습하기</span>}
         </Button>
       </div>
-      <nav aria-label="주 메뉴" className={cn('space-y-1 px-3', collapsed && 'px-2')}>
+      <nav aria-label="주 메뉴" className={cn('space-y-1', collapsed ? 'px-2' : 'px-3')}>
         {[
-          {
-            type: 'dashboard',
-            label: '학습 홈',
-            icon: Home,
-            action: onNavigateHome,
-            count: null,
-          },
-          {
-            type: 'all-decks',
-            label: '학습 세트',
-            icon: Layers,
-            action: onNavigateAllDecks,
-            count: decks.length,
-          },
-          {
-            type: 'all-folders',
-            label: '폴더',
-            icon: Folder,
-            action: onNavigateAllFolders,
-            count: folders.length,
-          },
+          { type: 'search', label: '검색', icon: Search, action: onOpenSearch },
+          { type: 'dashboard', label: '학습 홈', icon: Home, action: onNavigateHome },
+          { type: 'account', label: '마이페이지', icon: UserRound, action: onNavigateAccount },
         ].map((item) => (
           <button
             key={item.type}
@@ -201,23 +200,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             aria-current={currentView.type === item.type ? 'page' : undefined}
             title={item.label}
             aria-label={collapsed ? item.label : undefined}
+            aria-haspopup={item.type === 'search' ? 'dialog' : undefined}
+            aria-keyshortcuts={item.type === 'search' ? 'Meta+K Control+K' : undefined}
             className={cn(
               'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors',
               currentView.type === item.type
-                ? 'bg-primary font-semibold text-primary-foreground shadow-sm shadow-primary/20'
+                ? 'bg-secondary font-semibold text-secondary-foreground'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               collapsed && 'justify-center px-0'
             )}
           >
             <item.icon className="h-[18px] w-[18px] shrink-0" />
-            {!collapsed && (
-              <>
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.count !== null && (
-                  <span className="text-[11px] tabular-nums opacity-70">{item.count}</span>
-                )}
-              </>
-            )}
+            {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
           </button>
         ))}
       </nav>
@@ -230,16 +224,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {!collapsed ? (
           <>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="section-label">내 보관함</h2>
-              <button
-                type="button"
-                onClick={() => navigate(onCreateFolder)}
-                aria-label="새 폴더 만들기"
-                title="새 폴더 만들기"
-                className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
-              >
-                <FolderPlus className="h-4 w-4" />
-              </button>
+              <h2 className="section-label">라이브러리</h2>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => navigate(onCreateFolder)}
+                  aria-label="새 폴더 만들기"
+                  title="새 폴더 만들기"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
+                >
+                  <FolderPlus className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(onCreateDeck)}
+                  aria-label="새 학습 세트 만들기"
+                  title="새 학습 세트 만들기"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
+                >
+                  <SquarePlus className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             {!folders.length && !decks.length && (
               <div className="rounded-xl border border-dashed border-border p-4 text-xs leading-relaxed text-muted-foreground">
@@ -315,7 +320,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {isExpanded && (
                     <div className="ml-3 min-w-0 space-y-0.5 border-l border-border pl-2 py-0.5">
                       {folderDecks.length ? (
-                        folderDecks.map(renderDeck)
+                        folderDecks.map((deck) => renderDeck(deck, false))
                       ) : (
                         <p className="p-2 text-xs text-muted-foreground">아직 세트가 없어요.</p>
                       )}
@@ -324,14 +329,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
               );
             })}
-            {sortedDecks.some((deck) => !deck.folderId) && (
-              <div className="mt-4">
-                <p className="mb-2 px-2 text-[10px] text-muted-foreground">미분류 세트</p>
-                <div className="space-y-0.5">
-                  {sortedDecks.filter((deck) => !deck.folderId).map(renderDeck)}
-                </div>
-              </div>
-            )}
           </>
         ) : (
           sortedFolders.slice(0, 6).map((folder) => (
@@ -346,6 +343,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Folder className="h-4 w-4" />
             </button>
           ))
+        )}
+        {rootDecks.length > 0 && (
+          <div className={collapsed ? 'space-y-2' : 'space-y-0.5'}>
+            {rootDecks.map((deck) => renderDeck(deck, collapsed))}
+          </div>
         )}
       </div>
       <div className={cn('shrink-0 border-t border-border/70 p-4', collapsed && 'px-2')}>

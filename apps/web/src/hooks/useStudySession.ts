@@ -360,6 +360,8 @@ export const useStudySession = ({
         return;
       }
 
+      if ((e.target as HTMLElement)?.closest('[role="dialog"]')) return;
+
       // input이나 textarea 포커스 중에는 단축키 무시
       if (
         ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) ||

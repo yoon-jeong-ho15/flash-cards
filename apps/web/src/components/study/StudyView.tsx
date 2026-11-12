@@ -150,7 +150,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
     if (!skipClick.current) handleFlip();
   };
   return (
-    <div className="mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col px-5 sm:px-8">
+    <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-5xl flex-col px-5 sm:px-8">
       <header className="flex min-h-20 items-center gap-4 border-b border-border py-4">
         <Button
           variant="ghost"

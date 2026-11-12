@@ -160,7 +160,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     <div className="relative pb-8">
       {/* 상단 Sticky 메뉴바 */}
       <StickyActionBar
-        className="top-0 bg-card/95"
+        className="bg-card/95"
         onBack={handleRequestClose}
         iconOnlyBack
         backTitle="취소하고 뒤로 가기"
@@ -201,7 +201,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
       <div className="page-container max-w-[1280px]">
         <div className="lg:flex lg:gap-8 lg:items-start">
           {/* 좌측 카드 목차 사이드바 (데스크탑 고정 사이드바) */}
-          <div className="hidden lg:block shrink-0 sticky top-28 self-start z-20">
+          <div className="hidden lg:block shrink-0 sticky top-44 self-start z-20">
             <DeckEditorOutline
               cards={cardItems}
               activeIndex={activeOutlineIndex}
@@ -313,7 +313,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             </Card>
 
             <div
-              className="no-scrollbar sticky top-24 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl border border-border bg-background/95 p-2 backdrop-blur-lg lg:hidden"
+              className="no-scrollbar sticky top-40 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl border border-border bg-background/95 p-2 backdrop-blur-lg lg:hidden"
               aria-label="카드 목차"
             >
               {cardItems.map((card, index) => (
