@@ -13,6 +13,8 @@ export interface Preferences {
   folderSort?: DeckSortOption;
 }
 export interface Snapshot extends Data {
+  /** Account-local offline originals, keyed by their canonical remote URL. Never sent to Firestore. */
+  imageCache?: Record<string, string>;
   revision: number;
   outbox: Record<string, Operation>;
   preferences: Preferences;
@@ -32,13 +34,14 @@ export interface Storage {
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
 }
+export interface ImageUpload { cardId: string; original: string; url: string }
 export interface Transport {
   available: boolean;
-  push(uid: string, snapshot: Snapshot, active: () => boolean): Promise<void>;
+  push(uid: string, snapshot: Snapshot, active: () => boolean, onImage?: (image: ImageUpload) => Promise<void>): Promise<void>;
   pull(uid: string): Promise<Data>;
 }
 export type CardInput = Omit<Card, 'id' | 'deckId' | 'userId' | 'order' | 'learned'> & { id?: string; learned?: boolean };
 export interface DeckInput { title: string; description?: string; folderId?: string | null }
 export interface Draft { title: string; description: string; folderId: string | null; cards: CardInput[]; savedAt: number }
-export const emptySnapshot = (): Snapshot => ({ folders: [], decks: [], cards: [], revision: 0, outbox: {}, preferences: {} });
+export const emptySnapshot = (): Snapshot => ({ folders: [], decks: [], cards: [], imageCache: {}, revision: 0, outbox: {}, preferences: {} });
 export const accountKey = (uid?: string) => `flashcards_mobile_v2:${uid ? `user:${uid}` : 'guest'}`;

@@ -1,11 +1,12 @@
 import { accountKey, emptySnapshot, type CardInput, type Data, type DeckInput, type Draft, type Kind,
   type Preferences, type Snapshot, type State, type Storage, type Transport, type UserProfile } from './types';
+import { mergeCardImage, mapSources } from './imageSync';
 import { hasContent } from './content';
 
 const kinds: Kind[] = ['folders', 'decks', 'cards'];
 const message = (error: unknown) => error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
 const snapshotOf = (s: State): Snapshot => ({ folders: s.folders, decks: s.decks, cards: s.cards,
-  outbox: s.outbox, revision: s.revision, preferences: s.preferences });
+  imageCache: s.imageCache, outbox: s.outbox, revision: s.revision, preferences: s.preferences });
 
 /** Serialized durable mutations. No UI or network write is acknowledged before local persistence. */
 export class FlashcardStore {
@@ -17,6 +18,12 @@ export class FlashcardStore {
   private pullRequested = false;
   constructor(private storage: Storage, private transport: Transport, private uuid: () => string) {}
   getState = () => this.state;
+  resolveImage = (url: string) => this.state.imageCache?.[url] || url;
+  displayHTML = (html: string) => mapSources(html, this.resolveImage);
+  canonicalHTML = (html: string) => {
+    const urls = new Map(Object.entries(this.state.imageCache || {}).map(([url, data]) => [data, url]));
+    return mapSources(html, value => urls.get(value) || value);
+  };
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private publish(update: Partial<State>) { this.state = { ...this.state, ...update }; this.listeners.forEach(fn => fn()); }
   private serial<T>(job: () => Promise<T>): Promise<T> {
@@ -37,7 +44,7 @@ export class FlashcardStore {
           throw new Error('기기에 저장된 데이터를 읽을 수 없습니다. 저장소를 확인한 뒤 다시 시도해 주세요.');
         }
         this.publish({ folders: saved.folders, decks: saved.decks, cards: saved.cards,
-          revision: saved.revision, outbox: saved.outbox, preferences: saved.preferences || {}, ready: true });
+          imageCache: saved.imageCache || {}, revision: saved.revision, outbox: saved.outbox, preferences: saved.preferences || {}, ready: true });
       } catch (error) { this.publish({ error: message(error) }); throw error; }
     }).then(() => { void this.sync(); });
   };
@@ -62,7 +69,7 @@ export class FlashcardStore {
         for (const id of old.keys()) if (!ids.has(id)) outbox[`${kind}:${id}`] = { kind, id, revision, deleted: true };
       }
       const next: Snapshot = { folders: data.folders, decks: data.decks, cards: data.cards,
-        revision, outbox, preferences: before.preferences };
+        imageCache: before.imageCache, revision, outbox, preferences: before.preferences };
       try { await this.persist(next, before.user?.uid); }
       catch (error) { this.publish({ error: '기기 저장에 실패했습니다. 저장 공간을 확인해 주세요.' }); throw error; }
       this.publish({ ...next, error: null, status: this.canSync() ? 'syncing' : 'offline' });
@@ -165,7 +172,19 @@ export class FlashcardStore {
         while (active() && this.canSync()) {
           const sent = snapshotOf(this.state);
           if (Object.keys(sent.outbox).length) {
-            await this.transport.push(uid, sent, active);
+            await this.transport.push(uid, sent, active, image => this.serial(async () => {
+              if (!active() || !this.state.ready) throw new Error('계정이 변경되었습니다.');
+              const next = snapshotOf(this.state);
+              const source = sent.cards.find(card => card.id === image.cardId);
+              // Restrict replacement to fields present in the sent card. Merge into latest values.
+              const cards = next.cards.map(card => {
+                if (card.id !== image.cardId || !source) return card;
+                return mergeCardImage(card, source, image.original, image.url);
+              });
+              const imageCache = { ...next.imageCache, [image.url]: image.original };
+              await this.persist({ ...next, cards, imageCache }, uid);
+              if (active()) this.publish({ cards, imageCache });
+            }));
             await this.serial(async () => {
               if (!active()) return;
               const next = snapshotOf(this.state);

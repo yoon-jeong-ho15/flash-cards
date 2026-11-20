@@ -1,3 +1,4 @@
+import { store, useStore } from '../platform/runtime';
 import { Text } from '../ui/Typography';
 import { useUI } from '../ui/theme';
 import { useAppearance } from '../platform/appearance';
@@ -11,6 +12,7 @@ import type { CardDrag } from '../ui/useSwipeMotion';
 export interface RichTextHandle { getHTML(): Promise<string>; insertImage(url: string): void }
 interface Props { html: string; side?: 'front' | 'back'; editable?: boolean; label?: string; presentation?: 'default' | 'study-front' | 'study-back'; onChange?: (html: string) => void; onImage?: (url: string) => void; onFlip?: () => void; onCardDrag?: (event: CardDrag) => void; onPickImage?: () => void }
 export const RichText = forwardRef<RichTextHandle, Props>(function RichText(props, ref) {
+  const { imageCache } = useStore();
   const settings = useAppearance();
   const { dark, colors } = useUI();
   const fontSize = props.side === 'front' || props.presentation === 'study-front' ? settings.questionSize
@@ -27,10 +29,11 @@ export const RichText = forwardRef<RichTextHandle, Props>(function RichText(prop
   const [failed, setFailed] = useState(false);
   const requests = useRef(new Map<string, (html: string) => void>());
   const lastHTML = useRef(props.html);
+  const lastImageCache = useRef(imageCache);
   const send = (value: unknown) => web.current?.injectJavaScript(`window.nativeReceive(${JSON.stringify(value)});true;`);
   useEffect(() => {
-    if (ready && props.html !== lastHTML.current) { lastHTML.current = props.html; send({ type: 'set', html: props.html }); }
-  }, [props.html, ready]);
+    if (ready && (props.html !== lastHTML.current || (!props.editable && imageCache !== lastImageCache.current))) { lastImageCache.current = imageCache; lastHTML.current = props.html; send({ type: 'set', html: store.displayHTML(props.html) }); }
+  }, [props.html, props.editable, ready, imageCache]);
   useEffect(() => { if (ready) send({ type: 'appearance', presentation: props.presentation, ...appearance }); }, [props.presentation, fontSize, dark, settings.uiScale, ready]);
   useImperativeHandle(ref, () => ({
     getHTML: () => new Promise((resolve, reject) => {
@@ -53,10 +56,10 @@ export const RichText = forwardRef<RichTextHandle, Props>(function RichText(prop
       onMessage={event => {
         try {
           const data = JSON.parse(event.nativeEvent.data);
-          if (data.type === 'ready') { lastHTML.current = latest.current.html; send({ type: 'init', html: latest.current.html, editable: props.editable, label: props.label, presentation: latest.current.presentation, ...currentAppearance.current }); setReady(true); }
+          if (data.type === 'ready') { lastHTML.current = latest.current.html; send({ type: 'init', html: store.displayHTML(latest.current.html), editable: props.editable, label: props.label, presentation: latest.current.presentation, ...currentAppearance.current }); setReady(true); }
           if (data.type === 'height' && Number.isFinite(data.value) && !props.editable) setHeight(Math.max(60, Math.min(20000, data.value)));
-          if (data.type === 'change' && typeof data.html === 'string') { lastHTML.current = data.html; latest.current.onChange?.(data.html); }
-          if (data.type === 'value' && typeof data.html === 'string') { requests.current.get(data.id)?.(data.html); requests.current.delete(data.id); }
+          if (data.type === 'change' && typeof data.html === 'string') { lastHTML.current = store.canonicalHTML(data.html); latest.current.onChange?.(lastHTML.current); }
+          if (data.type === 'value' && typeof data.html === 'string') { requests.current.get(data.id)?.(store.canonicalHTML(data.html)); requests.current.delete(data.id); }
           if (data.type === 'image' && typeof data.url === 'string') latest.current.onImage?.(data.url);
           if (data.type === 'flip') latest.current.onFlip?.();
           if (data.type === 'card-drag' && ['move', 'end', 'cancel'].includes(data.phase) && Number.isFinite(data.dx) && Number.isFinite(data.dy)) latest.current.onCardDrag?.({ phase: data.phase, dx: data.dx, dy: data.dy });

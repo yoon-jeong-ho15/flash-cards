@@ -65,7 +65,7 @@ test('web denied upload preserves the existing local fallback', async () => {
 });
 
 for (const user of [null, { uid: 'alice' }]) {
-  test(`mobile ${user ? 'account uploads JPEG under its UID' : 'guest retains local JPEG without uploading'}`, async () => {
+  test(`mobile ${user ? 'account durably stages JPEG for the outbox' : 'guest retains local JPEG without uploading'}`, async () => {
     const calls = [];
     const { chooseImage } = load('apps/mobile/src/platform/images.ts', {
       'expo-image-picker': { launchImageLibraryAsync: async () => ({ canceled: false, assets: [{ uri: 'local.jpg', width: 100, height: 100, fileSize: 3 }] }) },
@@ -74,13 +74,7 @@ for (const user of [null, { uid: 'alice' }]) {
       './cloud': { uploadImage: async (data, uid, active) => { calls.push({ data, uid }); assert.equal(active(), true); return `https://example.com/cards/${uid}/image.jpg`; } },
     });
     const result = await chooseImage();
-    if (user) {
-      assert.equal(calls[0].uid, 'alice');
-      assert.equal(calls[0].data, 'data:image/jpeg;base64,YWJj');
-      assert.equal(result, 'https://example.com/cards/alice/image.jpg');
-    } else {
-      assert.equal(result, 'data:image/jpeg;base64,YWJj');
-      assert.equal(calls.length, 0);
-    }
+    assert.equal(result, 'data:image/jpeg;base64,YWJj');
+    assert.equal(calls.length, 0);
   });
 }

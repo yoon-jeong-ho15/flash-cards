@@ -1,7 +1,9 @@
+import { digest, CryptoDigestAlgorithm } from 'expo-crypto';
+import { cardDataImages, replaceCardImage } from '../core/imageSync';
 import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { auth, configured, db, storage } from './firebase';
 import { getDownloadURL, ref, uploadBytesResumable, type UploadTaskSnapshot } from 'firebase/storage';
-import type { Card, Data, Kind, Transport } from '../core/types';
+import type { Card, Data, Kind, Transport, ImageUpload } from '../core/types';
 
 const names: Record<Kind, string> = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
 async function bounded<T>(work: PromiseLike<T>, milliseconds = 20000): Promise<T> {
@@ -11,38 +13,47 @@ async function bounded<T>(work: PromiseLike<T>, milliseconds = 20000): Promise<T
 }
 export async function uploadImage(dataUrl: string, uid: string, active: () => boolean): Promise<string> {
   if (!storage || !active() || auth?.currentUser?.uid !== uid) throw new Error('로그인 상태를 확인해 주세요.');
-  const format = dataUrl.match(/^data:(image\/(png|jpe?g|gif|webp));base64,(.+)$/i);
+  const format = dataUrl.match(/^data:(image\/(png|jpe?g|gif|webp));base64,([a-z0-9+/=\s]+)$/i);
   if (!format) throw new Error('지원하지 않는 이미지 형식입니다.');
   const [, contentType, extension, encoded] = format;
-  const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0));
-  const path = `cards/${uid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${extension === 'jpeg' ? 'jpg' : extension}`;
-  const task = uploadBytesResumable(ref(storage, path), bytes, { contentType, cacheControl: 'public,max-age=31536000' });
+  const bytes = Uint8Array.from(atob(encoded.replace(/\s/g, '')), char => char.charCodeAt(0));
+  if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new Error('5MB 이하의 이미지를 선택해 주세요.');
+  const hash = Array.from(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256, bytes)), n => n.toString(16).padStart(2, '0')).join('');
+  const check = () => { if (!active() || auth?.currentUser?.uid !== uid) throw new Error('계정이 변경되었습니다.'); };
+  check();
+  const path = `cards/${uid}/sha256_${hash}.${extension.toLowerCase().replace('jpeg', 'jpg')}`;
+  try {
+    const url = await bounded(getDownloadURL(ref(storage, path)), 8000);
+    check();
+    return url;
+  } catch (error) { if ((error as { code?: string }).code !== 'storage/object-not-found') throw error; }
+  check();
+  const task = uploadBytesResumable(ref(storage, path), bytes, { contentType: contentType.toLowerCase(), cacheControl: 'public,max-age=31536000' });
   try {
     const completed = new Promise<UploadTaskSnapshot>((resolve, reject) => task.then(resolve, reject));
-    const result = await bounded(completed, 8000);
+    const result = await bounded(completed, 15000);
     if (!active() || auth?.currentUser?.uid !== uid) throw new Error('계정이 변경되었습니다.');
-    return await bounded(getDownloadURL(result.ref), 8000);
+    const url = await bounded(getDownloadURL(result.ref), 8000);
+    check();
+    return url;
   } catch (error) { task.cancel(); throw error; }
 }
-async function uploadEmbeddedImages(card: Card, uid: string, active: () => boolean, cache: Map<string, string>): Promise<Card> {
-  const output = { ...card };
-  const upload = async (url: string) => {
-    if (!url.startsWith('data:image/')) return url;
-    if (!cache.has(url)) cache.set(url, await uploadImage(url, uid, active));
-    return cache.get(url)!;
-  };
-  for (const key of ['frontImageUrl', 'backImageUrl', 'imageUrl'] as const) if (output[key]) output[key] = await upload(output[key]!);
-  for (const key of ['termRichText', 'definitionRichText'] as const) {
-    const urls = [...output[key].matchAll(/<img\b[^>]*\bsrc=["'](data:image\/[^"']+)["']/gi)].map(match => match[1]);
-    for (const url of urls) output[key] = output[key].split(url).join(await upload(url));
+async function uploadEmbeddedImages(card: Card, uid: string, active: () => boolean, cache: Map<string, string>, onImage?: (image: ImageUpload) => Promise<void>): Promise<Card> {
+  let output = card;
+  for (const original of cardDataImages(card)) {
+    if (!cache.has(original)) cache.set(original, await uploadImage(original, uid, active));
+    const url = cache.get(original)!;
+    // Persist each upload before a batch commit; partial failures retain reusable results.
+    await onImage?.({ cardId: card.id, original, url });
+    output = replaceCardImage(output, original, url);
   }
   return output;
 }
 export const cloud: Transport = {
   available: configured,
-  async push(uid, snapshot, active) {
+  async push(uid, snapshot, active, onImage) {
     if (!db) throw new Error('Firebase 설정을 확인해 주세요.');
-    const cache = new Map<string, string>();
+    const cache = new Map<string, string>(Object.entries(snapshot.imageCache || {}).map(([url, data]) => [data, url]));
     const operations = Object.values(snapshot.outbox);
     // Keep the same 400-operation limit as the web app. Replays are idempotent.
     for (let i = 0; i < operations.length; i += 400) {
@@ -53,7 +64,7 @@ export const cloud: Transport = {
         if (operation.deleted) { batch.delete(target); continue; }
         const item = snapshot[operation.kind].find(item => item.id === operation.id);
         if (!item) throw new Error('동기화할 자료를 찾을 수 없습니다.');
-        const normalized = operation.kind === 'cards' ? await uploadEmbeddedImages(item as Card, uid, active, cache) : item;
+        const normalized = operation.kind === 'cards' ? await uploadEmbeddedImages(item as Card, uid, active, cache, onImage) : item;
         const data: Record<string, unknown> = { ...normalized, userId: uid };
         for (const key of operation.kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) data[key] ??= null;
         for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;

@@ -101,17 +101,18 @@ export function CardPreview({
   onImage?: (url: string) => void;
 }) {
   const { colors } = useUI();
+  const { imageCache } = useStore();
   const content = useMemo(() => {
     if (!html || !html.trim()) return null;
     try {
-      const doc = parseDocument(html);
+      const doc = parseDocument(store.displayHTML(html));
       return (doc.children as DomNode[]).map((child, i) =>
         renderDomNode(child, i, colors, onImage)
       );
     } catch {
       return <Text style={{ fontSize: 15, lineHeight: 22, color: colors.ink }}>{plainText(html)}</Text>;
     }
-  }, [html, colors, onImage]);
+  }, [html, colors, onImage, imageCache]);
 
   if (!content || (Array.isArray(content) && content.length === 0)) {
     return <Text style={{ fontSize: 13, color: colors.muted, fontStyle: 'italic' }}>내용 없음</Text>;
