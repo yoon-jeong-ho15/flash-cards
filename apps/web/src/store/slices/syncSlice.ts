@@ -1,3 +1,5 @@
+import { uploadDataImage } from '../../services/storageService';
+import { cardDataImages, replaceCardImage } from '../../services/imageSync';
 import { StateCreator } from 'zustand';
 import { FlashcardStoreState, SyncSlice, EMPTY_PENDING_SYNC } from '../types';
 import { flashcardService, sortCardsByOrder } from '../../services/flashcardService';
@@ -51,6 +53,24 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
               return latest;
             });
             if (!active()) return;
+            // Also migrate legacy local images that were never put in the outbox.
+            const images = new Set(snapshot.cards.flatMap(cardDataImages));
+            if (images.size) {
+              for (const original of images) {
+                if (!active()) return;
+                const url = await uploadDataImage(original, uid!, active);
+                await transactAccount(uid, latest => {
+                  const cards = latest.cards.map(card => replaceCardImage(card, original, url));
+                  if (cards.every((card, i) => card === latest.cards[i])) return null;
+                  const after = { ...latest, cards };
+                  const mutationRevision = latest.mutationRevision + 1;
+                  return { ...after, mutationRevision,
+                    ...enqueueChanges(latest, after, latest.pendingSync, latest.pendingVersions, mutationRevision) };
+                }, publish, active);
+              }
+              // Reload durable versions, including edits/deletes made during upload.
+              continue;
+            }
             if (hasPending(snapshot.pendingSync)) {
               await flashcardService.commitChanges(snapshot, uid!, active);
               if (!active()) return;

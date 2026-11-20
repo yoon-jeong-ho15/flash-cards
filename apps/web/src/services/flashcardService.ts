@@ -13,6 +13,19 @@ import { db, auth, isFirebaseConfigured } from '../lib/firebase';
 import { Card, Deck, Folder } from '../types';
 import { AccountData, PendingSync } from '../store/types';
 import { collections } from '../store/syncQueue';
+import { bounded, cardDataImages, validateDocument } from './imageSync';
+
+// A timed-out Firestore commit cannot be cancelled. Do not submit a newer write
+// until it settles, so a late old request cannot overtake the retry/delete.
+let outstandingCommit: Promise<void> = Promise.resolve();
+async function commitBatch(batch: WriteBatch, active: () => boolean = () => true): Promise<void> {
+  await bounded(outstandingCommit);
+  if (!active()) throw new Error('Authentication session changed');
+  const work = batch.commit();
+  outstandingCommit = work.catch(() => {});
+  await bounded(work);
+}
+
 
 /**
  * Firestore의 WriteBatch 500개 제한을 안전하게 처리하기 위한 청크 커밋 헬퍼
@@ -26,7 +39,7 @@ async function commitInBatches(
     const chunk = operations.slice(i, i + CHUNK_SIZE);
     const batch = writeBatch(db);
     chunk.forEach((op) => op(batch));
-    await batch.commit();
+    await commitBatch(batch);
   }
 }
 
@@ -57,12 +70,16 @@ export const flashcardService = {
       const ids = new Set(snapshot.pendingSync[upserts]);
       for (const item of snapshot[kind]) {
         if (!ids.has(item.id)) continue;
+        if (kind === 'cards' && cardDataImages(item as Card).length) {
+          throw new Error('이미지 업로드가 완료되지 않았습니다. 연결을 확인한 후 다시 동기화해 주세요. 원본은 보관됩니다.');
+        }
         const data: Record<string, unknown> = { ...item, userId };
         // Explicit nulls clear optional fields in merge writes.
         for (const key of kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) {
           data[key] ??= null;
         }
         for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
+        validateDocument(data);
         operations.push(batch => batch.set(doc(db!, names[kind], item.id), data, { merge: true }));
       }
     }
@@ -70,7 +87,7 @@ export const flashcardService = {
       if (!isActive() || auth?.currentUser?.uid !== userId) throw new Error('Authentication session changed');
       const batch = writeBatch(db);
       operations.slice(i, i + 400).forEach(operation => operation(batch));
-      await batch.commit();
+      await commitBatch(batch, () => isActive() && auth?.currentUser?.uid === userId);
     }
   },
 
@@ -81,11 +98,11 @@ export const flashcardService = {
     if (!db || !isFirebaseConfigured || !userId) return null;
 
     try {
-      const [foldersSnap, decksSnap, cardsSnap] = await Promise.all([
+      const [foldersSnap, decksSnap, cardsSnap] = await bounded(Promise.all([
         getDocs(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
         getDocs(query(collection(db, 'flashcard_decks'), where('userId', '==', userId))),
         getDocs(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
-      ]);
+      ]));
 
       const folders: Folder[] = foldersSnap.docs
         .map((d) => {
@@ -304,6 +321,8 @@ export const flashcardService = {
    */
   async upsertCard(card: Card, userId: string): Promise<void> {
     if (!db || !isFirebaseConfigured || !userId) return;
+    if (cardDataImages(card).length) throw new Error('이미지 카드는 로컬에 저장한 후 다시 동기화해 주세요.');
+    validateDocument({ ...card, userId });
     const docRef = doc(db, 'flashcard_cards', card.id);
     await setDoc(
       docRef,
@@ -328,6 +347,10 @@ export const flashcardService = {
    */
   async batchUpsertCards(cards: Card[], userId: string): Promise<void> {
     if (!db || !isFirebaseConfigured || !userId || cards.length === 0) return;
+    cards.forEach(card => {
+      if (cardDataImages(card).length) throw new Error('이미지 카드는 로컬에 저장한 후 다시 동기화해 주세요.');
+      validateDocument({ ...card, userId });
+    });
     const ops = cards.map((c, index) => (batch: WriteBatch) => {
       const docRef = doc(db!, 'flashcard_cards', c.id);
       batch.set(

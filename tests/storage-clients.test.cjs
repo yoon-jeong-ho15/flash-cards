@@ -40,6 +40,7 @@ function webFixture(fail = false) {
     }
   }
   return { calls, ...load('apps/web/src/services/storageService.ts', {
+    './imageSync': { bounded: async work => await work },
     'firebase/storage': storage, '../lib/firebase': { storage: {}, isFirebaseConfigured: true },
   }, { navigator: { onLine: true }, FileReader }) };
 }

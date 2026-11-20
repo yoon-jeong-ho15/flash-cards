@@ -37,6 +37,8 @@ export const App: React.FC = () => {
   const setUser = useFlashcardStore((state) => state.setUser);
   const user = useFlashcardStore((state) => state.user);
 
+  const syncError = useFlashcardStore(state => state.syncError);
+  const syncStatus = useFlashcardStore(state => state.syncStatus);
   const storageError = useFlashcardStore(state => state.storageError);
   useEffect(() => {
     const refresh = () => void useFlashcardStore.getState().refreshAccount();
@@ -236,6 +238,10 @@ export const App: React.FC = () => {
         </a>
         {storageError && <div role="alert" className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] bg-destructive text-destructive-foreground p-3 rounded-lg">
           저장하지 못했습니다: {storageError}
+        </div>}
+        {user && syncStatus === 'error' && <div role="alert" className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] w-[min(90vw,36rem)] rounded-lg border border-destructive bg-background p-3 text-sm shadow-lg">
+          <p>{syncError || '동기화를 완료하지 못했습니다.'} 원본과 대기 작업은 보관됩니다.</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => void initCloudSync()}>동기화 다시 시도</Button>
         </div>}
         {/* 1. 글로벌 좌측 접이식 사이드바 */}
         <Sidebar

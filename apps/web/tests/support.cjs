@@ -36,7 +36,7 @@ function createHarness(service = {}, storage = new Map(), overrides = {}) {
   };
   const cache = new Map();
   const window = { addEventListener() {}, removeEventListener() {} };
-  const context = vm.createContext({console, window, navigator, localStorage, crypto:require('node:crypto').webcrypto, setTimeout,clearTimeout});
+  const context = vm.createContext({console, window, navigator, localStorage, TextEncoder, atob, crypto:require('node:crypto').webcrypto, setTimeout,clearTimeout});
   function load(file) {
     if (mocks[file]) return mocks[file];
     if (cache.has(file)) return cache.get(file).exports;

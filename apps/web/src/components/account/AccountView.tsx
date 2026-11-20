@@ -23,6 +23,7 @@ export function AccountView() {
   const folders = useFlashcardStore((state) => state.folders);
   const cards = useFlashcardStore((state) => state.cards);
   const syncStatus = useFlashcardStore((state) => state.syncStatus);
+  const syncError = useFlashcardStore(state => state.syncError);
   const lastSyncedAt = useFlashcardStore((state) => state.lastSyncedAt);
   const pendingSync = useFlashcardStore((state) => state.pendingSync);
   const sync = useFlashcardStore((state) => state.initCloudSync);
@@ -137,7 +138,7 @@ export function AccountView() {
                     <p className="text-xs leading-5 text-muted-foreground">
                       {lastSyncedAt ? `최근 동기화 · ${new Date(lastSyncedAt).toLocaleString('ko-KR')}` : '아직 동기화 기록이 없어요.'}
                     </p>
-                    {syncStatus === 'error' && <p role="alert" className="text-sm text-destructive">인터넷 연결을 확인한 뒤 다시 시도해 주세요.</p>}
+                    {syncStatus === 'error' && <p role="alert" className="text-sm text-destructive">{syncError || '인터넷 연결을 확인한 뒤 다시 시도해 주세요.'} 원본과 대기 작업은 이 브라우저에 보관됩니다.</p>}
                   </>
                 ) : (
                   <p className="max-w-md text-xs leading-5 text-muted-foreground">Google로 로그인하면 계정에 저장한 자료를 다른 기기에서도 볼 수 있어요. 게스트 자료는 이 브라우저에 보관돼요.</p>
