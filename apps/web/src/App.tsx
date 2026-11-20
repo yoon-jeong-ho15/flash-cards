@@ -6,6 +6,7 @@ import { resolveView, viewUrl, routeStatus } from './routing';
 import { EmptyState } from './components/common/EmptyState';
 import { Button } from './components/ui/button';
 import { useFlashcardStore } from './store/useFlashcardStore';
+import { accountStorageKey } from './store/accountStorage';
 import { BottomNavigation } from './components/common/BottomNavigation';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
@@ -35,6 +36,25 @@ export const App: React.FC = () => {
   const setSyncStatus = useFlashcardStore((state) => state.setSyncStatus);
   const setUser = useFlashcardStore((state) => state.setUser);
   const user = useFlashcardStore((state) => state.user);
+
+  const storageError = useFlashcardStore(state => state.storageError);
+  useEffect(() => {
+    const refresh = () => void useFlashcardStore.getState().refreshAccount();
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (event.key === null ||
+        event.key === accountStorageKey(useFlashcardStore.getState().user?.uid))) refresh();
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('pageshow', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    refresh();
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('pageshow', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   // Firebase Auth 인증 상태 감지 및 자동 동기화
   useEffect(() => {
@@ -214,6 +234,9 @@ export const App: React.FC = () => {
         <a href="#main-content" className="skip-link">
           본문으로 바로가기
         </a>
+        {storageError && <div role="alert" className="fixed top-2 left-1/2 -translate-x-1/2 z-[100] bg-destructive text-destructive-foreground p-3 rounded-lg">
+          저장하지 못했습니다: {storageError}
+        </div>}
         {/* 1. 글로벌 좌측 접이식 사이드바 */}
         <Sidebar
           currentView={currentView}

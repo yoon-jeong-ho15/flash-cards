@@ -3,15 +3,16 @@ import { FlashcardStoreState, FolderSlice } from '../types';
 
 export const createFolderSlice: StateCreator<FlashcardStoreState, [], [], FolderSlice> = (_set, get) => ({
   folders: [],
-  addFolder: (title, description) => {
+  addFolder: async (title, description) => {
     const id = `folder-${crypto.randomUUID()}`;
-    get().applyChanges(state => ({ folders: [...state.folders, { id, title: title.trim(),
+    await get().applyChanges(state => ({ folders: [...state.folders, { id, title: title.trim(),
       description: description?.trim(), createdAt: Date.now(), userId: state.user?.uid }] }));
     return id;
   },
-  updateFolder: (id, updates) => get().applyChanges(state => ({
-    folders: state.folders.map(folder => folder.id === id ? { ...folder, ...updates } : folder),
-  })),
+  updateFolder: (id, updates) => get().applyChanges(state => {
+    if (!state.folders.some(folder => folder.id === id)) throw new Error('폴더가 다른 탭에서 삭제되었습니다.');
+    return { folders: state.folders.map(folder => folder.id === id ? { ...folder, ...updates } : folder) };
+  }),
   deleteFolder: (id, deleteContainedDecks = false) => get().applyChanges(state => {
     const deckIds = new Set(state.decks.filter(deck => deck.folderId === id).map(deck => deck.id));
     return {

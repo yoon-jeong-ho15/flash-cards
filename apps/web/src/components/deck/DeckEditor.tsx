@@ -60,6 +60,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     handleReorderCards,
     handleUpdateCard,
     handleSave,
+    isSaving,
     lastSavedAt,
     showDraftRestoreModal,
     draftSavedAt,
@@ -188,6 +189,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
               variant="default"
               size="sm"
               onClick={handleSave}
+              isLoading={isSaving}
               leftIcon={<Save className="w-4 h-4" />}
               className="font-semibold shadow-xs"
             >
@@ -437,6 +439,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                 size="default"
                 tabIndex={-1}
                 onClick={handleSave}
+                isLoading={isSaving}
                 leftIcon={<Save className="w-4 h-4" />}
                 className="font-semibold shadow-xs"
               >

@@ -264,8 +264,8 @@ export const useDeckEditor = ({
   // Track the original independently of the editable draft. Remote refreshes must not reset inputs.
   const originalDeck = decks.find((d) => d.id === deckId);
   const fingerprint = useMemo(
-    () => JSON.stringify({ deck: originalDeck, cards }),
-    [originalDeck, cards]
+    () => JSON.stringify({ deck: originalDeck, cards: cards.filter(card => card.deckId === deckId) }),
+    [originalDeck, cards, deckId]
   );
   const [baseline, setBaseline] = useState(fingerprint);
   const hasExternalChanges = Boolean(deckId && baseline !== fingerprint);
@@ -413,8 +413,11 @@ export const useDeckEditor = ({
     setCardItems((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
   }, []);
 
+  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   // 저장 처리
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const trimmedTitle = title.trim();
     const newErrors: DeckEditorErrors = {};
 
@@ -434,13 +437,11 @@ export const useDeckEditor = ({
       return;
     }
 
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
     try {
-      // 빈 카드가 삭제되었으므로 화면 상태도 동기화
-      if (validCards.length !== cardItems.length) {
-        setCardItems(validCards);
-      }
-
-      const savedDeckId = saveDeckWithCards(
+      const savedDeckId = await saveDeckWithCards(
         deckId || null,
         {
           title: trimmedTitle,
@@ -457,7 +458,8 @@ export const useDeckEditor = ({
           imageUrl: c.imageUrl || c.backImageUrl,
           learned:
             (c.id ? indexCards(cards).byId.get(c.id)?.learned : undefined) ?? c.learned ?? false,
-        }))
+        })),
+        JSON.parse(baseline)
       );
 
       // saveDeckWithCards returns only after both data and outbox are durable locally.
@@ -469,8 +471,11 @@ export const useDeckEditor = ({
     } catch (err: any) {
       console.error('덱 저장 중 오류:', err);
       setErrors({
-        general: '덱을 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.',
+        general: typeof err?.message === 'string' ? err.message : '덱을 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.',
       });
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   }, [
     title,
@@ -480,6 +485,7 @@ export const useDeckEditor = ({
     deckId,
     cards,
     saveDeckWithCards,
+    baseline,
     onSaved,
     user?.uid,
   ]);
@@ -508,6 +514,7 @@ export const useDeckEditor = ({
     handleReorderCards,
     handleUpdateCard,
     handleSave,
+    isSaving,
     lastSavedAt,
     showDraftRestoreModal,
     draftSavedAt: draftToRestore?.savedAt || null,

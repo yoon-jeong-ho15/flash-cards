@@ -10,9 +10,19 @@ export const accountStorageKey = (uid?: string) => `flashcards_account_v1:${uid 
 export const emptyAccount = (): AccountSnapshot => ({ folders: [], decks: [], cards: [],
   pendingSync: { ...EMPTY_PENDING_SYNC }, pendingVersions: {}, mutationRevision: 0 });
 
+const readCache = new Map<string, { raw: string; snapshot: AccountSnapshot }>();
 export function readAccount(uid?: string): AccountSnapshot {
-  const raw = localStorage.getItem(accountStorageKey(uid));
-  if (raw) return { ...emptyAccount(), ...JSON.parse(raw) };
+  const key = accountStorageKey(uid);
+  // Always read storage, even when cached: only the exact durable string may be reused.
+  const raw = localStorage.getItem(key);
+  if (raw) {
+    const cached = readCache.get(key);
+    if (cached?.raw === raw) return cached.snapshot;
+    const snapshot = { ...emptyAccount(), ...JSON.parse(raw) };
+    readCache.set(key, { raw, snapshot });
+    return snapshot;
+  }
+  readCache.delete(key);
 
   // Keep the original key as a recovery copy. Never assign another account's cache to this user.
   const legacyRaw = localStorage.getItem('quizlet_flashcards_v1');
@@ -43,11 +53,40 @@ function serializeCollection(value: object): string {
   return serialized;
 }
 
-export function writeAccount(state: FlashcardStoreState): void {
+function writeAccount(state: AccountSnapshot, uid?: string): void {
   const metadata = JSON.stringify({ pendingSync: state.pendingSync,
     pendingVersions: state.pendingVersions, mutationRevision: state.mutationRevision });
   // One atomic localStorage write. Acknowledgements reuse collection JSON rather than
   // walking every card (and embedded image) again just to update the outbox.
   const serialized = `{"folders":${serializeCollection(state.folders)},"decks":${serializeCollection(state.decks)},"cards":${serializeCollection(state.cards)},${metadata.slice(1)}`;
-  localStorage.setItem(accountStorageKey(state.user?.uid), serialized);
+  localStorage.setItem(accountStorageKey(uid), serialized);
+  readCache.set(accountStorageKey(uid), { raw: serialized, snapshot: state });
+}
+
+// All writers (including cloud pull and acknowledgement) use this origin-wide lock.
+// There is deliberately no localStorage spin-lock or unlocked fallback.
+export async function withAccountLock<T>(uid: string | undefined, kind: 'data' | 'sync', work: () => T | Promise<T>): Promise<T> {
+  if (!navigator.locks) return Promise.reject(new Error('이 브라우저는 안전한 다중 탭 저장(Web Locks)을 지원하지 않습니다. 최신 브라우저와 HTTPS 환경을 사용해 주세요.'));
+  return await navigator.locks.request(`${accountStorageKey(uid)}:${kind}`, async () => await work());
+}
+
+export function transactAccount(uid: string | undefined,
+  change: (latest: AccountSnapshot) => AccountSnapshot | null,
+  publish: (saved: AccountSnapshot) => void,
+  active: () => boolean = () => true): Promise<void> {
+  return withAccountLock(uid, 'data', () => {
+    if (!active()) throw new Error('계정이 변경되어 저장을 취소했습니다.');
+    const latest = readAccount(uid);
+    const next = change(latest);
+    if (!next) return;
+    writeAccount(next, uid);
+    publish(next);
+  });
+}
+
+// Rendering may continue after a blocked/corrupt storage read. Transactions always
+// use readAccount directly, so this empty view can never replace the recovery data.
+export function loadAccountView(uid?: string) {
+  try { return { ...readAccount(uid), storageError: null }; }
+  catch (error) { return { ...emptyAccount(), storageError: error instanceof Error ? error.message : String(error) }; }
 }

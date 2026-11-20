@@ -360,8 +360,8 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
       <ConfirmModal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => {
-          deleteDeck(deck.id);
+        onConfirm={async () => {
+          try { await deleteDeck(deck.id); } catch { return; }
           setShowDeleteConfirm(false);
           back();
         }}
@@ -373,8 +373,8 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
       <ConfirmModal
         isOpen={showResetConfirm}
         onClose={() => setShowResetConfirm(false)}
-        onConfirm={() => {
-          resetDeckProgress(deck.id);
+        onConfirm={async () => {
+          try { await resetDeckProgress(deck.id); } catch { return; }
           setShowResetConfirm(false);
         }}
         title="학습 진행도 초기화"

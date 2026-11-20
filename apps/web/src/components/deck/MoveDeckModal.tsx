@@ -20,9 +20,11 @@ export const MoveDeckModal: React.FC<MoveDeckModalProps> = ({
   const moveDeck = useFlashcardStore(state => state.moveDeck);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId || null);
 
-  const handleSave = () => {
-    moveDeck(deckId, selectedFolderId);
-    onClose();
+  const handleSave = async () => {
+    try {
+      await moveDeck(deckId, selectedFolderId);
+      onClose();
+    } catch { /* The global storage alert reports the failure; keep the selection. */ }
   };
 
   return (

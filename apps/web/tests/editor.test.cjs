@@ -31,7 +31,7 @@ function editorFixture() {
   };
 }
 
-test('draft keys isolate accounts and report persistence failure', () => {
+test('draft keys isolate accounts and report persistence failure', async () => {
   const h = createHarness();
   const drafts = h.load(path.join(h.root, 'services/deckDraftStorage.ts'));
   const draft = {
@@ -53,15 +53,15 @@ test('draft keys isolate accounts and report persistence failure', () => {
   assert.equal(drafts.saveDeckDraft('a', draft), false);
 });
 
-test('remote refresh preserves dirty inputs and offers explicit reload', () => {
+test('remote refresh preserves dirty inputs and offers explicit reload', async () => {
   const h = editorFixture();
   try {
     let editor = h.render();
     editor.setTitle('unsaved title');
     editor.handleUpdateCard(0, 'termRichText', 'unsaved text');
     h.render();
-    h.store.getState().updateDeck('d1', { title: 'remote title' });
-    h.store.getState().updateCard('c1', { termRichText: 'remote text' });
+    await h.store.getState().updateDeck('d1', { title: 'remote title' });
+    await h.store.getState().updateCard('c1', { termRichText: 'remote text' });
     editor = h.render();
     assert.equal(editor.title, 'unsaved title');
     assert.equal(editor.cardItems[0].termRichText, 'unsaved text');
@@ -76,7 +76,7 @@ test('remote refresh preserves dirty inputs and offers explicit reload', () => {
   }
 });
 
-test('navigation flushes a draft but saving does not recreate it on unmount', () => {
+test('navigation flushes a draft but saving does not recreate it on unmount', async () => {
   const h = editorFixture();
   let editor = h.render();
   editor.setTitle('draft');
@@ -87,13 +87,13 @@ test('navigation flushes a draft but saving does not recreate it on unmount', ()
   editor = saved.render();
   editor.setTitle('saved');
   editor = saved.render();
-  editor.handleSave();
+  await editor.handleSave();
   saved.renderer.cleanup();
   assert.equal(saved.storage.get('flashcards_draft_v2:user:a:d1'), 'null');
   assert.equal(saved.store.getState().decks[0].title, 'saved');
 });
 
-test('deleting one duplicated card retains the shared image on the other', () => {
+test('deleting one duplicated card retains the shared image on the other', async () => {
   let deletions = 0;
   const h = createHarness({}, new Map(), {
     [path.resolve(__dirname, '../src/services/storageService.ts')]: {
@@ -104,16 +104,16 @@ test('deleting one duplicated card retains the shared image on the other', () =>
     },
   });
   h.navigator.onLine = false;
-  h.store.getState().addDeck({ title: 'deck' }, [
+  await h.store.getState().addDeck({ title: 'deck' }, [
     { ...seed.card, frontImageUrl: 'shared' },
     { ...seed.card, frontImageUrl: 'shared' },
   ]);
-  h.store.getState().deleteCard(h.store.getState().cards[0].id);
+  await h.store.getState().deleteCard(h.store.getState().cards[0].id);
   assert.equal(deletions, 0);
   assert.equal(h.store.getState().cards[0].frontImageUrl, 'shared');
 });
 
-test('saving a draft before leaving persists the latest edits and reports a failed write', () => {
+test('saving a draft before leaving persists the latest edits and reports a failed write', async () => {
   const h = editorFixture();
   try {
     let editor = h.render();
@@ -141,4 +141,23 @@ test('saving a draft before leaving persists the latest edits and reports a fail
   } finally {
     h.renderer.cleanup();
   }
+});
+
+test('an asynchronous save failure keeps the editor input and draft for retry', async () => {
+  const h = editorFixture();
+  try {
+    let editor = h.render(); editor.setTitle('keep my input'); editor = h.render();
+    assert.equal(editor.saveDraftNow(), true);
+    const write = h.localStorage.setItem;
+    h.localStorage.setItem = () => { throw Error('quota'); };
+    await editor.handleSave();
+    editor = h.render();
+    assert.equal(editor.title, 'keep my input'); assert.match(editor.errors.general, /quota/);
+    assert.equal(h.store.getState().decks[0].title, 'deck');
+    assert.equal(JSON.parse(h.storage.get('flashcards_draft_v2:user:a:d1')).title, 'keep my input');
+    h.localStorage.setItem = write;
+    await editor.handleSave();
+    assert.equal(h.store.getState().decks[0].title, 'keep my input');
+    assert.equal(h.storage.get('flashcards_draft_v2:user:a:d1'), 'null');
+  } finally { h.renderer.cleanup(); }
 });

@@ -215,12 +215,12 @@ export const useStudySession = ({
   }, [currentIndex, sessionCards.length]);
 
   const handleRate = useCallback(
-    (known: boolean) => {
+    async (known: boolean) => {
       const card = sessionCards[currentIndex];
       const key = `${card?.id}:${stepCount}`;
       if (!card || isFinishModalOpen || lastRatingRef.current === key) return;
-      setCardLearned(card.id, known);
       lastRatingRef.current = key;
+      try { await setCardLearned(card.id, known); } catch { lastRatingRef.current = null; return; }
       triggerFeedback(known ? 'know' : 'unknown');
       handleNext();
     },
@@ -236,13 +236,13 @@ export const useStudySession = ({
   );
 
   // "알아요 토글" (Enter 키)
-  const handleToggleKnow = useCallback(() => {
+  const handleToggleKnow = useCallback(async () => {
     if (sessionCards.length === 0 || currentIndex >= sessionCards.length) return;
     const card = sessionCards[currentIndex];
     const newLearned = !card.learned;
 
     // 1. 스토어 상태 반영
-    setCardLearned(card.id, newLearned);
+    try { await setCardLearned(card.id, newLearned); } catch { return; }
 
     // 3. 토글 피드백
     triggerFeedback(newLearned ? 'know' : null);
@@ -291,11 +291,11 @@ export const useStudySession = ({
 
   // 카드 내용 즉석 수정 핸들러
   const handleUpdateCurrentCard = useCallback(
-    (updates: { termRichText: string; definitionRichText: string }) => {
+    async (updates: { termRichText: string; definitionRichText: string }) => {
       if (!currentCard) return;
 
       // 1. 스토어 갱신
-      updateCard(currentCard.id, updates);
+      try { await updateCard(currentCard.id, updates); } catch { return; }
 
       closeEditModal();
     },
@@ -303,13 +303,13 @@ export const useStudySession = ({
   );
 
   // 카드 즉석 삭제 핸들러
-  const handleDeleteCurrentCard = useCallback(() => {
+  const handleDeleteCurrentCard = useCallback(async () => {
     if (!currentCard) return;
 
     const cardIdToDelete = currentCard.id;
 
     // 1. 스토어에서 카드 삭제
-    deleteCard(cardIdToDelete);
+    try { await deleteCard(cardIdToDelete); } catch { return; }
 
     // 2. 세션 카드 목록에서 제거
     setSessionCardIds((prev) => prev.filter((id) => id !== cardIdToDelete));

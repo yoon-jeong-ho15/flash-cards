@@ -63,9 +63,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     day: 'numeric',
     weekday: 'long',
   }).format(new Date());
-  const createSample = () => {
+  const createSample = async () => {
     try {
-      const id = addDeck(
+      const id = await addDeck(
         {
           title: '하루 6개, 여행 영어',
           description: '여행에서 바로 쓰는 표현으로 첫 학습을 시작해 보세요.',

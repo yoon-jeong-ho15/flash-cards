@@ -142,8 +142,8 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
     );
   }
 
-  const handleDelete = () => {
-    deleteFolder(folder.id, false);
+  const handleDelete = async () => {
+    try { await deleteFolder(folder.id, false); } catch { return; }
     setShowDeleteConfirm(false);
     onBack();
   };

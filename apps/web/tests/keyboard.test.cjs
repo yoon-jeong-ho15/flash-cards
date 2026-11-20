@@ -1,10 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { createHarness, seed } = require('./support.cjs');
+const { createHarness, seed, tick } = require('./support.cjs');
 const { hookRenderer } = require('./hookRenderer.cjs');
 
-test('study shortcuts preserve native button activation, select inputs, and handled modal events', () => {
+test('study shortcuts preserve native button activation, select inputs, and handled modal events', async () => {
   const h = createHarness();
   h.navigator.onLine = false;
   const snapshot = seed.snapshot();
@@ -67,6 +67,7 @@ test('study shortcuts preserve native button activation, select inputs, and hand
     dispatch(' ');
     assert.equal(render().isFlipped, true, 'Space flips the study card');
     dispatch('Enter');
+    await tick();
     assert.equal(
       h.store.getState().cards[0].learned,
       true,
@@ -75,6 +76,7 @@ test('study shortcuts preserve native button activation, select inputs, and hand
     dispatch('ArrowRight');
     assert.equal(render().currentIndex, 1, 'study navigation shortcut still works');
     dispatch('2');
+    await tick();
     assert.equal(render().isFinishModalOpen, true, 'rating the last card opens the result');
     assert.equal(h.store.getState().cards[1].learned, true);
   } finally {
