@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const esbuild = require('esbuild');
-const { harness: storeHarness, item, load } = require('./helpers.cjs');
+const { harness: storeHarness, item, load, tick } = require('./helpers.cjs');
 const { folderCards } = load('core/content.ts');
 
 const externals = ['react-native-safe-area-context', 'react-native-svg', 'react', 'react-native', 'expo-haptics', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library', './Typography', './theme'];
@@ -37,7 +37,7 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
   class Value { setValue() {} stopAnimation() {} interpolate() { return 0; } }
   const native = { useWindowDimensions: () => dimensions, StyleSheet: { create: value => value }, Animated: { Value, View: 'Animated.View', timing: () => ({ start() {} }) }, Easing: { inOut: value => value, cubic: 'cubic' },
     AccessibilityInfo: { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }) },
-    ...Object.fromEntries(['View', 'Text', 'Pressable', 'ScrollView', 'FlatList', 'ActivityIndicator'].map(name => [name, name])),
+    ...Object.fromEntries(['View', 'Text', 'Pressable', 'ScrollView', 'FlatList', 'ActivityIndicator', 'Modal'].map(name => [name, name])),
   };
   const mocks = {
     'react-native-safe-area-context': { SafeAreaView: 'SafeAreaView' },
@@ -91,6 +91,24 @@ const button = (tree, title) => {
 };
 const text = tree => !tree || typeof tree === 'boolean' ? '' : typeof tree !== 'object' ? String(tree)
   : Array.isArray(tree) ? tree.map(text).join('') : text(tree.props?.children);
+const component = (tree, name) => {
+  const found = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === name);
+  assert.ok(found, `Missing component: ${name}`);
+  return found;
+};
+const accessible = (tree, role, label) => {
+  const found = nodes(tree).filter(node => node.props?.accessibilityRole === role && node.props.accessibilityLabel === label);
+  assert.equal(found.length, 1, `Expected one ${role}: ${label}`);
+  return found[0].props;
+};
+async function chooseLayout(tree, layout) {
+  const selector = component(tree, 'CollectionLayoutToggle');
+  const control = selector.type(selector.props);
+  accessible(control, 'radiogroup', '목록 표시 방식');
+  accessible(control, 'radio', layout === 'list' ? '목록 보기' : '그리드 보기').onPress();
+  // The control handles the promise; wait for the store's durable serial write.
+  await tick();
+}
 
 async function fixture() {
   const { store } = storeHarness();
@@ -326,13 +344,13 @@ test('study picker adapts to narrow screens and enlarged text and supports unfil
 });
 
 
-test('deck detail prioritizes adding and editing cards instead of starting study', async () => {
+test('deck detail prioritizes card management and offers accessible study order choices', async () => {
   const f = await fixture();
   const screen = screenHarness(f.store, 'DeckDetail');
   let destination;
   try {
     const props = { deckId: f.first, nav: { go: route => { destination = route; }, back() {} } };
-    const tree = screen.render(props);
+    let tree = screen.render(props);
     const displayedText = nodes(tree).filter(node => node.type === 'Text').map(text).join('');
     assert.ok(displayedText.includes('카드 관리'));
     assert.ok(!displayedText.includes('어떻게 학습할까요?'));
@@ -340,18 +358,65 @@ test('deck detail prioritizes adding and editing cards instead of starting study
     assert.equal(nodes(tree).filter(node => node.type === 'Button' && /학습 시작|전체 카드 복습/.test(node.props.title)).length, 0);
     button(tree, '카드 추가하기').onPress();
     assert.deepEqual(destination, { type: 'edit-deck', deckId: f.first, appendCard: true });
-    assert.equal(button(tree, '학습하기').tone, 'secondary');
-    button(tree, '학습하기').onPress();
-    assert.deepEqual(destination, { type: 'study-options', deckId: f.first });
+    assert.equal(button(tree, '카드 순서 변경').tone, 'secondary');
+    assert.equal(button(tree, '카드 순서 변경').disabled, false);
+    assert.equal(nodes(tree).some(node => node.type?.name === 'StudyOrderModal'), false);
+    const study = accessible(tree, 'button', '학습하기');
+    assert.equal(study.disabled, false);
+    assert.deepEqual(study.accessibilityState, { disabled: false });
     const list = nodes(tree).find(node => node.type === 'FlatList');
     const card = list.props.data[0];
     const edit = nodes(list.props.renderItem({ item: card })).find(node => node.props?.accessibilityLabel === '카드 수정');
     edit.props.onPress();
     assert.deepEqual(destination, { type: 'edit-deck', deckId: f.first, focusCardId: card.id });
     nodes(tree).find(node => node.type === 'Field').props.onChangeText('검색 결과 없음');
-    assert.equal(button(screen.render(props), '학습하기').disabled, false);
+    tree = screen.render(props);
+    assert.equal(nodes(tree).find(node => node.type === 'FlatList').props.data.length, 0);
+    assert.equal(accessible(tree, 'button', '학습하기').disabled, false, 'search results do not disable a nonempty deck');
+
+    destination = undefined;
+    accessible(tree, 'button', '학습하기').onPress();
+    tree = screen.render(props);
+    let modal = component(tree, 'StudyOrderModal');
+    assert.equal(modal.props.title, '영어');
+    assert.equal(destination, undefined, 'opening the chooser must not navigate');
+    let choices = modal.type(modal.props);
+    assert.ok(nodes(choices).some(node => node.props?.accessibilityViewIsModal));
+    accessible(choices, 'button', '닫기').onPress();
+    tree = screen.render(props);
+    assert.equal(nodes(tree).some(node => node.type?.name === 'StudyOrderModal'), false);
+    assert.equal(destination, undefined, 'closing the chooser must not navigate');
+
+    for (const [shuffle, label] of [
+      [false, '정방향 학습, 카드를 등록된 순서대로 학습해요.'],
+      [true, '랜덤 학습, 카드를 무작위로 섞어서 학습해요.'],
+    ]) {
+      accessible(tree, 'button', '학습하기').onPress();
+      modal = component(screen.render(props), 'StudyOrderModal');
+      choices = modal.type(modal.props);
+      accessible(choices, 'button', label).onPress();
+      assert.deepEqual(destination, { type: 'study', deckId: f.first, shuffle, onlyDifficult: false });
+      tree = screen.render(props);
+      assert.equal(nodes(tree).some(node => node.type?.name === 'StudyOrderModal'), false);
+      const studyScreen = screenHarness(f.store, 'Study');
+      const studyProps = { deckId: destination.deckId, shuffle: destination.shuffle, unlearnedOnly: destination.onlyDifficult, onExit() {} };
+      try {
+        studyScreen.render(studyProps);
+        const seen = [studyScreen.currentId()];
+        studyScreen.next();
+        studyScreen.render(studyProps);
+        seen.push(studyScreen.currentId());
+        assert.deepEqual(seen, shuffle ? [f.ids[1], f.ids[0]] : [f.ids[0], f.ids[1]], 'study includes learned cards despite the detail search');
+      } finally { studyScreen.cleanup(); }
+    }
+
     for (const card of f.store.getState().cards.filter(card => card.deckId === f.first)) await f.store.deleteCard(card.id);
-    assert.equal(button(screen.render(props), '학습하기').disabled, true);
+    tree = screen.render(props);
+    const disabledStudy = accessible(tree, 'button', '학습하기');
+    assert.equal(disabledStudy.disabled, true);
+    assert.deepEqual(disabledStudy.accessibilityState, { disabled: true });
+    assert.equal(nodes(tree).some(node => node.type?.name === 'StudyOrderModal'), false);
+    assert.equal(button(tree, '카드 순서 변경').disabled, true);
   } finally { screen.cleanup(); }
 });
 
@@ -467,36 +532,115 @@ test('settings button in study bar opens font settings modal during study', asyn
   } finally { screen.cleanup(); }
 });
 
-test('the shared layout control changes every library and study collection without dropping filters or items', async () => {
+async function layoutFixture() {
   const f = await fixture();
+  const own = f.store.getState().cards.filter(card => card.deckId === f.first);
+  await f.store.saveDeck(f.first, { title: '영어', folderId: f.folder }, [...own, item('apricot'), item('제외')]);
+  const extra = await f.store.saveDeck(undefined, { title: '추가', folderId: f.folder }, [item('apple extra')]);
+  const completed = await f.store.saveDeck(undefined, { title: '완료', folderId: f.folder }, [item('apple completed')]);
+  await f.store.setLearned(f.store.getState().cards.find(card => card.deckId === completed).id, true);
+  const root = await f.store.saveDeck(undefined, { title: '추가 미분류' }, [item('root two')]);
+  await f.store.setPreferences({ collectionLayout: 'grid', folderSort: 'name-desc', deckSort: 'name-desc', folderDeckSort: 'name-desc' });
+  return { ...f, extra, completed, root };
+}
+
+test('fixed library lists preserve items, sorting and active filters when the shared layout changes elsewhere', async t => {
+  const f = await layoutFixture();
+  const nav = { go() {}, back() {} };
+  for (const [name, props] of [
+    ['FolderLibrary', { nav, onNewFolder() {} }],
+    ['DeckLibrary', { nav }],
+    ['DeckLibrary', { nav, folderId: f.folder }],
+  ]) {
+    await t.test(`${name}${props.folderId ? ' inside a folder' : ''}`, async () => {
+      await f.store.setPreferences({ collectionLayout: 'grid' });
+      const screen = screenHarness(f.store, 'Library', name);
+      const controller = screenHarness(f.store, 'Library', 'Search');
+      try {
+        let tree = screen.render(props);
+        if (name === 'DeckLibrary') {
+          nodes(tree).find(node => node.type === 'Field').props.onChangeText('a');
+          nodes(tree).find(node => node.type === 'Pressable' && text(node) === '학습 중').props.onPress();
+          tree = screen.render(props);
+        }
+        const expected = name === 'FolderLibrary' ? [f.folder, f.empty, f.other] : [f.extra, f.first];
+        for (const layout of ['grid', 'list', 'grid']) {
+          await chooseLayout(controller.render({ nav }), layout);
+          tree = screen.render(props);
+          const list = nodes(tree).find(node => node.type === 'FlatList');
+          assert.equal(f.store.getState().preferences.collectionLayout, layout);
+          assert.equal(list.props.numColumns, 1, 'library stays a single-column list');
+          assert.equal(nodes(tree).some(node => node.type?.name === 'CollectionLayoutToggle'), false, 'fixed lists do not offer a layout choice');
+          assert.deepEqual(list.props.data.map(item => item.id), expected, 'items and descending name order are preserved');
+          assert.equal(nodes(tree).find(node => node.type === 'Select').props.value, 'name-desc');
+          if (name === 'DeckLibrary') {
+            assert.equal(nodes(tree).find(node => node.type === 'Field').props.value, 'a');
+            assert.equal(nodes(tree).find(node => node.type === 'Pressable' && text(node) === '학습 중').props.accessibilityState.selected, true);
+          } else {
+            const unfiled = nodes(list.props.ListFooterComponent).filter(node => node.type?.name === 'DeckTile');
+            assert.deepEqual(unfiled.map(node => node.props.deck.id), [f.root, f.store.getState().decks.find(deck => deck.title === '미분류 덱').id]);
+            for (const tile of unfiled) {
+              const wrapper = nodes(list.props.ListFooterComponent).find(node => node.props?.children?.includes(tile));
+              assert.equal(wrapper.props.style.width, '100%', 'unfiled decks also stay in list layout');
+            }
+          }
+        }
+      } finally { screen.cleanup(); controller.cleanup(); }
+    });
+  }
+});
+
+test('switchable study, search and card collections preserve items, order and active filters in both layouts', async t => {
+  const f = await layoutFixture();
   const nav = { go() {}, back() {} };
   for (const [file, name, props] of [
-    ['Library', 'FolderLibrary', { nav, onNewFolder() {} }],
-    ['Library', 'DeckLibrary', { nav }],
-    ['Library', 'DeckLibrary', { nav, folderId: f.folder }],
     ['Library', 'StudyLibrary', { nav }],
     ['Library', 'Search', { nav }],
     ['StudySetup', 'StudyFolder', { nav, folderId: f.folder }],
     ['DeckDetail', 'DeckDetail', { nav, deckId: f.first }],
   ]) {
-    await f.store.setPreferences({ collectionLayout: 'grid' });
-    const screen = screenHarness(f.store, file, name);
-    try {
-      let tree = screen.render(props);
-      const list = nodes(tree).find(node => node.type === 'FlatList');
-      const ids = list.props.data.map(item => item.id);
-      assert.equal(list.props.numColumns, 2, name);
-      const selector = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'CollectionLayoutToggle');
-      assert.ok(selector, `${name} offers a layout choice`);
-      const control = selector.type(selector.props);
-      await nodes(control).find(node => node.props?.accessibilityLabel === '목록 보기').props.onPress();
-      // The component handles the promise; wait for the store's durable serial write.
-      await new Promise(resolve => setImmediate(resolve));
-      tree = screen.render(props);
-      const updated = nodes(tree).find(node => node.type === 'FlatList');
-      assert.equal(updated.props.numColumns, 1, name);
-      assert.deepEqual(updated.props.data.map(item => item.id), ids, `${name} keeps the same items and order`);
-      assert.equal(f.store.getState().preferences.collectionLayout, 'list');
-    } finally { screen.cleanup(); }
+    await t.test(name, async () => {
+      await f.store.setPreferences({ collectionLayout: 'grid' });
+      const screen = screenHarness(f.store, file, name);
+      try {
+        let tree = screen.render(props);
+        if (name === 'Search' || name === 'DeckDetail') {
+          nodes(tree).find(node => node.type === 'Field').props.onChangeText('a');
+          if (name === 'DeckDetail') nodes(tree).find(node => node.type === 'Chips').props.onChange('unlearned');
+          tree = screen.render(props);
+        }
+        const list = nodes(tree).find(node => node.type === 'FlatList');
+        const ids = list.props.data.map(item => item.id);
+        assert.equal(list.props.numColumns, 2, name);
+        if (name === 'StudyLibrary') assert.deepEqual(ids, [f.folder, f.empty, f.other]);
+        if (name === 'StudyFolder') assert.deepEqual(ids, [f.extra, f.completed, f.first, f.second]);
+        if (name === 'Search') assert.deepEqual(new Set(ids), new Set([f.first, f.extra, f.completed]), 'search excludes nonmatching decks');
+        if (name === 'DeckDetail') {
+          const own = f.store.getState().cards.filter(card => card.deckId === f.first);
+          assert.deepEqual(ids, [own[1].id, own[2].id], 'both search and learned status filter the cards in their registered order');
+        }
+        const preferences = f.store.getState().preferences;
+        const content = { folders: f.store.getState().folders, decks: f.store.getState().decks, cards: f.store.getState().cards };
+        const footerLabels = tree => nodes(tree).filter(node => node.type === 'Pressable' && node.props.accessibilityLabel?.includes('카드')).map(node => node.props.accessibilityLabel);
+        const footer = footerLabels(list.props.ListFooterComponent);
+        if (name === 'StudyLibrary') assert.equal(footer.length, 2, 'unfiled decks are covered along with folder items');
+        for (const [layout, columns] of [['list', 1], ['grid', 2]]) {
+          await chooseLayout(tree, layout);
+          tree = screen.render(props);
+          const updated = nodes(tree).find(node => node.type === 'FlatList');
+          assert.equal(updated.props.numColumns, columns, name);
+          assert.deepEqual(updated.props.data.map(item => item.id), ids, `${name} keeps the same items and order`);
+          assert.deepEqual(footerLabels(updated.props.ListFooterComponent), footer, 'unfiled decks keep their order and summaries');
+          const selector = component(tree, 'CollectionLayoutToggle');
+          const control = selector.type(selector.props);
+          assert.deepEqual(accessible(control, 'radio', '목록 보기').accessibilityState, { checked: layout === 'list' });
+          assert.deepEqual(accessible(control, 'radio', '그리드 보기').accessibilityState, { checked: layout === 'grid' });
+          assert.deepEqual(f.store.getState().preferences, { ...preferences, collectionLayout: layout }, 'sort preferences survive the layout change');
+          assert.deepEqual({ folders: f.store.getState().folders, decks: f.store.getState().decks, cards: f.store.getState().cards }, content);
+          if (name === 'Search' || name === 'DeckDetail') assert.equal(nodes(tree).find(node => node.type === 'Field').props.value, 'a');
+          if (name === 'DeckDetail') assert.equal(nodes(tree).find(node => node.type === 'Chips').props.value, 'unlearned');
+        }
+      } finally { screen.cleanup(); }
+    });
   }
 });
