@@ -1,8 +1,25 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /cards/{allPaths=**} {
-      allow read, write: if true;
+    match /cards/{uid}/{allPaths=**} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      function isValidImage() {
+        // Web uploads WebP; mobile also syncs existing PNG/JPEG/JPG/GIF data URLs.
+        // Validate the resulting object on both create and update (including metadata).
+        return request.resource.size > 0
+          && request.resource.size <= 5 * 1024 * 1024
+          && request.resource.contentType in [
+            'image/webp', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif'
+          ];
+      }
+
+      allow read: if isOwner();
+      allow create, update: if isOwner() && isValidImage();
+      // Deletes have no request.resource; legacy invalid/large files remain removable.
+      allow delete: if isOwner();
     }
   }
 }

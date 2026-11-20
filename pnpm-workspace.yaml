@@ -6,6 +6,7 @@ allowBuilds:
   '@firebase/util': true
   esbuild: true
   protobufjs: true
+  re2: false
 
 minimumReleaseAgeExclude:
   - '@expo/cli@58.1.19'
