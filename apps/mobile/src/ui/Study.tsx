@@ -114,6 +114,26 @@ export function Study({
   const flipReady = useRef<() => void>(() => {});
   const frontScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const backScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const pageScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const [cardTouchActive, setCardTouchActive] = useState(false);
+  const scrollPositions = useRef({
+    front: { y: 0, height: 0, content: 0 },
+    back: { y: 0, height: 0, content: 0 },
+    page: { y: 0, height: 0, content: 0 },
+  });
+  const scrollVertically = (dy: number, animated = false) => {
+    const side = session.flipped ? "back" : "front";
+    const inner = scrollPositions.current[side];
+    const innerY = Math.max(0, Math.min(Math.max(0, inner.content - inner.height), inner.y - dy));
+    const consumed = inner.y - innerY;
+    inner.y = innerY;
+    (session.flipped ? backScroll : frontScroll).current?.scrollTo({ y: innerY, animated });
+
+    const page = scrollPositions.current.page;
+    const pageY = Math.max(0, Math.min(Math.max(0, page.content - page.height), page.y - (dy - consumed)));
+    page.y = pageY;
+    pageScroll.current?.scrollTo({ y: pageY, animated });
+  };
   const openImage = useImage();
   useEffect(() => {
     if (deckId !== undefined)
@@ -147,6 +167,18 @@ export function Study({
           : previous,
       ),
     onFlipReady: () => flipReady.current(),
+    onTouchActive: (active) => {
+      // Stop native scroll recognizers at touch-down while preserving tap targets.
+      // The card responder drives vertical scrolling until it turns horizontal.
+      for (const ref of [frontScroll, backScroll, pageScroll]) {
+        ref.current?.setNativeProps({ scrollEnabled: !active });
+      }
+      setCardTouchActive(active);
+    },
+    onVerticalDrag: (dy) => scrollVertically(dy),
+    onVerticalRelease: (velocityY) => {
+      if (Math.abs(velocityY) > 0.1) scrollVertically(velocityY * 160, !reduceMotion);
+    },
     onSwipeStart: () => {
       if (!flipInFlight.current) return;
       animationVersion.current++;
@@ -159,6 +191,8 @@ export function Study({
   useLayoutEffect(() => {
     frontScroll.current?.scrollTo({ y: 0, animated: false });
     backScroll.current?.scrollTo({ y: 0, animated: false });
+    scrollPositions.current.front.y = 0;
+    scrollPositions.current.back.y = 0;
   }, [current?.id]);
   useLayoutEffect(() => {
     // A different card or an interrupted animation must never inherit a partial turn.
@@ -394,7 +428,7 @@ export function Study({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="카드 뒤집기"
-          accessibilityHint="왼쪽으로 밀면 다음 카드, 오른쪽으로 밀면 이전 카드"
+          accessibilityHint="왼쪽으로 빠르게 밀면 다음 카드, 오른쪽으로 빠르게 밀면 이전 카드"
           accessibilityActions={[
             { name: "increment", label: last ? "학습 결과 보기" : "다음 카드" },
             { name: "decrement", label: "이전 카드" },
@@ -439,6 +473,17 @@ export function Study({
         <Pressable onPress={flipOnPress} style={{ flex: 1 }} accessible={false}>
           <ScrollView
             ref={back ? backScroll : frontScroll}
+            scrollEnabled={!cardTouchActive}
+            scrollEventThrottle={16}
+            onScroll={(event) => {
+              scrollPositions.current[back ? "back" : "front"].y = event.nativeEvent.contentOffset.y;
+            }}
+            onLayout={(event) => {
+              scrollPositions.current[back ? "back" : "front"].height = event.nativeEvent.layout.height;
+            }}
+            onContentSizeChange={(_, height) => {
+              scrollPositions.current[back ? "back" : "front"].content = height;
+            }}
             nestedScrollEnabled
             style={{ flex: 1 }}
             contentContainerStyle={{
@@ -479,6 +524,12 @@ export function Study({
   return (
     <>
       <ScrollView
+        ref={pageScroll}
+        scrollEnabled={!cardTouchActive}
+        scrollEventThrottle={16}
+        onScroll={(event) => { scrollPositions.current.page.y = event.nativeEvent.contentOffset.y; }}
+        onLayout={(event) => { scrollPositions.current.page.height = event.nativeEvent.layout.height; }}
+        onContentSizeChange={(_, height) => { scrollPositions.current.page.content = height; }}
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
@@ -535,6 +586,7 @@ export function Study({
           <View style={{ flex: 1, minHeight: 180 }}>
             <View
               {...swipe.panHandlers}
+              {...swipe.touchHandlers}
               pointerEvents={busy ? "none" : "auto"}
               style={{ flex: 1 }}
               accessible={false}

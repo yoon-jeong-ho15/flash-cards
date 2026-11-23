@@ -67,19 +67,23 @@ test('study swipes navigate in both directions without flipping, while vertical 
     window.Date.now = () => now;
     const touch = (type, x, y) => {
       const event = new window.Event(type, { bubbles: true, cancelable: true });
-      Object.defineProperties(event, { touches: { value: type === 'touchend' ? [] : [{ clientX: x, clientY: y }] }, changedTouches: { value: [{ clientX: x, clientY: y }] } });
+      Object.defineProperties(event, { timeStamp: { value: now }, touches: { value: type === 'touchend' ? [] : [{ clientX: x, clientY: y }] }, changedTouches: { value: [{ clientX: x, clientY: y }] } });
       content.dispatchEvent(event);
     };
-    const drag = (x, y) => { touch('touchstart', 150, 150); touch('touchmove', x, y); touch('touchend', x, y); content.click(); };
+    const drag = (x, y) => { touch('touchstart', 150, 150); now += 40; touch('touchmove', x, y); now += 10; touch('touchend', x, y); content.click(); };
     messages.length = 0;
     drag(40, 155);
-    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: -110, dy: 5 }, { type: 'card-drag', phase: 'end', dx: -110, dy: 5 }]);
+    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: -110, dy: 0 }, { type: 'card-drag', phase: 'end', dx: -110, dy: 0, velocityX: -2.2, velocityY: 0.1 }]);
     messages.length = 0;
     touch('touchstart', 150, 150); touch('touchend', 150, 150); content.click();
     assert.deepEqual(messages, [{ type: 'flip' }], 'a fresh tap immediately after a swipe must flip without waiting for the suppression timeout');
     now += 1000; messages.length = 0;
     drag(260, 155);
-    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: 110, dy: 5 }, { type: 'card-drag', phase: 'end', dx: 110, dy: 5 }]);
+    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: 110, dy: 0 }, { type: 'card-drag', phase: 'end', dx: 110, dy: 0, velocityX: 2.2, velocityY: 0.1 }]);
+    messages.length = 0;
+    touch('touchstart', 300, 150); now += 80; touch('touchmove', 90, 150);
+    now += 200; touch('touchend', 90, 150);
+    assert.equal(messages.at(-1).velocityX, 0, 'holding at the edge loses flick velocity');
     for (const [x, y] of [[150, 300], [220, 260]]) {
       now += 1000; messages.length = 0;
       drag(x, y);
@@ -87,7 +91,7 @@ test('study swipes navigate in both directions without flipping, while vertical 
     }
     now += 1000; messages.length = 0;
     drag(130, 152);
-    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: -20, dy: 2 }, { type: 'card-drag', phase: 'end', dx: -20, dy: 2 }], 'short horizontal drags must report the offset so the native card can spring back');
+    assert.deepEqual(messages, [{ type: 'card-drag', phase: 'move', dx: -20, dy: 0 }, { type: 'card-drag', phase: 'end', dx: -20, dy: 0, velocityX: -0.4, velocityY: 0.04 }], 'short horizontal drags must report the offset so the native card can spring back');
     now += 1000; messages.length = 0;
     touch('touchstart', 150, 150); touch('touchmove', 90, 150); touch('touchcancel', 90, 150);
     assert.deepEqual(messages.at(-1), { type: 'card-drag', phase: 'cancel', dx: 0, dy: 0 });

@@ -51,7 +51,7 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     './kit': { colors: {}, s: {}, useImage: () => () => {}, attempt: fn => fn(), showError: error => { throw error; },
       ...Object.fromEntries(['Attachment', 'Button', 'Empty', 'Progress', 'Chips', 'Field', 'Select', 'ProgressRing', 'Sheet'].map(name => [name, name])),
     },
-    './useSwipeMotion': { useSwipeMotion: props => { swipeProps = props; return { panHandlers: {}, style: {}, transitioning: false, prepareFlip: () => true }; } },
+    './useSwipeMotion': { useSwipeMotion: props => { swipeProps = props; return { panHandlers: {}, style: {}, transitioning: false, isTap: () => true, prepareFlip: () => true }; } },
     'expo-haptics': { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: 'light' } },
   };
   const module = { exports: {} };

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -7,10 +7,16 @@ import {
   type GestureResponderEvent,
 } from "react-native";
 
+import { CardPan } from "../core/cardPan";
+
+const MIN_FLICK_SPEED = 0.65; // layout points per millisecond
+
 export interface CardDrag {
   phase: "move" | "end" | "cancel";
   dx: number;
   dy: number;
+  velocityX?: number;
+  velocityY?: number;
 }
 type Owner = "native" | "web";
 type Phase = "idle" | "drag" | "return" | "exit" | "enter";
@@ -27,6 +33,9 @@ export function useSwipeMotion({
   onNavigate,
   onFlipReady,
   onSwipeStart,
+  onTouchActive,
+  onVerticalDrag,
+  onVerticalRelease,
 }: {
   cardId?: string;
   round: number;
@@ -37,6 +46,9 @@ export function useSwipeMotion({
   onNavigate: (delta: -1 | 1, sourceId: string) => void;
   onFlipReady?: () => void;
   onSwipeStart?: () => void;
+  onTouchActive?: (active: boolean) => void;
+  onVerticalDrag?: (dy: number) => void;
+  onVerticalRelease?: (velocityY: number) => void;
 }) {
   const { width } = useWindowDimensions();
   const distance = Math.min(width - 32, 688) + 40;
@@ -55,10 +67,8 @@ export function useSwipeMotion({
     terminal?: CardDrag;
     owner: Owner;
   } | null>(null);
-  const origin = useRef<number | null>(0);
-  const lastDrag = useRef<CardDrag>({ phase: "move", dx: 0, dy: 0 });
   const flipQueued = useRef(false);
-  const nativeTap = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const nativeTap = useRef<{ x: number; y: number; moved: boolean; pan: CardPan } | null>(null);
   const [transitioning, setTransitioning] = useState(false);
   const latest = useRef({
     cardId,
@@ -68,6 +78,9 @@ export function useSwipeMotion({
     onNavigate,
     onFlipReady,
     onSwipeStart,
+    onTouchActive,
+    onVerticalDrag,
+    onVerticalRelease,
     distance,
   });
   latest.current = {
@@ -78,12 +91,16 @@ export function useSwipeMotion({
     onNavigate,
     onFlipReady,
     onSwipeStart,
+    onTouchActive,
+    onVerticalDrag,
+    onVerticalRelease,
     distance,
   };
 
   const reset = () => {
     version.current++;
     x.stopAnimation();
+    x.setOffset(0);
     x.setValue(0);
     phase.current = "idle";
     owner.current = null;
@@ -95,6 +112,7 @@ export function useSwipeMotion({
   };
   const settle = () => {
     const token = ++version.current;
+    if (phase.current === "drag") x.flattenOffset();
     phase.current = "return";
     owner.current = null;
     x.stopAnimation();
@@ -135,6 +153,7 @@ export function useSwipeMotion({
       return;
     }
     const token = ++version.current;
+    if (phase.current === "drag") x.flattenOffset();
     x.stopAnimation();
     owner.current = null;
     if (state.reduceMotion) {
@@ -187,34 +206,26 @@ export function useSwipeMotion({
     if (owner.current === "native" && input === "web") return;
     if (event.phase === "move") {
       if (phase.current !== "drag" && !horizontal(event.dx, event.dy)) return;
-      lastDrag.current = event;
       if (phase.current !== "drag") {
-        state.onSwipeStart?.();
-        const token = ++version.current;
+        const interruptingSpring = phase.current === "enter" || phase.current === "return";
+        version.current++;
+        x.stopAnimation();
+        // Keep an interrupted spring's displayed position on the animation node.
+        // Finger updates can then start without waiting for a native position read.
+        if (interruptingSpring) x.extractOffset();
         phase.current = "drag";
-        origin.current = null;
+        state.onSwipeStart?.();
         setTransitioning(false);
-        x.stopAnimation((value) => {
-          if (token !== version.current || phase.current !== "drag") return;
-          origin.current = value;
-          const dx = lastDrag.current.dx;
-          x.setValue(value + (latest.current.first && dx > 0 ? dx * 0.22 : dx));
-        });
       }
       owner.current = input;
-      const offset = state.first && event.dx > 0 ? event.dx * 0.22 : event.dx;
-      if (origin.current !== null)
-        x.setValue(
-          Math.max(
-            -state.distance,
-            Math.min(state.distance, origin.current + offset),
-          ),
-        );
+      const dx = state.first && event.dx > 0 ? event.dx * 0.22 : event.dx;
+      x.setValue(Math.max(-state.distance, Math.min(state.distance, dx)));
     } else if (phase.current === "drag") {
       if (
         event.phase === "end" &&
         Math.abs(event.dx) >= 30 &&
-        horizontal(event.dx, event.dy)
+        Math.sign(event.dx) * (event.velocityX ?? 0) >= MIN_FLICK_SPEED &&
+        Math.abs(event.velocityX ?? 0) > Math.abs(event.velocityY ?? 0) * 1.4
       )
         navigate(event.dx < 0 ? 1 : -1, sourceId);
       else settle();
@@ -293,6 +304,28 @@ export function useSwipeMotion({
     };
   }, [cardId, round, finished, reduceMotion, distance]);
 
+  const nativeDrag = (phase: "move" | "end", event: GestureResponderEvent) => {
+    const start = nativeTap.current;
+    if (!start) {
+      if (phase === "end") {
+        drag({ phase: "cancel", dx: 0, dy: 0 }, latest.current.cardId, "native");
+        latest.current.onTouchActive?.(false);
+      }
+      return;
+    }
+    const { pageX, pageY, timestamp } = event.nativeEvent;
+    const motion = start.pan.sample(pageX, pageY, timestamp);
+    owner.current = "native";
+    if (motion.horizontal) {
+      drag({ phase, dx: motion.dx, dy: 0, velocityX: motion.velocityX, velocityY: motion.velocityY }, latest.current.cardId, "native");
+    } else if (phase === "move") {
+      latest.current.onVerticalDrag?.(motion.scrollY);
+    } else if (start.moved) {
+      latest.current.onVerticalRelease?.(motion.velocityY);
+    }
+    if (phase === "end") latest.current.onTouchActive?.(false);
+  };
+
   // Keep the responder's native gesture state across renders during a swipe.
   // Callbacks read current props through latest rather than replacing it.
   const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
@@ -300,47 +333,68 @@ export function useSwipeMotion({
     responder.current = PanResponder.create({
       onStartShouldSetPanResponderCapture: (event) => {
         const touches = event.nativeEvent.touches;
-        nativeTap.current = touches.length === 1
-          ? { x: touches[0].pageX, y: touches[0].pageY, moved: false }
-          : null;
+        if (touches.length !== 1 || latest.current.disabled) {
+          if (nativeTap.current) {
+            drag({ phase: "cancel", dx: 0, dy: 0 }, latest.current.cardId, "native");
+          }
+          nativeTap.current = null;
+          latest.current.onTouchActive?.(false);
+          return false;
+        }
+        nativeTap.current = null;
+        if (touches.length === 1) {
+          const { pageX, pageY } = touches[0];
+          const pan = new CardPan(pageX, pageY, event.nativeEvent.timestamp);
+          nativeTap.current = { x: pageX, y: pageY, moved: false, pan };
+          owner.current = null;
+          latest.current.onTouchActive?.(true);
+        }
         return false;
       },
       onMoveShouldSetPanResponderCapture: (_, movement) => {
-        // Pressable accepts releases anywhere inside the card. A vertical drag
-        // must stop counting as a tap even though we only capture horizontal pans.
-        if (nativeTap.current && (Math.abs(movement.dx) > 10 || Math.abs(movement.dy) > 10))
-          nativeTap.current.moved = true;
-        return !latest.current.disabled && horizontal(movement.dx, movement.dy);
+        // Handle both axes for a card touch so native scrolling cannot consume
+        // the touch stream before the user turns sideways.
+        const moved = Math.abs(movement.dx) > 10 || Math.abs(movement.dy) > 10;
+        if (nativeTap.current && moved) nativeTap.current.moved = true;
+        const capture = !latest.current.disabled && nativeTap.current !== null && moved;
+        if (capture) owner.current = "native";
+        return capture;
       },
-      onPanResponderGrant: (_, movement) =>
-        drag(
-          { phase: "move", dx: movement.dx, dy: movement.dy },
-          latest.current.cardId,
-          "native",
-        ),
-      onPanResponderMove: (_, movement) =>
-        drag(
-          { phase: "move", dx: movement.dx, dy: movement.dy },
-          latest.current.cardId,
-          "native",
-        ),
-      onPanResponderRelease: (_, movement) =>
-        drag(
-          { phase: "end", dx: movement.dx, dy: movement.dy },
-          latest.current.cardId,
-          "native",
-        ),
-      onPanResponderTerminate: () =>
-        drag(
-          { phase: "cancel", dx: 0, dy: 0 },
-          latest.current.cardId,
-          "native",
-        ),
+      onPanResponderGrant: (event) => nativeDrag("move", event),
+      onPanResponderMove: (event) => nativeDrag("move", event),
+      onPanResponderRelease: (event) => nativeDrag("end", event),
+      onPanResponderTerminate: () => {
+        drag({ phase: "cancel", dx: 0, dy: 0 }, latest.current.cardId, "native");
+        nativeTap.current = null;
+        latest.current.onTouchActive?.(false);
+      },
       onPanResponderTerminationRequest: () => false,
       onShouldBlockNativeResponder: () => true,
     });
+  const style = useMemo(() => ({
+    transform: [
+      { translateX: x },
+      {
+        rotateZ: reduceMotion
+          ? "0deg"
+          : x.interpolate({
+              inputRange: [-distance, 0, distance],
+              outputRange: ["-7deg", "0deg", "7deg"],
+              extrapolate: "clamp",
+            }),
+      },
+    ],
+  }), [x, distance, reduceMotion]);
   return {
     panHandlers: responder.current.panHandlers,
+    touchHandlers: {
+      onTouchEnd: (event: GestureResponderEvent) => {
+        if (event.nativeEvent.touches.length === 0) latest.current.onTouchActive?.(false);
+      },
+      onTouchCancel: () => {
+        if (owner.current !== "native") latest.current.onTouchActive?.(false);
+      },
+    },
     transitioning,
     navigate,
     prepareFlip,
@@ -354,19 +408,6 @@ export function useSwipeMotion({
     },
     isMoving: () => phase.current !== "idle",
     onDrag: (event: CardDrag, sourceId: string) => drag(event, sourceId, "web"),
-    style: {
-      transform: [
-        { translateX: x },
-        {
-          rotateZ: reduceMotion
-            ? "0deg"
-            : x.interpolate({
-                inputRange: [-distance, 0, distance],
-                outputRange: ["-7deg", "0deg", "7deg"],
-                extrapolate: "clamp",
-              }),
-        },
-      ],
-    },
+    style,
   };
 }

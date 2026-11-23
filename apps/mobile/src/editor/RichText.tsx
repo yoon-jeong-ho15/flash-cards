@@ -62,7 +62,7 @@ export const RichText = forwardRef<RichTextHandle, Props>(function RichText(prop
           if (data.type === 'value' && typeof data.html === 'string') { requests.current.get(data.id)?.(store.canonicalHTML(data.html)); requests.current.delete(data.id); }
           if (data.type === 'image' && typeof data.url === 'string') latest.current.onImage?.(data.url);
           if (data.type === 'flip') latest.current.onFlip?.();
-          if (data.type === 'card-drag' && ['move', 'end', 'cancel'].includes(data.phase) && Number.isFinite(data.dx) && Number.isFinite(data.dy)) latest.current.onCardDrag?.({ phase: data.phase, dx: data.dx, dy: data.dy });
+          if (data.type === 'card-drag' && ['move', 'end', 'cancel'].includes(data.phase) && Number.isFinite(data.dx) && Number.isFinite(data.dy)) latest.current.onCardDrag?.({ phase: data.phase, dx: data.dx, dy: data.dy, velocityX: Number.isFinite(data.velocityX) ? data.velocityX : 0, velocityY: Number.isFinite(data.velocityY) ? data.velocityY : 0 });
           if (data.type === 'pick-image') latest.current.onPickImage?.();
         } catch { /* Ignore malformed messages from the isolated document. */ }
       }} />
