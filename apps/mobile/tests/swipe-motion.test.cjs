@@ -64,6 +64,35 @@ test('reduced motion navigates immediately; vertical scrolling never drags the c
   h.motion.onDrag({ phase: 'end', dx: -90, dy: 0 }, 'a');
   assert.deepEqual(h.calls, [[1, 'a']]); assert.equal(h.jobs.length, 0);
 });
+test('native vertical swipes are rejected as taps without capturing scrolling, including a return to the start', () => {
+  const h = harness();
+  const event = (x, y) => ({ nativeEvent: { touches: [{ pageX: x, pageY: y }], changedTouches: [{ pageX: x, pageY: y }] } });
+  for (const dy of [-100, -20, 20, 100]) {
+    assert.equal(h.motion.panHandlers.onStartShouldSetPanResponderCapture(event(150, 150)), false);
+    assert.equal(h.motion.panHandlers.onMoveShouldSetPanResponderCapture(null, { dx: 0, dy }), false);
+    assert.equal(h.motion.isTap(event(150, 150 + dy)), false, 'releasing inside the card after a vertical swipe must not flip');
+    h.render();
+    h.motion.panHandlers.onMoveShouldSetPanResponderCapture(null, { dx: 0, dy: 0 });
+    assert.equal(h.motion.isTap(event(150, 150)), false, 'returning to the origin must not turn a swipe into a tap');
+    assert.equal(h.x, 0);
+    assert.deepEqual(h.calls, []);
+
+    h.motion.panHandlers.onStartShouldSetPanResponderCapture(event(150, 150));
+    assert.equal(h.motion.isTap(event(152, 155)), true, 'a fresh tap after scrolling must work immediately');
+  }
+});
+test('native tap detection checks release coordinates, rejects multiple fingers, and preserves accessibility clicks', () => {
+  const h = harness();
+  const point = { pageX: 150, pageY: 150 };
+  const start = { nativeEvent: { touches: [point] } };
+  h.motion.panHandlers.onStartShouldSetPanResponderCapture(start);
+  assert.equal(h.motion.isTap({ nativeEvent: { changedTouches: [{ pageX: 150, pageY: 200 }] } }), false, 'a missing move event must not allow a swipe to flip');
+  h.motion.panHandlers.onStartShouldSetPanResponderCapture({ nativeEvent: { touches: [point, point] } });
+  assert.equal(h.motion.isTap({ nativeEvent: { changedTouches: [point] } }), false);
+  assert.equal(h.motion.isTap({ nativeEvent: {} }), true, 'accessibility activation does not require touch coordinates');
+  h.motion.panHandlers.onStartShouldSetPanResponderCapture(start);
+  assert.equal(h.motion.isTap({ nativeEvent: { changedTouches: [point] } }), true);
+});
 test('a new swipe interrupts the incoming animation at its current position without waiting', () => {
   const h = harness();
   h.motion.onDrag({ phase: 'move', dx: -90, dy: 0 }, 'a');

@@ -4,6 +4,7 @@ import {
   Easing,
   PanResponder,
   useWindowDimensions,
+  type GestureResponderEvent,
 } from "react-native";
 
 export interface CardDrag {
@@ -57,6 +58,7 @@ export function useSwipeMotion({
   const origin = useRef<number | null>(0);
   const lastDrag = useRef<CardDrag>({ phase: "move", dx: 0, dy: 0 });
   const flipQueued = useRef(false);
+  const nativeTap = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const [transitioning, setTransitioning] = useState(false);
   const latest = useRef({
     cardId,
@@ -296,8 +298,20 @@ export function useSwipeMotion({
   const responder = useRef<ReturnType<typeof PanResponder.create> | null>(null);
   if (!responder.current)
     responder.current = PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, movement) =>
-        !latest.current.disabled && horizontal(movement.dx, movement.dy),
+      onStartShouldSetPanResponderCapture: (event) => {
+        const touches = event.nativeEvent.touches;
+        nativeTap.current = touches.length === 1
+          ? { x: touches[0].pageX, y: touches[0].pageY, moved: false }
+          : null;
+        return false;
+      },
+      onMoveShouldSetPanResponderCapture: (_, movement) => {
+        // Pressable accepts releases anywhere inside the card. A vertical drag
+        // must stop counting as a tap even though we only capture horizontal pans.
+        if (nativeTap.current && (Math.abs(movement.dx) > 10 || Math.abs(movement.dy) > 10))
+          nativeTap.current.moved = true;
+        return !latest.current.disabled && horizontal(movement.dx, movement.dy);
+      },
       onPanResponderGrant: (_, movement) =>
         drag(
           { phase: "move", dx: movement.dx, dy: movement.dy },
@@ -330,6 +344,14 @@ export function useSwipeMotion({
     transitioning,
     navigate,
     prepareFlip,
+    isTap: (event: GestureResponderEvent) => {
+      // Accessibility clicks have no touch stream and must remain available.
+      if (!event.nativeEvent.changedTouches) return true;
+      const start = nativeTap.current;
+      const end = event.nativeEvent.changedTouches[0] ?? event.nativeEvent;
+      return Boolean(start && !start.moved &&
+        Math.abs(end.pageX - start.x) <= 10 && Math.abs(end.pageY - start.y) <= 10);
+    },
     isMoving: () => phase.current !== "idle",
     onDrag: (event: CardDrag, sourceId: string) => drag(event, sourceId, "web"),
     style: {

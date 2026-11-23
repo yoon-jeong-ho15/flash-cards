@@ -9,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import type { Card, CardInput } from "../core/types";
 import { folderCards, orderedCards, orderedFolderCards } from "../core/content";
 import { reconcileSession, startSession, stepSession } from "../core/study";
@@ -196,6 +197,9 @@ export function Study({
     });
   };
   flipReady.current = flip;
+  const flipOnPress = (event: GestureResponderEvent) => {
+    if (swipe.isTap(event)) flip();
+  };
   if (!source)
     return (
       <View style={s.page}>
@@ -400,7 +404,7 @@ export function Study({
             if (event.nativeEvent.actionName === "decrement")
               swipe.navigate(-1);
           }}
-          onPress={flip}
+          onPress={flipOnPress}
           style={study.cardHeader}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -432,7 +436,7 @@ export function Study({
             <Icon name="pencil" size={17} color={colors.icon} />
           </Pressable>
         </Pressable>
-        <Pressable onPress={flip} style={{ flex: 1 }} accessible={false}>
+        <Pressable onPress={flipOnPress} style={{ flex: 1 }} accessible={false}>
           <ScrollView
             ref={back ? backScroll : frontScroll}
             nestedScrollEnabled
@@ -447,7 +451,7 @@ export function Study({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="카드 뒤집기"
-              onPress={flip}
+              onPress={flipOnPress}
             >
               <Attachment url={image} />
               <RichText
@@ -463,7 +467,7 @@ export function Study({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="카드 뒤집기"
-          onPress={flip}
+          onPress={flipOnPress}
           style={study.cardFooter}
         >
           <Icon name="rotate" size={15} color={colors.icon} />
