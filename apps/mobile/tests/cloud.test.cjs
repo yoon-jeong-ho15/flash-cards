@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const esbuild = require('esbuild');
 const { firestoreFixture, registerLearnedSyncTests, seedData } = require('../../../tests/learned-sync-fixture.cjs');
+const { registerDeckDeleteTests } = require('../../../tests/deck-delete-sync-regressions.cjs');
 const { registerAccountPullTests } = require('../../../tests/account-pull-regressions.cjs');
 const { harness, user, accountKey, emptySnapshot } = require('./helpers.cjs');
 
@@ -131,7 +132,11 @@ test('uploaded object is reused after local conversion persistence fails and the
   const { cloud, context } = await fixture();
   const h = harness({ push: cloud.push }); await h.store.switchUser(user('a'));
   await h.store.saveDeck(undefined, { title: '덱' }, [{ ...item(), frontImageUrl: 'data:image/png;base64,YWJj' }]);
-  h.storage.setItem = async () => { throw Error('disk full'); };
+  const write = h.storage.setItem;
+  h.storage.setItem = async (key, value) => {
+    if (context.uploads.length) throw Error('disk full');
+    await write(key, value);
+  };
   h.cloud.available = true; await h.store.sync(false);
   assert.equal(h.store.getState().status, 'error'); assert.equal(context.uploads.length, 1);
   const restarted = harness({ push: cloud.push }, h.map);
@@ -141,25 +146,41 @@ test('uploaded object is reused after local conversion persistence fails and the
   assert.equal(Object.keys(restarted.store.getState().outbox).length, 0);
 });
 
-async function syncFixture({ legacy = false } = {}) {
-  const data = seedData();
+async function syncFixture({ legacy = false, existingDeck = false, legacyDeck = false } = {}) {
+  const data = seedData(existingDeck);
   const server = firestoreFixture(data);
-  const { cloud } = await fixture(server.sdk);
   const snapshot = { ...emptySnapshot(), ...data };
   if (legacy) {
     snapshot.cards[2].termRichText = '<p>legacy queued edit</p>';
     snapshot.outbox = { 'cards:c3': { kind: 'cards', id: 'c3', revision: 1, deleted: false } };
     snapshot.revision = 1;
   }
+  if (legacyDeck) {
+    snapshot.outbox = { 'decks:d2': { kind: 'decks', id: 'd2', revision: 1, deleted: false } };
+    snapshot.revision = 1;
+  }
   const map = new Map([[accountKey('a'), JSON.stringify(snapshot)]]);
   let h;
   const reload = async () => {
+    const { cloud } = await fixture(server.sdk);
     h = harness({ ...cloud, available: false }, map);
     await h.store.switchUser(user('a'));
   };
   await reload();
   return {
     server, reload,
+    createDeck: async () => {
+      const cards = [1, 2].map(index => ({ termRichText: '<p>Card ' + index + '</p>', definitionRichText: '' }));
+      const deckId = await h.store.saveDeck(undefined, { title: 'offline deck' }, cards);
+      return { deckId, cardIds: h.store.getState().cards.filter(card => card.deckId === deckId).map(card => card.id) };
+    },
+    renameDeck: (id, title) => h.store.saveDeck(id, { title },
+      h.store.getState().cards.filter(card => card.deckId === id)),
+    deleteDeck: id => h.store.deleteDeck(id),
+    queued: token => {
+      const operation = JSON.parse(map.get(accountKey('a'))).outbox[token];
+      if (operation) return { state: operation.writeState, deleted: operation.deleted };
+    },
     rate: (id, learned) => h.store.setLearned(id, learned),
     edit: (id, termRichText) => h.store.updateCard(id, { termRichText }),
     editInDeck: (id, termRichText) => h.store.saveDeck('d1', { title: 'deck' },
@@ -183,3 +204,4 @@ async function syncFixture({ legacy = false } = {}) {
 }
 registerLearnedSyncTests(syncFixture);
 registerAccountPullTests(syncFixture);
+registerDeckDeleteTests(syncFixture);

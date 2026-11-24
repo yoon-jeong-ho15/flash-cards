@@ -4,13 +4,18 @@ import { StateCreator } from 'zustand';
 import { FlashcardStoreState, SyncSlice, EMPTY_PENDING_SYNC } from '../types';
 import { flashcardService, sortCardsByOrder } from '../../services/flashcardService';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { acknowledge, enqueueChanges, hasPending } from '../syncQueue';
+import { acknowledge, collections, enqueueChanges, hasPending, markCreationsAttempted, omitDeferredDeletes } from '../syncQueue';
 import { AccountSnapshot, readAccount, transactAccount, withAccountLock } from '../accountStorage';
+
+const deleteRetryInterval = 5_000;
+const maxDeleteRetryInterval = 300_000;
 
 export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlice> = (set, get) => {
   let running: Promise<void> | null = null;
   let pullRequested = false;
   let rerunRequested = false;
+  let deleteRetry: ReturnType<typeof setTimeout> | undefined;
+  let deleteRetryDelay = deleteRetryInterval;
   const online = () => isFirebaseConfigured && navigator.onLine && Boolean(get().user);
   const message = (error: unknown) => error instanceof Error ? error.message : String(error);
   // Preserve references for unchanged entities. Editors keep their own input buffers and
@@ -37,8 +42,13 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
   const run = (pull: boolean): Promise<void> => {
     pullRequested ||= pull;
     if (running) { rerunRequested = true; return running; }
+    clearTimeout(deleteRetry);
+    deleteRetry = undefined;
     if (!online()) { set({ syncStatus: 'offline', isInitialSyncComplete: true }); return Promise.resolve(); }
     const { uid, active } = sessionContext();
+    // An absent document can still arrive from another runtime's old create.
+    // Keep its deletion durable and set it aside only for this pass.
+    const deferredDeletes = new Map<string, number | undefined>();
     running = Promise.resolve().then(async () => {
       if (!active()) return;
       let didSync = false;
@@ -67,7 +77,8 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                 for (const source of sources) images.add(source);
               }
             }
-            const pending = hasPending(snapshot.pendingSync);
+            let pendingSync = omitDeferredDeletes(snapshot.pendingSync, snapshot.pendingVersions, deferredDeletes);
+            const pending = hasPending(pendingSync);
             if (!images.size && !pending && !pullRequested) break;
             if (get().syncStatus !== 'syncing') set({ syncStatus: 'syncing', syncError: null });
             if (images.size) {
@@ -88,8 +99,24 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
               continue;
             }
             if (pending) {
-              await flashcardService.commitChanges(snapshot, uid!, active);
+              const attempted = markCreationsAttempted(snapshot.pendingSync);
+              if (attempted !== snapshot.pendingSync) {
+                let prepared = false;
+                await transactAccount(uid, latest => {
+                  if (!online() || latest.mutationRevision !== snapshot.mutationRevision) return null;
+                  prepared = true;
+                  return { ...latest, pendingSync: markCreationsAttempted(latest.pendingSync) };
+                }, publish, active);
+                if (!prepared) continue;
+                pendingSync = markCreationsAttempted(pendingSync);
+              }
+              const sent = { ...snapshot, pendingSync };
+              const missing = await flashcardService.commitChanges(sent, uid!, active);
               if (!active()) return;
+              for (const token of missing ?? []) {
+                if (pendingSync.writeStates?.[token] !== 'existing') deferredDeletes.set(token, snapshot.pendingVersions[token]);
+              }
+              const confirmed = omitDeferredDeletes(pendingSync, snapshot.pendingVersions, deferredDeletes);
               // Refresh stale images before acknowledgement, otherwise the next
               // pass would treat them as unqueued legacy images and push the old card.
               const cloud = refreshCards.size ? await flashcardService.fetchAllData(uid!) : null;
@@ -103,7 +130,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                   return remote ? [remote] : [];
                 }) : latest.cards;
                 return { ...latest, cards,
-                  ...acknowledge(latest.pendingSync, latest.pendingVersions, snapshot.pendingSync, snapshot.pendingVersions),
+                  ...acknowledge(latest.pendingSync, latest.pendingVersions, confirmed, snapshot.pendingVersions),
                 };
               }, publish, active);
               didSync = true;
@@ -114,9 +141,16 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
             const cloud = await flashcardService.fetchAllData(uid!);
             if (!active()) return;
             await transactAccount(uid, latest => {
+              // If a late create appeared in this pull, send its deletion before publishing the data.
+              if (deferredDeletes.size) {
+                for (const [kind] of collections) {
+                  for (const item of cloud[kind]) deferredDeletes.delete(`${kind}:${item.id}`);
+                }
+              }
               // Other tabs can edit while this pull is in flight. Never overwrite
               // their data or outbox with a stale server response.
-              if (!online() || snapshot.mutationRevision !== latest.mutationRevision || hasPending(latest.pendingSync)) {
+              if (!online() || snapshot.mutationRevision !== latest.mutationRevision ||
+                  hasPending(omitDeferredDeletes(latest.pendingSync, latest.pendingVersions, deferredDeletes))) {
                 pullRequested = true;
                 return null;
               }
@@ -144,8 +178,16 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
       running = null;
       const repeat = rerunRequested;
       rerunRequested = false;
-      if (!active()) void run(true);
-      else if (repeat && online() && get().syncStatus !== 'error') return run(false);
+      if (!active()) {
+        deleteRetryDelay = deleteRetryInterval;
+        void run(true);
+      } else if (online() && get().syncStatus !== 'error') {
+        if (repeat) return run(false);
+        if (deferredDeletes.size) {
+          deleteRetry = setTimeout(() => { if (active()) void run(false); }, deleteRetryDelay);
+          deleteRetryDelay = Math.min(deleteRetryDelay * 2, maxDeleteRetryInterval);
+        } else deleteRetryDelay = deleteRetryInterval;
+      }
     });
     return running;
   };

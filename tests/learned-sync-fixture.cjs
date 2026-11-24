@@ -1,8 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-function seedData() {
-  return {
+function seedData(existingDeck = false) {
+  const data = {
     folders: [{ id: 'f1', userId: 'a', title: 'folder', createdAt: 1 }],
     decks: [{ id: 'd1', userId: 'a', folderId: 'f1', title: 'deck', createdAt: 1, updatedAt: 1 }],
     cards: ['c1', 'c2', 'c3'].map((id, order) => ({
@@ -10,6 +10,11 @@ function seedData() {
       definitionRichText: '<p>answer</p>', learned: false,
     })),
   };
+  if (existingDeck) {
+    data.decks.push({ ...data.decks[0], id: 'd2', title: 'another deck' });
+    data.cards.push({ ...data.cards[0], id: 'd2-card', deckId: 'd2' });
+  }
+  return data;
 }
 
 function firestoreFixture(data) {
@@ -21,7 +26,8 @@ function firestoreFixture(data) {
   const denied = new Set();
   const missingCode = new Map();
   const server = {
-    cards, writes, denied, missingCode, beforeUpdate: async () => {},
+    cards, decks: documents.flashcard_decks, writes, denied, missingCode,
+    beforeUpdate: async () => {}, beforeBatch: async () => {},
     serverReads: [], cacheReads: [], beforeRead: async () => {},
     clearCollections: () => Object.values(documents).forEach(items => items.clear()),
   };
@@ -58,12 +64,20 @@ function firestoreFixture(data) {
       }
       documents[name].set(id, { ...item, ...data });
     },
+    deleteDoc: async ({ name, id }) => {
+      writes.push({ kind: 'delete', name, id });
+      if (documents[name].get(id)?.userId !== 'a' || denied.has(id)) {
+        throw Object.assign(Error('delete denied'), { code: 'permission-denied' });
+      }
+      documents[name].delete(id);
+    },
     writeBatch: () => {
       const entries = [];
       return {
         set: ({ name, id }, data) => entries.push({ kind: 'set', name, id, data: { ...data } }),
         delete: ({ name, id }) => entries.push({ kind: 'delete', name, id }),
         commit: async () => {
+          await server.beforeBatch(entries);
           for (const entry of entries) {
             writes.push(entry);
             const { kind, name, id, data } = entry;

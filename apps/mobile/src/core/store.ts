@@ -4,6 +4,8 @@ import { mergeCardImage, mapSources } from './imageSync';
 import { hasContent } from './content';
 
 const kinds: Kind[] = ['folders', 'decks', 'cards'];
+const deleteRetryInterval = 5_000;
+const maxDeleteRetryInterval = 300_000;
 const message = (error: unknown) => error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
 const snapshotOf = (s: State): Snapshot => ({ folders: s.folders, decks: s.decks, cards: s.cards,
   imageCache: s.imageCache, outbox: s.outbox, revision: s.revision, preferences: s.preferences });
@@ -16,6 +18,8 @@ export class FlashcardStore {
   private queue: Promise<unknown> = Promise.resolve();
   private running: Promise<void> | null = null;
   private pullRequested = false;
+  private deleteRetry: ReturnType<typeof setTimeout> | undefined;
+  private deleteRetryDelay = deleteRetryInterval;
   constructor(private storage: Storage, private transport: Transport, private uuid: () => string) {}
   getState = () => this.state;
   resolveImage = (url: string) => this.state.imageCache?.[url] || url;
@@ -51,6 +55,7 @@ export class FlashcardStore {
   setOnline = (online: boolean) => {
     this.publish({ online, ...(!online ? { status: 'offline' as const } : {}) });
     if (online) void this.sync();
+    else clearTimeout(this.deleteRetry);
   };
   private canSync() { return this.state.ready && this.state.online && this.transport.available && Boolean(this.state.user); }
   private mutate<T>(change: (s: State) => { data: Data; result: T }, cardChange?: 'learned'): Promise<T> {
@@ -70,7 +75,8 @@ export class FlashcardStore {
           if (previous === item) continue;
           const key = `${kind}:${item.id}`;
           const queued = outbox[key];
-          const operation: Operation = { kind, id: item.id, revision, deleted: false };
+          const operation: Operation = { kind, id: item.id, revision, deleted: false,
+            writeState: queued ? queued.writeState : previous ? 'existing' : 'unsent' };
           if (kind === 'cards' && previous) {
             const oldCard = previous as Card;
             const card = item as Card;
@@ -81,7 +87,14 @@ export class FlashcardStore {
           }
           outbox[key] = operation;
         }
-        for (const id of old.keys()) if (!ids.has(id)) outbox[`${kind}:${id}`] = { kind, id, revision, deleted: true };
+        for (const id of old.keys()) {
+          if (ids.has(id)) continue;
+          const key = `${kind}:${id}`;
+          const queued = outbox[key];
+          if (queued?.writeState === 'unsent') delete outbox[key];
+          else outbox[key] = { kind, id, revision, deleted: true,
+            writeState: queued && queued.writeState !== 'existing' ? 'attempted' : 'existing' };
+        }
       }
       const next: Snapshot = { folders: data.folders, decks: data.decks, cards: data.cards,
         imageCache: before.imageCache, revision, outbox, preferences: before.preferences };
@@ -177,21 +190,47 @@ export class FlashcardStore {
   sync = (pull = true): Promise<void> => {
     this.pullRequested ||= pull;
     if (this.running) return this.running;
+    clearTimeout(this.deleteRetry);
+    this.deleteRetry = undefined;
     if (!this.canSync()) { if (this.state.status !== 'error') this.publish({ status: 'offline' }); return Promise.resolve(); }
     const { session, user } = this.state;
     const uid = user!.uid;
     const active = () => session === this.state.session && uid === this.state.user?.uid;
+    // Retry an absent, possibly created document on later syncs without blocking this one.
+    const deferredDeletes = new Map<string, number>();
+    const isDeferred = ([key, operation]: [string, Operation]) => deferredDeletes.get(key) === operation.revision;
     this.running = Promise.resolve().then(async () => {
       let didSync = false;
       let pulling = false;
       try {
         while (active() && this.canSync()) {
-          const sent = snapshotOf(this.state);
+          const snapshot = snapshotOf(this.state);
+          let sent = deferredDeletes.size ? { ...snapshot,
+            outbox: Object.fromEntries(Object.entries(snapshot.outbox).filter(entry => !isDeferred(entry))),
+          } : snapshot;
           const pending = Object.keys(sent.outbox).length > 0;
           if (!pending && !this.pullRequested) break;
           if (this.state.status !== 'syncing') this.publish({ status: 'syncing', error: null });
           if (pending) {
-            await this.transport.push(uid, sent, active, image => this.serial(async () => {
+            if (Object.values(sent.outbox).some(operation => operation.writeState === 'unsent')) {
+              const prepared = await this.serial(async () => {
+                if (!active() || !this.canSync() || snapshot.revision !== this.state.revision) return null;
+                const latest = snapshotOf(this.state);
+                const outbox = { ...latest.outbox };
+                const sending = { ...sent.outbox };
+                for (const [key, operation] of Object.entries(sent.outbox)) {
+                  if (operation.writeState === 'unsent') {
+                    sending[key] = outbox[key] = { ...operation, writeState: 'attempted' };
+                  }
+                }
+                await this.persist({ ...latest, outbox }, uid);
+                if (active()) this.publish({ outbox });
+                return { ...sent, outbox: sending };
+              });
+              if (!prepared || !active()) continue;
+              sent = prepared;
+            }
+            const missing = await this.transport.push(uid, sent, active, image => this.serial(async () => {
               if (!active() || !this.state.ready) throw new Error('계정이 변경되었습니다.');
               const next = snapshotOf(this.state);
               const source = sent.cards.find(card => card.id === image.cardId);
@@ -204,11 +243,23 @@ export class FlashcardStore {
               await this.persist({ ...next, cards, imageCache }, uid);
               if (active()) this.publish({ cards, imageCache });
             }));
+            for (const key of missing ?? []) {
+              const operation = sent.outbox[key];
+              if (operation && operation.writeState !== 'existing') deferredDeletes.set(key, operation.revision);
+            }
             await this.serial(async () => {
               if (!active()) return;
               const next = snapshotOf(this.state);
               const outbox = { ...next.outbox };
-              for (const [key, operation] of Object.entries(sent.outbox)) if (outbox[key]?.revision === operation.revision) delete outbox[key];
+              for (const entry of Object.entries(sent.outbox)) {
+                const [key, operation] = entry;
+                const current = outbox[key];
+                if (!current || isDeferred(entry)) continue;
+                if (current.revision === operation.revision) delete outbox[key];
+                else if (!current.deleted && current.writeState === 'attempted' && !operation.deleted) {
+                  outbox[key] = { ...current, writeState: 'existing' };
+                }
+              }
               await this.persist({ ...next, outbox }, uid);
               if (active()) {
                 this.publish({ outbox });
@@ -222,7 +273,13 @@ export class FlashcardStore {
           const cloud = await this.transport.pull(uid);
           await this.serial(async () => {
             if (!active()) return;
-            if (!this.canSync() || this.state.revision !== sent.revision || Object.keys(this.state.outbox).length) {
+            if (deferredDeletes.size) {
+              for (const kind of kinds) {
+                for (const item of cloud[kind]) deferredDeletes.delete(`${kind}:${item.id}`);
+              }
+            }
+            if (!this.canSync() || this.state.revision !== sent.revision ||
+                Object.entries(this.state.outbox).some(entry => !isDeferred(entry))) {
               this.pullRequested = true;
               return;
             }
@@ -247,8 +304,17 @@ export class FlashcardStore {
       }
     }).finally(() => {
       this.running = null;
-      if (this.canSync() && (!active() || (this.state.status !== 'error' &&
-        (this.pullRequested || Object.keys(this.state.outbox).length > 0)))) void this.sync(!active());
+      if (!active()) {
+        this.deleteRetryDelay = deleteRetryInterval;
+        if (this.canSync()) void this.sync();
+      } else if (this.canSync() && this.state.status !== 'error') {
+        if (this.pullRequested || Object.entries(this.state.outbox).some(entry => !isDeferred(entry))) {
+          void this.sync(false);
+        } else if (deferredDeletes.size) {
+          this.deleteRetry = setTimeout(() => { if (active()) void this.sync(false); }, this.deleteRetryDelay);
+          this.deleteRetryDelay = Math.min(this.deleteRetryDelay * 2, maxDeleteRetryInterval);
+        } else this.deleteRetryDelay = deleteRetryInterval;
+      }
     });
     return this.running;
   };

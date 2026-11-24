@@ -19,9 +19,11 @@ test('failed writes remain durable and retry successfully', async () => {
 });
 
 test('offline deck replacement queues removed cards and progress reset', async () => {
-  const h = createHarness(); h.navigator.onLine = false;
+  const h = createHarness();
   h.store.getState().setUser({ uid: 'a' });
   const id = await h.store.getState().addDeck({ title: 'deck' }, [seed.card, seed.card]);
+  await h.store.getState().flushPendingSync();
+  h.navigator.onLine = false;
   const [first, second] = h.store.getState().cards;
   await h.store.getState().saveDeckWithCards(id, { title: 'deck' }, [first]);
   assert.ok(h.store.getState().pendingSync.deletedCardIds.includes(second.id));
@@ -32,9 +34,12 @@ test('offline deck replacement queues removed cards and progress reset', async (
 });
 
 test('folder deletion queues deck detachment and cascading deletes', async () => {
-  const h = createHarness(); h.navigator.onLine = false;
+  const h = createHarness();
+  h.store.getState().setUser({ uid: 'a' });
   const folderId = await h.store.getState().addFolder('folder');
   const deckId = await h.store.getState().addDeck({ title: 'deck', folderId }, [seed.card]);
+  await h.store.getState().flushPendingSync();
+  h.navigator.onLine = false;
   await h.store.getState().deleteFolder(folderId);
   assert.equal(h.store.getState().decks[0].folderId, null);
   assert.ok(h.store.getState().pendingSync.deckIds.includes(deckId));

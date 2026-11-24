@@ -1,6 +1,6 @@
 import { digest, CryptoDigestAlgorithm } from 'expo-crypto';
 import { cardDataImages, replaceCardImage } from '../core/imageSync';
-import { collection, doc, documentId, getDocsFromServer, query, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, documentId, getDocsFromServer, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, configured, db, storage } from './firebase';
 import { getDownloadURL, ref, uploadBytesResumable, type UploadTaskSnapshot } from 'firebase/storage';
 import type { Card, Data, Kind, Transport, ImageUpload } from '../core/types';
@@ -22,20 +22,21 @@ async function commitWrite(write: () => Promise<void>, active: () => boolean) {
   await bounded(work);
 }
 
-async function updateLearned(id: string, learned: boolean, uid: string, active: () => boolean) {
+async function writeExisting(name: string, id: string, uid: string, active: () => boolean, write: () => Promise<void>) {
   try {
-    await updateDoc(doc(db!, names.cards, id), { learned });
+    await write();
+    return true;
   } catch (error) {
     if (!active()) throw new Error('계정이 변경되었습니다.');
     const code = (error as { code?: string }).code;
-    if (code === 'not-found') return;
+    if (code === 'not-found') return false;
     if (code !== 'permission-denied') throw error;
 
     // Missing documents can also be denied by the ownership rule. Confirm on the server.
-    const cards = collection(db!, names.cards);
-    const owned = await getDocsFromServer(query(cards, where('userId', '==', uid), where(documentId(), '==', id)));
+    const owned = await getDocsFromServer(query(collection(db!, name), where('userId', '==', uid), where(documentId(), '==', id)));
     if (!active()) throw new Error('계정이 변경되었습니다.');
     if (!owned.empty) throw error;
+    return false;
   }
 }
 export async function uploadImage(dataUrl: string, uid: string, active: () => boolean): Promise<string> {
@@ -82,12 +83,26 @@ export const cloud: Transport = {
     if (!db) throw new Error('Firebase 설정을 확인해 주세요.');
     const canWrite = () => active() && auth?.currentUser?.uid === uid;
     const cache = new Map<string, string>(Object.entries(snapshot.imageCache || {}).map(([url, data]) => [data, url]));
-    const learned: Card[] = [];
+    const individualWrites: Array<() => Promise<void>> = [];
+    const missingDeletes: string[] = [];
     const operations = Object.values(snapshot.outbox).filter(operation => {
-      if (operation.kind !== 'cards' || operation.deleted || !operation.learnedOnly) return true;
-      const card = snapshot.cards.find(card => card.id === operation.id);
+      const { kind, id } = operation;
+      if (operation.deleted) {
+        // A missing delete must not reject a batch of unrelated upserts.
+        individualWrites.push(async () => {
+          const deleted = await writeExisting(names[kind], id, uid, canWrite,
+            () => deleteDoc(doc(db!, names[kind], id)));
+          if (!deleted) missingDeletes.push(`${kind}:${id}`);
+        });
+        return false;
+      }
+      if (kind !== 'cards' || !operation.learnedOnly) return true;
+      const card = snapshot.cards.find(card => card.id === id);
       if (!card) throw new Error('동기화할 자료를 찾을 수 없습니다.');
-      learned.push(card);
+      individualWrites.push(async () => {
+        await writeExisting(names.cards, id, uid, canWrite,
+          () => updateDoc(doc(db!, names.cards, id), { learned: Boolean(card.learned) }));
+      });
       return false;
     });
     // Keep the same 400-operation limit as the web app. Replays are idempotent.
@@ -96,7 +111,6 @@ export const cloud: Transport = {
       for (const operation of operations.slice(i, i + 400)) {
         if (!canWrite()) throw new Error('계정이 변경되었습니다.');
         const target = doc(db, names[operation.kind], operation.id);
-        if (operation.deleted) { batch.delete(target); continue; }
         const item = snapshot[operation.kind].find(item => item.id === operation.id);
         if (!item) throw new Error('동기화할 자료를 찾을 수 없습니다.');
         const normalized = operation.kind === 'cards' ? await uploadEmbeddedImages(item as Card, uid, active, cache, onImage) : item;
@@ -107,15 +121,15 @@ export const cloud: Transport = {
       }
       await commitWrite(() => batch.commit(), canWrite);
     }
-    for (let i = 0; i < learned.length; i += 25) {
-      const chunk = learned.slice(i, i + 25);
+    for (let i = 0; i < individualWrites.length; i += 25) {
+      const chunk = individualWrites.slice(i, i + 25);
       await commitWrite(async () => {
-        const results = await Promise.allSettled(chunk.map(card =>
-          updateLearned(card.id, Boolean(card.learned), uid, canWrite)));
+        const results = await Promise.allSettled(chunk.map(write => write()));
         const failure = results.find(result => result.status === 'rejected');
         if (failure) throw failure.reason;
       }, canWrite);
     }
+    return missingDeletes;
   },
   async pull(uid) {
     if (!db || auth?.currentUser?.uid !== uid) throw new Error('로그인 상태를 확인해 주세요.');

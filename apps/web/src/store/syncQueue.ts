@@ -11,6 +11,7 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
   versions: Record<string, number>, revision: number, cardChange?: 'learned') {
   const next = { ...pending };
   const nextVersions = { ...versions };
+  const writeStates = { ...pending.writeStates };
   const learnedOnly = new Set(pending.learnedOnlyCardIds);
   for (const [collection, upserts, deletes] of collections) {
     if (before[collection] === after[collection]) continue;
@@ -31,22 +32,57 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
             (!updated.has(item.id) || learnedOnly.has(item.id))) learnedOnly.add(item.id);
         else learnedOnly.delete(item.id);
       }
+      const token = `${collection}:${item.id}`;
+      if (!updated.has(item.id)) {
+        writeStates[token] = previous ? 'existing' : removed.has(item.id) ? 'attempted' : 'unsent';
+      }
       updated.add(item.id);
       removed.delete(item.id);
-      nextVersions[`${collection}:${item.id}`] = revision;
+      nextVersions[token] = revision;
     }
     for (const id of oldItems.keys()) {
       if (newIds.has(id)) continue;
       if (collection === 'cards') learnedOnly.delete(id);
-      updated.delete(id);
+      const token = `${collection}:${id}`;
+      const queued = updated.delete(id);
+      if (writeStates[token] === 'unsent') {
+        delete writeStates[token];
+        delete nextVersions[token];
+        removed.delete(id);
+        continue;
+      }
+      // A legacy upsert may already be a creation that was sent.
+      writeStates[token] = queued && writeStates[token] !== 'existing' ? 'attempted' : 'existing';
       removed.add(id);
-      nextVersions[`${collection}:${id}`] = revision;
+      nextVersions[token] = revision;
     }
     next[upserts] = [...updated];
     next[deletes] = [...removed];
   }
   next.learnedOnlyCardIds = [...learnedOnly];
+  next.writeStates = writeStates;
   return { pendingSync: next, pendingVersions: nextVersions };
+}
+
+export function markCreationsAttempted(pending: PendingSync): PendingSync {
+  const unsent = Object.entries(pending.writeStates ?? {}).filter(([, state]) => state === 'unsent');
+  if (!unsent.length) return pending;
+  const writeStates = { ...pending.writeStates };
+  for (const [token] of unsent) writeStates[token] = 'attempted';
+  return { ...pending, writeStates };
+}
+
+export function omitDeferredDeletes(pending: PendingSync, versions: Record<string, number>,
+  deferred: ReadonlyMap<string, number | undefined>): PendingSync {
+  if (!deferred.size) return pending;
+  const next = { ...pending };
+  for (const [collection, , deletes] of collections) {
+    next[deletes] = pending[deletes].filter(id => {
+      const token = `${collection}:${id}`;
+      return !deferred.has(token) || deferred.get(token) !== versions[token];
+    });
+  }
+  return next;
 }
 
 export const hasPending = (pending: PendingSync) =>
@@ -56,18 +92,25 @@ export function acknowledge(current: PendingSync, versions: Record<string, numbe
   sent: PendingSync, sentVersions: Record<string, number>) {
   const pendingSync = { ...EMPTY_PENDING_SYNC };
   const pendingVersions = { ...versions };
-  for (const [collection, ...keys] of collections) {
-    for (const key of keys) {
+  const writeStates = { ...current.writeStates };
+  for (const [collection, upserts, deletes] of collections) {
+    for (const key of [upserts, deletes]) {
       const sentIds = new Set(sent[key]);
       pendingSync[key] = current[key].filter(id => {
         const token = `${collection}:${id}`;
         const acknowledged = sentIds.has(id) && versions[token] === sentVersions[token];
-        if (acknowledged) delete pendingVersions[token];
+        if (acknowledged) {
+          delete pendingVersions[token];
+          delete writeStates[token];
+        } else if (key === upserts && sentIds.has(id) && writeStates[token] === 'attempted') {
+          writeStates[token] = 'existing';
+        }
         return !acknowledged;
       });
     }
   }
   const learnedOnly = new Set(current.learnedOnlyCardIds);
   pendingSync.learnedOnlyCardIds = pendingSync.cardIds.filter(id => learnedOnly.has(id));
+  pendingSync.writeStates = writeStates;
   return { pendingSync, pendingVersions };
 }

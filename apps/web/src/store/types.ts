@@ -1,6 +1,7 @@
 import { Card, Deck, Folder, UserProfile } from '../types';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
+export type WriteState = 'unsent' | 'attempted' | 'existing';
 
 export interface PendingSync {
   folderIds: string[];
@@ -8,6 +9,8 @@ export interface PendingSync {
   cardIds: string[];
   /** Subset of cardIds. Older snapshots omit this and retain full writes. */
   learnedOnlyCardIds?: string[];
+  /** Keyed by collection:id. An absent entry in a legacy queue is unknown. */
+  writeStates?: Record<string, WriteState>;
   deletedFolderIds: string[];
   deletedDeckIds: string[];
   deletedCardIds: string[];

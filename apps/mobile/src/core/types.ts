@@ -3,7 +3,15 @@ export type { Card, Deck, Folder, UserProfile, DeckSortOption };
 
 export interface Data { folders: Folder[]; decks: Deck[]; cards: Card[] }
 export type Kind = keyof Data;
-export interface Operation { kind: Kind; id: string; revision: number; deleted: boolean; learnedOnly?: true }
+export interface Operation {
+  kind: Kind;
+  id: string;
+  revision: number;
+  deleted: boolean;
+  learnedOnly?: true;
+  /** Missing on legacy operations, whose first transmission is unknown. */
+  writeState?: 'unsent' | 'attempted' | 'existing';
+}
 export interface Preferences {
   collectionLayout?: 'grid' | 'list';
   mockDataVersion?: number;
@@ -37,7 +45,7 @@ export interface Storage {
 export interface ImageUpload { cardId: string; original: string; url: string }
 export interface Transport {
   available: boolean;
-  push(uid: string, snapshot: Snapshot, active: () => boolean, onImage?: (image: ImageUpload) => Promise<void>): Promise<void>;
+  push(uid: string, snapshot: Snapshot, active: () => boolean, onImage?: (image: ImageUpload) => Promise<void>): Promise<void | string[]>;
   pull(uid: string): Promise<Data>;
 }
 export type CardInput = Omit<Card, 'id' | 'deckId' | 'userId' | 'order' | 'learned'> & { id?: string; learned?: boolean };

@@ -27,10 +27,14 @@ test('guest and each signed-in account retain independent durable data, preferen
   assert.equal(restarted.getState().preferences.deckSort, 'name-asc'); assert.equal(Object.keys(restarted.getState().outbox).length, 2);
 });
 test('folder deletion retains deck/card IDs and learned progress, then deck deletion enqueues tombstones', async () => {
-  const { store } = harness(); await store.switchUser(null);
+  const { store, cloud } = harness(); await store.switchUser(user('a'));
   const folderId = await store.saveFolder(undefined, '폴더', '');
   const deckId = await store.saveDeck(undefined, { title: '덱', folderId }, [item()]);
   const cardId = store.getState().cards[0].id; await store.setLearned(cardId, true);
+  cloud.pull = async () => ({ folders: store.getState().folders, decks: store.getState().decks, cards: store.getState().cards });
+  cloud.available = true;
+  await store.sync(false);
+  store.setOnline(false);
   await store.deleteFolder(folderId);
   assert.equal(store.getState().decks[0].folderId, null); assert.equal(store.getState().cards[0].learned, true);
   assert.equal(store.getState().cards[0].id, cardId);
@@ -174,7 +178,11 @@ test('upload callbacks cannot resurrect deleted cards or clear their tombstones'
 
 test('upload callback persistence failure retains original and queue; retry and restart retain URLs', async () => {
   const h = await imageHarness(async (_, snapshot, active, onImage) => onImage({ cardId: snapshot.cards[0].id, original: originalImage, url: remoteImage }));
-  const write = h.storage.setItem; h.storage.setItem = async () => { throw Error('disk full'); };
+  const write = h.storage.setItem;
+  h.storage.setItem = async (key, value) => {
+    if (JSON.parse(value).imageCache?.[remoteImage]) throw Error('disk full');
+    await write(key, value);
+  };
   h.cloud.available = true; await h.store.sync(false);
   assert.equal(h.store.getState().status, 'error'); assert.equal(h.store.getState().cards[0].frontImageUrl, originalImage);
   assert.equal(Object.keys(h.store.getState().outbox).length, 2);

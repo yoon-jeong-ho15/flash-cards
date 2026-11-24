@@ -33,20 +33,21 @@ function commitBatch(batch: WriteBatch, active: () => boolean = () => true) {
   return commitWrite(() => batch.commit(), active);
 }
 
-async function updateLearned(id: string, learned: boolean, userId: string, active: () => boolean) {
+async function writeExisting(name: string, id: string, userId: string, active: () => boolean, write: () => Promise<void>) {
   try {
-    await updateDoc(doc(db!, 'flashcard_cards', id), { learned });
+    await write();
+    return true;
   } catch (error) {
     if (!active()) throw new Error('Authentication session changed');
     const code = (error as { code?: string }).code;
-    if (code === 'not-found') return;
+    if (code === 'not-found') return false;
     if (code !== 'permission-denied') throw error;
 
     // Missing documents can also be denied by the ownership rule. Confirm on the server.
-    const cards = collection(db!, 'flashcard_cards');
-    const owned = await getDocsFromServer(query(cards, where('userId', '==', userId), where(documentId(), '==', id)));
+    const owned = await getDocsFromServer(query(collection(db!, name), where('userId', '==', userId), where(documentId(), '==', id)));
     if (!active()) throw new Error('Authentication session changed');
     if (!owned.empty) throw error;
+    return false;
   }
 }
 
@@ -82,22 +83,31 @@ export function sortCardsByOrder(cards: Card[]): Card[] {
 
 export const flashcardService = {
   async commitChanges(snapshot: AccountData & { pendingSync: PendingSync }, userId: string,
-    isActive: () => boolean): Promise<void> {
+    isActive: () => boolean): Promise<string[]> {
     if (!db || !isFirebaseConfigured) throw new Error('Firebase is unavailable');
     const operations: Array<(batch: WriteBatch) => void> = [];
     const learnedOnlyIds = new Set(snapshot.pendingSync.learnedOnlyCardIds);
-    const learned: Card[] = [];
+    const individualWrites: Array<() => Promise<void>> = [];
+    const missingDeletes: string[] = [];
     const active = () => isActive() && auth?.currentUser?.uid === userId;
     const names = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
     for (const [kind, upserts, deletes] of collections) {
       for (const id of snapshot.pendingSync[deletes]) {
-        operations.push(batch => batch.delete(doc(db!, names[kind], id)));
+        // A missing delete must not reject a batch of unrelated upserts.
+        individualWrites.push(async () => {
+          const deleted = await writeExisting(names[kind], id, userId, active,
+            () => deleteDoc(doc(db!, names[kind], id)));
+          if (!deleted) missingDeletes.push(`${kind}:${id}`);
+        });
       }
       const ids = new Set(snapshot.pendingSync[upserts]);
       for (const item of snapshot[kind]) {
         if (!ids.has(item.id)) continue;
         if (kind === 'cards' && learnedOnlyIds.has(item.id)) {
-          learned.push(item as Card);
+          individualWrites.push(async () => {
+            await writeExisting(names.cards, item.id, userId, active,
+              () => updateDoc(doc(db!, names.cards, item.id), { learned: Boolean((item as Card).learned) }));
+          });
           continue;
         }
         if (kind === 'cards' && cardDataImages(item as Card).length) {
@@ -119,15 +129,15 @@ export const flashcardService = {
       operations.slice(i, i + 400).forEach(operation => operation(batch));
       await commitBatch(batch, active);
     }
-    for (let i = 0; i < learned.length; i += 25) {
-      const chunk = learned.slice(i, i + 25);
+    for (let i = 0; i < individualWrites.length; i += 25) {
+      const chunk = individualWrites.slice(i, i + 25);
       await commitWrite(async () => {
-        const results = await Promise.allSettled(chunk.map(card =>
-          updateLearned(card.id, Boolean(card.learned), userId, active)));
+        const results = await Promise.allSettled(chunk.map(write => write()));
         const failure = results.find(result => result.status === 'rejected');
         if (failure) throw failure.reason;
       }, active);
     }
+    return missingDeletes;
   },
 
   /**
