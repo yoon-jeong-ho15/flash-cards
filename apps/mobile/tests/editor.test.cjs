@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
+const { harness, user, accountKey, emptySnapshot } = require('./helpers.cjs');
 const generated = fs.readFileSync(path.join(__dirname, '../src/editor/document.generated.ts'), 'utf8');
 const html = JSON.parse(generated.slice(generated.indexOf(' = ') + 3).trim().replace(/;$/, ''));
 function document() {
@@ -37,6 +38,53 @@ test('offline editable Tiptap round-trips web HTML and explicitly flushes the cu
     window.nativeReceive({ type: 'get', id: 'reload' });
     assert.equal(messages.find(m => m.id === 'reload').html, '<p>최신 원본</p>');
   } finally { close(); }
+});
+
+test('an editor-serialized image URL round-trips through offline reopen and save', async () => {
+  const remote = 'https://firebasestorage.googleapis.com/v0/b/demo/o/cards%2Fimage.webp?alt=media&token=a%26b&size=2';
+  const escaped = remote.replaceAll('&', '&amp;');
+  const original = 'data:image/webp;base64,YWJj';
+  const seedEditor = document();
+  let serialized;
+  try {
+    seedEditor.window.nativeReceive({ type: 'init', editable: true, html: `<img src="${remote}" alt="질문">` });
+    seedEditor.window.nativeReceive({ type: 'get', id: 'first-save' });
+    serialized = seedEditor.messages.find(message => message.id === 'first-save').html;
+    assert.ok(serialized.includes(`src="${escaped}"`));
+  } finally { seedEditor.close(); }
+
+  const account = user('a');
+  const map = new Map([[accountKey(account.uid), JSON.stringify({
+    ...emptySnapshot(), imageCache: { [remote]: original },
+  })]]);
+  const openOffline = async () => {
+    const { store } = harness({}, map);
+    store.setOnline(false);
+    await store.switchUser(account);
+    return store;
+  };
+  const initial = await openOffline();
+  await initial.saveDeck(undefined, { title: '오프라인 세트' }, [{ termRichText: serialized, definitionRichText: '' }]);
+
+  for (let pass = 0; pass < 2; pass++) {
+    const store = await openOffline();
+    const card = store.getState().cards[0];
+    const editor = document();
+    try {
+      editor.window.nativeReceive({ type: 'init', editable: true, html: store.displayHTML(card.termRichText) });
+      assert.equal(editor.window.document.querySelector('#content img').getAttribute('src'), original);
+      editor.window.nativeReceive({ type: 'get', id: 'offline-save' });
+      const localHtml = editor.messages.find(message => message.id === 'offline-save').html;
+      const remoteHtml = store.canonicalHTML(localHtml);
+      assert.ok(remoteHtml.includes(`src="${escaped}"`));
+      assert.doesNotMatch(remoteHtml, /&amp;amp;/);
+      assert.equal(store.canonicalHTML(remoteHtml), remoteHtml);
+      const template = editor.window.document.createElement('template');
+      template.innerHTML = remoteHtml;
+      assert.equal(template.content.querySelector('img').getAttribute('src'), remote);
+      await store.updateCard(card.id, { termRichText: remoteHtml });
+    } finally { editor.close(); }
+  }
 });
 test('study faces switch typography without resetting rich content or image interaction', () => {
   const { window, messages, close } = document();

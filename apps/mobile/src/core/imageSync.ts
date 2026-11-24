@@ -1,18 +1,41 @@
+import { Parser } from 'htmlparser2';
 import type { Card } from './types';
 
 export const imageFields = ['frontImageUrl', 'backImageUrl', 'imageUrl'] as const;
 const htmlFields = ['termRichText', 'definitionRichText'] as const;
-// Match complete tags/attributes, so data-src and text containing the same URL stay intact.
-const tags = /<img\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
-const attributes = /(\s+)([^\s=/>]+)(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
 export function mapSources(html: string, map: (url: string) => string): string {
-  return html.replace(tags, tag => tag.replace(attributes, (all, space, name, equals, double, single, bare) => {
-    if (name.toLowerCase() !== 'src') return all;
-    const value = double ?? single ?? bare;
-    const next = map(value);
-    const quote = double !== undefined ? '"' : single !== undefined ? "'" : '"';
-    return next === value ? all : `${space}${name}${equals}${quote}${next}${quote}`;
-  }));
+  let isImage = false;
+  let source: { url: string; start: number; end: number; quote: string | null | undefined } | undefined;
+  const parts: string[] = [];
+  let offset = 0;
+  const parser = new Parser({
+    onopentagname(name) {
+      isImage = name === 'img';
+      source = undefined;
+    },
+    onattribute(name, url, quote) {
+      if (isImage && name === 'src' && !source) {
+        source = { url, quote, start: parser.startIndex, end: parser.endIndex };
+      }
+    },
+    onopentag(name) {
+      if (name !== 'img' || !source || source.quote === undefined) return;
+      // The parser has decoded HTML character references in the attribute once.
+      const next = map(source.url);
+      if (next === source.url) return;
+
+      // Replace just the value's original span, preserving surrounding markup.
+      let start = html.indexOf('=', source.start) + 1;
+      while (/[\t\n\f\r ]/.test(html.charAt(start))) start++;
+      const quote = source.quote ?? '"';
+      const escaped = next.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const value = quote === "'" ? escaped.replace(/'/g, '&#39;') : escaped.replace(/"/g, '&quot;');
+      parts.push(html.slice(offset, start), quote, value, quote);
+      offset = source.end;
+    },
+  });
+  parser.end(html);
+  return parts.length ? parts.join('') + html.slice(offset) : html;
 }
 export function cardDataImages(card: Card): string[] {
   const urls = new Set<string>();
