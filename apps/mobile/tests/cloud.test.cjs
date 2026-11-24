@@ -2,8 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const esbuild = require('esbuild');
+const { firestoreFixture, registerLearnedSyncTests, seedData } = require('../../../tests/learned-sync-fixture.cjs');
+const { harness, user, accountKey, emptySnapshot } = require('./helpers.cjs');
 
-async function fixture() {
+async function fixture(firestoreOverride) {
   const context = { uid: 'a', batches: [], uploads: [], queries: [], records: {}, objects: new Set() };
   const native = { auth: { get currentUser() { return { uid: context.uid }; } }, configured: true, db: {}, storage: {} };
   const firestore = {
@@ -24,7 +26,7 @@ async function fixture() {
     } }],
   });
   const module = { exports: {} };
-  new Function('require', 'module', 'exports', compiled.outputFiles[0].text)(id => ({ './firebase': native, 'firebase/firestore': firestore, 'firebase/storage': storage, 'expo-crypto': { CryptoDigestAlgorithm: { SHA256: 'SHA-256' }, digest: (algorithm, bytes) => require('node:crypto').webcrypto.subtle.digest(algorithm, bytes) } })[id], module, module.exports);
+  new Function('require', 'module', 'exports', compiled.outputFiles[0].text)(id => ({ './firebase': native, 'firebase/firestore': firestoreOverride ?? firestore, 'firebase/storage': storage, 'expo-crypto': { CryptoDigestAlgorithm: { SHA256: 'SHA-256' }, digest: (algorithm, bytes) => require('node:crypto').webcrypto.subtle.digest(algorithm, bytes) } })[id], module, module.exports);
   return { cloud: module.exports.cloud, context };
 }
 test('native cloud transport uses web collections, splits batches at 400, clears removed optional fields and checks the active account', async () => {
@@ -136,4 +138,41 @@ test('uploaded object is reused after local conversion persistence fails and the
   await restarted.store.switchUser(user('a')); restarted.cloud.available = true; await restarted.store.sync(false);
   assert.equal(context.uploads.length, 1); assert.match(restarted.store.getState().cards[0].frontImageUrl, /^https:/);
   assert.equal(Object.keys(restarted.store.getState().outbox).length, 0);
+});
+
+registerLearnedSyncTests(async ({ legacy = false } = {}) => {
+  const data = seedData();
+  const server = firestoreFixture(data);
+  const { cloud } = await fixture(server.sdk);
+  const snapshot = { ...emptySnapshot(), ...data };
+  if (legacy) {
+    snapshot.cards[2].termRichText = '<p>legacy queued edit</p>';
+    snapshot.outbox = { 'cards:c3': { kind: 'cards', id: 'c3', revision: 1, deleted: false } };
+    snapshot.revision = 1;
+  }
+  const map = new Map([[accountKey('a'), JSON.stringify(snapshot)]]);
+  let h;
+  const reload = async () => {
+    h = harness({ ...cloud, available: false }, map);
+    await h.store.switchUser(user('a'));
+  };
+  await reload();
+  return {
+    server, reload,
+    rate: (id, learned) => h.store.setLearned(id, learned),
+    edit: (id, termRichText) => h.store.updateCard(id, { termRichText }),
+    editInDeck: (id, termRichText) => h.store.saveDeck('d1', { title: 'deck' },
+      h.store.getState().cards.map(card => card.id === id ? { ...card, termRichText } : card)),
+    create: async (termRichText) => {
+      const deckId = await h.store.saveDeck(undefined, { title: 'new deck' }, [{ termRichText, definitionRichText: '' }]);
+      return h.store.getState().cards.find(card => card.deckId === deckId).id;
+    },
+    connect: () => {
+      h.cloud.available = true;
+      return h.store.sync();
+    },
+    pending: (id) => Boolean(h.store.getState().outbox[`cards:${id}`]),
+    status: () => h.store.getState().status,
+    cards: () => h.store.getState().cards,
+  };
 });

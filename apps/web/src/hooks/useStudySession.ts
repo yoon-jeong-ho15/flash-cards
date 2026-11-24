@@ -386,9 +386,6 @@ export const useStudySession = ({
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleNext();
-      } else if (e.key === '1' || e.key === '2') {
-        e.preventDefault();
-        handleRate(e.key === '2');
       } else if (e.key === 'Enter') {
         e.preventDefault();
         handleToggleKnow();
@@ -414,7 +411,6 @@ export const useStudySession = ({
     handlePrevious,
     handleNext,
     handleToggleKnow,
-    handleRate,
     onExit,
   ]);
 

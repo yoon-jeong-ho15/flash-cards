@@ -53,14 +53,26 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
               return latest;
             });
             if (!active()) return;
-            // Also migrate legacy local images that were never put in the outbox.
-            const images = new Set(snapshot.cards.flatMap(cardDataImages));
+            // Also migrate unqueued legacy images, but never promote a progress-only
+            // write into a full card write based on its cached images.
+            const learnedOnly = new Set(snapshot.pendingSync.learnedOnlyCardIds);
+            const refreshCards = new Set<string>();
+            const images = new Set<string>();
+            for (const card of snapshot.cards) {
+              const sources = cardDataImages(card);
+              if (learnedOnly.has(card.id)) {
+                if (sources.length) refreshCards.add(card.id);
+              } else {
+                for (const source of sources) images.add(source);
+              }
+            }
             if (images.size) {
               for (const original of images) {
                 if (!active()) return;
                 const url = await uploadDataImage(original, uid!, active);
                 await transactAccount(uid, latest => {
-                  const cards = latest.cards.map(card => replaceCardImage(card, original, url));
+                  const progress = new Set(latest.pendingSync.learnedOnlyCardIds);
+                  const cards = latest.cards.map(card => progress.has(card.id) ? card : replaceCardImage(card, original, url));
                   if (cards.every((card, i) => card === latest.cards[i])) return null;
                   const after = { ...latest, cards };
                   const mutationRevision = latest.mutationRevision + 1;
@@ -74,9 +86,23 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
             if (hasPending(snapshot.pendingSync)) {
               await flashcardService.commitChanges(snapshot, uid!, active);
               if (!active()) return;
-              await transactAccount(uid, latest => ({ ...latest,
-                ...acknowledge(latest.pendingSync, latest.pendingVersions, snapshot.pendingSync, snapshot.pendingVersions),
-              }), publish, active);
+              // Refresh stale images before acknowledgement, otherwise the next
+              // pass would treat them as unqueued legacy images and push the old card.
+              const cloud = refreshCards.size ? await flashcardService.fetchAllData(uid!, true) : null;
+              if (!active()) return;
+              if (refreshCards.size && !cloud) throw new Error('최신 카드 내용을 확인할 수 없습니다. 다시 동기화해 주세요.');
+              const remoteCards = cloud && new Map(cloud.cards.map(card => [card.id, card]));
+              await transactAccount(uid, latest => {
+                const cards = remoteCards ? latest.cards.flatMap(card => {
+                  const token = `cards:${card.id}`;
+                  if (!refreshCards.has(card.id) || latest.pendingVersions[token] !== snapshot.pendingVersions[token]) return [card];
+                  const remote = remoteCards.get(card.id);
+                  return remote ? [remote] : [];
+                }) : latest.cards;
+                return { ...latest, cards,
+                  ...acknowledge(latest.pendingSync, latest.pendingVersions, snapshot.pendingSync, snapshot.pendingVersions),
+                };
+              }, publish, active);
               continue;
             }
             if (!pullRequested) break;
@@ -122,7 +148,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
         if (active()) void run(false);
       } catch (error) { if (active()) set({ storageError: message(error) }); }
     },
-    applyChanges: async change => {
+    applyChanges: async (change, cardChange) => {
       const { uid, active } = sessionContext();
       try {
         await transactAccount(uid, latest => {
@@ -130,7 +156,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
           const after = { ...latest, ...change(before) };
           const mutationRevision = latest.mutationRevision + 1;
           return { ...after, mutationRevision,
-            ...enqueueChanges(latest, after, latest.pendingSync, latest.pendingVersions, mutationRevision) };
+            ...enqueueChanges(latest, after, latest.pendingSync, latest.pendingVersions, mutationRevision, cardChange) };
         }, publish, active);
         if (!active()) throw new Error('계정이 변경되었습니다.');
         set({ syncStatus: online() ? 'syncing' : 'offline', syncError: null });

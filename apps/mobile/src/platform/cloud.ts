@@ -1,6 +1,6 @@
 import { digest, CryptoDigestAlgorithm } from 'expo-crypto';
 import { cardDataImages, replaceCardImage } from '../core/imageSync';
-import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, documentId, getDocs, getDocsFromServer, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, configured, db, storage } from './firebase';
 import { getDownloadURL, ref, uploadBytesResumable, type UploadTaskSnapshot } from 'firebase/storage';
 import type { Card, Data, Kind, Transport, ImageUpload } from '../core/types';
@@ -10,6 +10,33 @@ async function bounded<T>(work: PromiseLike<T>, milliseconds = 20000): Promise<T
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([work, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('연결 시간이 초과되었습니다. 다시 동기화해 주세요.')), milliseconds); })]); }
   finally { clearTimeout(timer); }
+}
+
+// A timed-out write may still settle. Wait for it before submitting a retry or a newer edit.
+let outstandingWrite: Promise<void> = Promise.resolve();
+async function commitWrite(write: () => Promise<void>, active: () => boolean) {
+  await bounded(outstandingWrite);
+  if (!active()) throw new Error('계정이 변경되었습니다.');
+  const work = write();
+  outstandingWrite = work.catch(() => {});
+  await bounded(work);
+}
+
+async function updateLearned(id: string, learned: boolean, uid: string, active: () => boolean) {
+  try {
+    await updateDoc(doc(db!, names.cards, id), { learned });
+  } catch (error) {
+    if (!active()) throw new Error('계정이 변경되었습니다.');
+    const code = (error as { code?: string }).code;
+    if (code === 'not-found') return;
+    if (code !== 'permission-denied') throw error;
+
+    // Missing documents can also be denied by the ownership rule. Confirm on the server.
+    const cards = collection(db!, names.cards);
+    const owned = await getDocsFromServer(query(cards, where('userId', '==', uid), where(documentId(), '==', id)));
+    if (!active()) throw new Error('계정이 변경되었습니다.');
+    if (!owned.empty) throw error;
+  }
 }
 export async function uploadImage(dataUrl: string, uid: string, active: () => boolean): Promise<string> {
   if (!storage || !active() || auth?.currentUser?.uid !== uid) throw new Error('로그인 상태를 확인해 주세요.');
@@ -53,13 +80,21 @@ export const cloud: Transport = {
   available: configured,
   async push(uid, snapshot, active, onImage) {
     if (!db) throw new Error('Firebase 설정을 확인해 주세요.');
+    const canWrite = () => active() && auth?.currentUser?.uid === uid;
     const cache = new Map<string, string>(Object.entries(snapshot.imageCache || {}).map(([url, data]) => [data, url]));
-    const operations = Object.values(snapshot.outbox);
+    const learned: Card[] = [];
+    const operations = Object.values(snapshot.outbox).filter(operation => {
+      if (operation.kind !== 'cards' || operation.deleted || !operation.learnedOnly) return true;
+      const card = snapshot.cards.find(card => card.id === operation.id);
+      if (!card) throw new Error('동기화할 자료를 찾을 수 없습니다.');
+      learned.push(card);
+      return false;
+    });
     // Keep the same 400-operation limit as the web app. Replays are idempotent.
     for (let i = 0; i < operations.length; i += 400) {
       const batch = writeBatch(db);
       for (const operation of operations.slice(i, i + 400)) {
-        if (!active() || auth?.currentUser?.uid !== uid) throw new Error('계정이 변경되었습니다.');
+        if (!canWrite()) throw new Error('계정이 변경되었습니다.');
         const target = doc(db, names[operation.kind], operation.id);
         if (operation.deleted) { batch.delete(target); continue; }
         const item = snapshot[operation.kind].find(item => item.id === operation.id);
@@ -70,8 +105,16 @@ export const cloud: Transport = {
         for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
         batch.set(target, data, { merge: true });
       }
-      if (!active() || auth?.currentUser?.uid !== uid) throw new Error('계정이 변경되었습니다.');
-      await bounded(batch.commit());
+      await commitWrite(() => batch.commit(), canWrite);
+    }
+    for (let i = 0; i < learned.length; i += 25) {
+      const chunk = learned.slice(i, i + 25);
+      await commitWrite(async () => {
+        const results = await Promise.allSettled(chunk.map(card =>
+          updateLearned(card.id, Boolean(card.learned), uid, canWrite)));
+        const failure = results.find(result => result.status === 'rejected');
+        if (failure) throw failure.reason;
+      }, canWrite);
     }
   },
   async pull(uid) {

@@ -1,8 +1,11 @@
 import {
   collection,
   doc,
+  documentId,
   getDocs,
+  getDocsFromServer,
   setDoc,
+  updateDoc,
   deleteDoc,
   writeBatch,
   query,
@@ -18,14 +21,34 @@ import { bounded, cardDataImages, validateDocument } from './imageSync';
 // A timed-out Firestore commit cannot be cancelled. Do not submit a newer write
 // until it settles, so a late old request cannot overtake the retry/delete.
 let outstandingCommit: Promise<void> = Promise.resolve();
-async function commitBatch(batch: WriteBatch, active: () => boolean = () => true): Promise<void> {
+async function commitWrite(write: () => Promise<void>, active: () => boolean): Promise<void> {
   await bounded(outstandingCommit);
   if (!active()) throw new Error('Authentication session changed');
-  const work = batch.commit();
+  const work = write();
   outstandingCommit = work.catch(() => {});
   await bounded(work);
 }
 
+function commitBatch(batch: WriteBatch, active: () => boolean = () => true) {
+  return commitWrite(() => batch.commit(), active);
+}
+
+async function updateLearned(id: string, learned: boolean, userId: string, active: () => boolean) {
+  try {
+    await updateDoc(doc(db!, 'flashcard_cards', id), { learned });
+  } catch (error) {
+    if (!active()) throw new Error('Authentication session changed');
+    const code = (error as { code?: string }).code;
+    if (code === 'not-found') return;
+    if (code !== 'permission-denied') throw error;
+
+    // Missing documents can also be denied by the ownership rule. Confirm on the server.
+    const cards = collection(db!, 'flashcard_cards');
+    const owned = await getDocsFromServer(query(cards, where('userId', '==', userId), where(documentId(), '==', id)));
+    if (!active()) throw new Error('Authentication session changed');
+    if (!owned.empty) throw error;
+  }
+}
 
 /**
  * Firestore의 WriteBatch 500개 제한을 안전하게 처리하기 위한 청크 커밋 헬퍼
@@ -62,6 +85,9 @@ export const flashcardService = {
     isActive: () => boolean): Promise<void> {
     if (!db || !isFirebaseConfigured) throw new Error('Firebase is unavailable');
     const operations: Array<(batch: WriteBatch) => void> = [];
+    const learnedOnlyIds = new Set(snapshot.pendingSync.learnedOnlyCardIds);
+    const learned: Card[] = [];
+    const active = () => isActive() && auth?.currentUser?.uid === userId;
     const names = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
     for (const [kind, upserts, deletes] of collections) {
       for (const id of snapshot.pendingSync[deletes]) {
@@ -70,6 +96,10 @@ export const flashcardService = {
       const ids = new Set(snapshot.pendingSync[upserts]);
       for (const item of snapshot[kind]) {
         if (!ids.has(item.id)) continue;
+        if (kind === 'cards' && learnedOnlyIds.has(item.id)) {
+          learned.push(item as Card);
+          continue;
+        }
         if (kind === 'cards' && cardDataImages(item as Card).length) {
           throw new Error('이미지 업로드가 완료되지 않았습니다. 연결을 확인한 후 다시 동기화해 주세요. 원본은 보관됩니다.');
         }
@@ -84,24 +114,34 @@ export const flashcardService = {
       }
     }
     for (let i = 0; i < operations.length; i += 400) {
-      if (!isActive() || auth?.currentUser?.uid !== userId) throw new Error('Authentication session changed');
+      if (!active()) throw new Error('Authentication session changed');
       const batch = writeBatch(db);
       operations.slice(i, i + 400).forEach(operation => operation(batch));
-      await commitBatch(batch, () => isActive() && auth?.currentUser?.uid === userId);
+      await commitBatch(batch, active);
+    }
+    for (let i = 0; i < learned.length; i += 25) {
+      const chunk = learned.slice(i, i + 25);
+      await commitWrite(async () => {
+        const results = await Promise.allSettled(chunk.map(card =>
+          updateLearned(card.id, Boolean(card.learned), userId, active)));
+        const failure = results.find(result => result.status === 'rejected');
+        if (failure) throw failure.reason;
+      }, active);
     }
   },
 
   /**
    * Firebase Firestore로부터 현재 사용자의 모든 폴더, 덱, 카드 데이터를 조회합니다.
    */
-  async fetchAllData(userId: string): Promise<{ folders: Folder[]; decks: Deck[]; cards: Card[] } | null> {
+  async fetchAllData(userId: string, fromServer = false): Promise<{ folders: Folder[]; decks: Deck[]; cards: Card[] } | null> {
     if (!db || !isFirebaseConfigured || !userId) return null;
 
     try {
+      const read = fromServer ? getDocsFromServer : getDocs;
       const [foldersSnap, decksSnap, cardsSnap] = await bounded(Promise.all([
-        getDocs(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
-        getDocs(query(collection(db, 'flashcard_decks'), where('userId', '==', userId))),
-        getDocs(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
+        read(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
+        read(query(collection(db, 'flashcard_decks'), where('userId', '==', userId))),
+        read(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
       ]));
 
       const folders: Folder[] = foldersSnap.docs

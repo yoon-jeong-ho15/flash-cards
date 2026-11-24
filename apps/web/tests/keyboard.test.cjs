@@ -73,12 +73,16 @@ test('study shortcuts preserve native button activation, select inputs, and hand
       true,
       'study Enter shortcut still marks the card'
     );
+    dispatch('1', 'DIV', { preventDefault: () => assert.fail('1 must be ignored') });
+    await tick();
+    assert.equal(render().currentIndex, 0);
+    assert.equal(h.store.getState().cards[0].learned, true);
     dispatch('ArrowRight');
     assert.equal(render().currentIndex, 1, 'study navigation shortcut still works');
-    dispatch('2');
+    dispatch('2', 'DIV', { preventDefault: () => assert.fail('2 must be ignored') });
     await tick();
-    assert.equal(render().isFinishModalOpen, true, 'rating the last card opens the result');
-    assert.equal(h.store.getState().cards[1].learned, true);
+    assert.equal(render().isFinishModalOpen, false);
+    assert.equal(h.store.getState().cards[1].learned, false);
   } finally {
     renderer.cleanup();
   }

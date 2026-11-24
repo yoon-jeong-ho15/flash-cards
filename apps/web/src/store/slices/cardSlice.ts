@@ -22,7 +22,7 @@ export const createCardSlice: StateCreator<FlashcardStoreState, [], [], CardSlic
     if (!card) throw new Error('카드가 다른 탭에서 삭제되었습니다.');
     return { cards: state.cards.map(c => c.id === id ? { ...c, ...updates } : c),
       decks: card ? touchDeck(state.decks, card.deckId) : state.decks };
-  }),
+  }, Object.keys(updates).length === 1 && typeof updates.learned === 'boolean' ? 'learned' : undefined),
   deleteCard: async id => {
     await get().applyChanges(state => {
       const card = state.cards.find(c => c.id === id);
@@ -89,8 +89,8 @@ export const createCardSlice: StateCreator<FlashcardStoreState, [], [], CardSlic
   },
   setCardLearned: (id, learned) => get().applyChanges(state => ({
     cards: state.cards.map(card => card.id === id ? { ...card, learned } : card),
-  })),
+  }), 'learned'),
   resetDeckProgress: deckId => get().applyChanges(state => ({
     cards: state.cards.map(card => card.deckId === deckId ? { ...card, learned: false } : card),
-  })),
+  }), 'learned'),
 });

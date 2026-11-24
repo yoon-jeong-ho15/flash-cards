@@ -1,5 +1,5 @@
-import { accountKey, emptySnapshot, type CardInput, type Data, type DeckInput, type Draft, type Kind,
-  type Preferences, type Snapshot, type State, type Storage, type Transport, type UserProfile } from './types';
+import { accountKey, emptySnapshot, type Card, type CardInput, type Data, type DeckInput, type Draft, type Kind,
+  type Operation, type Preferences, type Snapshot, type State, type Storage, type Transport, type UserProfile } from './types';
 import { mergeCardImage, mapSources } from './imageSync';
 import { hasContent } from './content';
 
@@ -53,7 +53,7 @@ export class FlashcardStore {
     if (online) void this.sync();
   };
   private canSync() { return this.state.ready && this.state.online && this.transport.available && Boolean(this.state.user); }
-  private mutate<T>(change: (s: State) => { data: Data; result: T }): Promise<T> {
+  private mutate<T>(change: (s: State) => { data: Data; result: T }, cardChange?: 'learned'): Promise<T> {
     const session = this.state.session;
     return this.serial(async () => {
       const before = this.state;
@@ -65,7 +65,22 @@ export class FlashcardStore {
         if (data[kind] === before[kind]) continue;
         const old = new Map<string, unknown>(before[kind].map(item => [item.id, item]));
         const ids = new Set(data[kind].map(item => item.id));
-        for (const item of data[kind]) if (old.get(item.id) !== item) outbox[`${kind}:${item.id}`] = { kind, id: item.id, revision, deleted: false };
+        for (const item of data[kind]) {
+          const previous = old.get(item.id);
+          if (previous === item) continue;
+          const key = `${kind}:${item.id}`;
+          const queued = outbox[key];
+          const operation: Operation = { kind, id: item.id, revision, deleted: false };
+          if (kind === 'cards' && previous) {
+            const oldCard = previous as Card;
+            const card = item as Card;
+            const sameContent = (Object.keys({ ...oldCard, ...card }) as (keyof Card)[])
+              .every(key => key === 'learned' || Object.is(oldCard[key], card[key]));
+            if (sameContent && oldCard.learned === card.learned && cardChange !== 'learned') continue;
+            if (sameContent && (!queued || queued.learnedOnly)) operation.learnedOnly = true;
+          }
+          outbox[key] = operation;
+        }
         for (const id of old.keys()) if (!ids.has(id)) outbox[`${kind}:${id}`] = { kind, id, revision, deleted: true };
       }
       const next: Snapshot = { folders: data.folders, decks: data.decks, cards: data.cards,
@@ -137,14 +152,14 @@ export class FlashcardStore {
     if (!hasContent(next)) throw new Error('앞면 또는 뒷면에 내용을 입력해 주세요.');
     return { data: { ...s, cards: s.cards.map(c => c.id === id ? next : c),
       decks: s.decks.map(d => d.id === card.deckId ? { ...d, updatedAt: Date.now() } : d) }, result: undefined };
-  });
+  }, Object.keys(input).length === 1 && typeof input.learned === 'boolean' ? 'learned' : undefined);
   deleteCard = (id: string) => this.mutate(s => {
     const card = s.cards.find(c => c.id === id);
     return { data: { ...s, cards: s.cards.filter(c => c.id !== id),
       decks: s.decks.map(d => d.id === card?.deckId ? { ...d, updatedAt: Date.now() } : d) }, result: undefined };
   });
-  setLearned = (id: string, learned: boolean) => this.mutate(s => ({ data: { ...s, cards: s.cards.map(c => c.id === id ? { ...c, learned } : c) }, result: undefined }));
-  resetProgress = (id: string) => this.mutate(s => ({ data: { ...s, cards: s.cards.map(c => c.deckId === id ? { ...c, learned: false } : c) }, result: undefined }));
+  setLearned = (id: string, learned: boolean) => this.mutate(s => ({ data: { ...s, cards: s.cards.map(c => c.id === id ? { ...c, learned } : c) }, result: undefined }), 'learned');
+  resetProgress = (id: string) => this.mutate(s => ({ data: { ...s, cards: s.cards.map(c => c.deckId === id ? { ...c, learned: false } : c) }, result: undefined }), 'learned');
   setPreferences = (update: Partial<Preferences>) => {
     const session = this.state.session;
     return this.serial(async () => {

@@ -3,7 +3,7 @@ export type { Card, Deck, Folder, UserProfile, DeckSortOption };
 
 export interface Data { folders: Folder[]; decks: Deck[]; cards: Card[] }
 export type Kind = keyof Data;
-export interface Operation { kind: Kind; id: string; revision: number; deleted: boolean }
+export interface Operation { kind: Kind; id: string; revision: number; deleted: boolean; learnedOnly?: true }
 export interface Preferences {
   collectionLayout?: 'grid' | 'list';
   mockDataVersion?: number;

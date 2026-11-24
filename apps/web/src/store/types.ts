@@ -6,6 +6,8 @@ export interface PendingSync {
   folderIds: string[];
   deckIds: string[];
   cardIds: string[];
+  /** Subset of cardIds. Older snapshots omit this and retain full writes. */
+  learnedOnlyCardIds?: string[];
   deletedFolderIds: string[];
   deletedDeckIds: string[];
   deletedCardIds: string[];
@@ -37,7 +39,7 @@ export interface SyncSlice {
   sessionVersion: number;
   mutationRevision: number;
   pendingVersions: Record<string, number>;
-  applyChanges: (change: (state: FlashcardStoreState) => Partial<AccountData>) => Promise<void>;
+  applyChanges: (change: (state: FlashcardStoreState) => Partial<AccountData>, cardChange?: 'learned') => Promise<void>;
   refreshAccount: () => Promise<void>;
   storageError: string | null;
   syncStatus: SyncStatus;

@@ -273,9 +273,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
             className="h-14"
           >
             다시 볼게요
-            <kbd className="ml-2 hidden rounded border border-primary/15 px-1.5 py-0.5 text-[10px] sm:inline">
-              1
-            </kbd>
           </Button>
           <Button
             size="lg"
@@ -291,15 +288,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
             className="h-14"
           >
             {session.isCurrentCardLearned ? '몰라요' : '알아요'}
-            <kbd
-              className={`ml-2 hidden rounded border px-1.5 py-0.5 text-[10px] sm:inline ${
-                session.isCurrentCardLearned
-                  ? 'border-primary/15'
-                  : 'border-white/25'
-              }`}
-            >
-              2
-            </kbd>
           </Button>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
