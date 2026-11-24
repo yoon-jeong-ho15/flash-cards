@@ -93,6 +93,37 @@ test('navigation flushes a draft but saving does not recreate it on unmount', as
   assert.equal(saved.store.getState().decks[0].title, 'saved');
 });
 
+test('deck saves retain image-only cards and exclude empty cards', async () => {
+  const h = editorFixture();
+  const accountKey = 'flashcards_account_v1:user:a';
+  try {
+    let editor = h.render();
+    editor.setTitle('edited deck');
+    for (const index of [0, 1]) {
+      editor.handleUpdateCard(index, 'termRichText', '<p>&nbsp;</p>');
+      editor.handleUpdateCard(index, 'definitionRichText', '<p><br></p>');
+    }
+
+    const before = h.storage.get(accountKey);
+    await h.render().handleSave();
+    editor = h.render();
+    assert.ok(editor.errors.general);
+    assert.equal(h.storage.get(accountKey), before);
+
+    const imageUrl = 'https://example.com/legacy.png';
+    editor.handleUpdateCard(0, 'imageUrl', imageUrl);
+    await h.render().handleSave();
+    const { cards, decks } = JSON.parse(h.storage.get(accountKey));
+    assert.equal(decks[0].title, 'edited deck');
+    assert.deepEqual(cards.map(({ id }) => id), ['c1']);
+    assert.equal(cards[0].termRichText, '<p>&nbsp;</p>');
+    assert.equal(cards[0].definitionRichText, '<p><br></p>');
+    assert.equal(cards[0].imageUrl, imageUrl);
+  } finally {
+    h.renderer.cleanup();
+  }
+});
+
 test('deleting one duplicated card retains the shared image on the other', async () => {
   let deletions = 0;
   const h = createHarness({}, new Map(), {

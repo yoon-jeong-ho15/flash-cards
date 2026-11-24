@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card as CardType } from '../../types';
 import { Modal } from '../common/Modal';
-import { RichTextEditor } from '../editor/RichTextEditor';
-import { isRichTextEmpty } from '../../utils/cardValidation';
+import { CardEditorFields } from '../editor/CardEditorFields';
+import { isCardItemEmpty } from '../../utils/cardValidation';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Pencil, Save, Trash2, AlertCircle } from 'lucide-react';
 
 interface EditCardModalProps {
@@ -35,21 +34,19 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
     }
   }, [isOpen, card]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  if (!card) return null;
 
-    if (isRichTextEmpty(term) && isRichTextEmpty(definition)) {
-      setErrorMessage('앞면 또는 뒷면 내용 중 최소 하나는 입력해야 합니다.');
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const updates = { termRichText: term, definitionRichText: definition };
+    if (isCardItemEmpty({ ...card, ...updates })) {
+      setErrorMessage('앞면 또는 뒷면에 내용이나 이미지를 추가해 주세요.');
       return;
     }
 
-    onSave({
-      termRichText: term,
-      definitionRichText: definition,
-    });
+    onSave(updates);
   };
-
-  if (!card) return null;
 
   return (
     <Modal
@@ -67,52 +64,31 @@ export const EditCardModal: React.FC<EditCardModalProps> = ({
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* 앞면 편집 영역 */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-              <span className="flex items-center gap-1.5">
-                앞면 <span className="text-muted-foreground font-normal">(개념 / 질문)</span>
-              </span>
-              <Badge variant="secondary" className="text-[10px] font-medium py-0">
-                앞면
-              </Badge>
-            </div>
-            <RichTextEditor
-              ariaLabel="학습 카드 앞면 수정"
-              value={term}
-              onChange={(html) => {
-                setTerm(html);
-                if (errorMessage) setErrorMessage(null);
-              }}
-              placeholder="단어, 질문 또는 핵심 키워드를 입력하세요..."
-              height="150px"
-              autoFocus
-            />
-          </div>
-
-          {/* 뒷면 편집 영역 */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-              <span className="flex items-center gap-1.5">
-                뒷면 <span className="text-muted-foreground font-normal">(정의 / 해설)</span>
-              </span>
-              <Badge variant="warning" className="text-[10px] font-medium py-0">
-                뒷면
-              </Badge>
-            </div>
-            <RichTextEditor
-              ariaLabel="학습 카드 뒷면 수정"
-              value={definition}
-              onChange={(html) => {
-                setDefinition(html);
-                if (errorMessage) setErrorMessage(null);
-              }}
-              placeholder="상세 설명, 해설, 정답을 입력하세요..."
-              height="150px"
-            />
-          </div>
-        </div>
+        <CardEditorFields
+          front={{
+            label: '앞면',
+            hint: '(개념 / 질문)',
+            ariaLabel: '학습 카드 앞면 수정',
+            value: term,
+            onChange: (html) => {
+              setTerm(html);
+              setErrorMessage(null);
+            },
+          }}
+          back={{
+            label: '뒷면',
+            hint: '(정의 / 해설)',
+            ariaLabel: '학습 카드 뒷면 수정',
+            value: definition,
+            onChange: (html) => {
+              setDefinition(html);
+              setErrorMessage(null);
+            },
+            placeholder: '상세 설명, 해설, 정답을 입력하세요...',
+          }}
+          height="150px"
+          autoFocusFront
+        />
 
         {/* 하단 모달 액션 버튼 바 */}
         <div className="flex items-center justify-between pt-3 border-t border-border mt-4">

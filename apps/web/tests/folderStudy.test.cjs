@@ -99,6 +99,74 @@ test('folder progress and edits update the original deck without resetting the s
   }
 });
 
+test('study edit form saves image-only cards and rejects completely empty cards', async (t) => {
+  for (const imageField of ['frontImageUrl', 'backImageUrl', 'imageUrl', null]) {
+    await t.test(imageField ?? 'no image', async () => {
+      const h = folderSession();
+      const modalRenderer = hookRenderer();
+      try {
+        const imageUrl = 'https://example.com/attachment.png';
+        const accountKey = 'flashcards_account_v1:guest';
+        let session = h.render();
+        const { id } = session.currentCard;
+        if (imageField) {
+          await h.store.getState().updateCard(id, { [imageField]: imageUrl });
+        }
+        session.openEditModal();
+        session = h.render();
+
+        const loader = createHarness({}, h.storage, {
+          react: modalRenderer.react,
+          'lucide-react': { Pencil: 'svg', Save: 'svg', Trash2: 'svg', AlertCircle: 'svg' },
+          '@/components/ui/button': { Button: 'button' },
+          '@/components/ui/badge': { Badge: 'span' },
+          [path.join(h.root, 'components/common/Modal.tsx')]: { Modal: 'dialog' },
+          [path.join(h.root, 'components/editor/RichTextEditor.tsx')]: { RichTextEditor: 'textarea' },
+        });
+        const { EditCardModal } = loader.load(path.join(h.root, 'components/study/EditCardModal.tsx'));
+        const { CardEditorFields } = loader.load(path.join(h.root, 'components/editor/CardEditorFields.tsx'));
+        let save;
+        const renderForm = () => modalRenderer.render(() =>
+          EditCardModal({
+            isOpen: session.isEditModalOpen,
+            onClose: session.closeEditModal,
+            card: session.currentCard,
+            onSave: (updates) => { save = session.handleUpdateCurrentCard(updates); },
+          })
+        ).props.children;
+
+        const fields = renderForm().props.children.find((child) => child?.type === CardEditorFields);
+        const [frontEditor, backEditor] = CardEditorFields(fields.props).props.children.map(
+          (field) => field.props.children[1]
+        );
+        frontEditor.props.onChange('<p>&nbsp;</p>');
+        backEditor.props.onChange('<p><br></p>');
+
+        const before = h.storage.get(accountKey);
+        renderForm().props.onSubmit({ preventDefault() {} });
+        if (imageField) {
+          assert.ok(save);
+          await save;
+          const { cards } = JSON.parse(h.storage.get(accountKey));
+          const saved = cards.find((card) => card.id === id);
+          assert.equal(saved.termRichText, '<p>&nbsp;</p>');
+          assert.equal(saved.definitionRichText, '<p><br></p>');
+          assert.equal(saved[imageField], imageUrl);
+          assert.equal(h.render().isEditModalOpen, false);
+        } else {
+          assert.equal(save, undefined);
+          assert.equal(h.storage.get(accountKey), before);
+          assert.ok(renderForm().props.children[0]);
+          assert.equal(h.render().isEditModalOpen, true);
+        }
+      } finally {
+        modalRenderer.cleanup();
+        h.cleanup();
+      }
+    });
+  }
+});
+
 test('folder restarts filter unlearned cards or reshuffle all cards from the current folder', async () => {
   const h = folderSession();
   try {

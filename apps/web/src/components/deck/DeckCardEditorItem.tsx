@@ -1,9 +1,8 @@
 import React, { memo, useRef, useEffect, useState } from 'react';
-import { RichTextEditor } from '../editor/RichTextEditor';
+import { CardEditorFields } from '../editor/CardEditorFields';
 import { ChevronUp, ChevronDown, Copy, Trash2, GripVertical, Plus } from 'lucide-react';
 import { Reorder, useDragControls } from 'motion/react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export interface CardFormItem {
@@ -185,43 +184,23 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(
             </div>
           </div>
 
-          {/* 에디터 필드 (2열 반응형 그리드) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* 앞면 에디터 */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                <span>질문</span>
-                <Badge variant="secondary" className="text-[10px] font-medium py-0">
-                  앞면
-                </Badge>
-              </div>
-              <RichTextEditor
-                ariaLabel={`카드 ${index + 1} 앞면`}
-                value={card.termRichText}
-                onChange={(html) => onUpdate(index, 'termRichText', html)}
-                placeholder="단어, 질문 또는 핵심 키워드를 입력하세요..."
-                height="135px"
-                autoFocus={autoFocusFront}
-              />
-            </div>
-
-            {/* 뒷면 에디터 */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                <span>뒷면 (정의 / 해설)</span>
-                <Badge variant="warning" className="text-[10px] font-medium py-0">
-                  뒷면
-                </Badge>
-              </div>
-              <RichTextEditor
-                ariaLabel={`카드 ${index + 1} 뒷면`}
-                value={card.definitionRichText}
-                onChange={(html) => onUpdate(index, 'definitionRichText', html)}
-                placeholder="상세 설명, 해설, 예시 코드를 입력하세요..."
-                height="135px"
-              />
-            </div>
-          </div>
+          <CardEditorFields
+            front={{
+              label: '질문',
+              ariaLabel: `카드 ${index + 1} 앞면`,
+              value: card.termRichText,
+              onChange: (html) => onUpdate(index, 'termRichText', html),
+            }}
+            back={{
+              label: '뒷면 (정의 / 해설)',
+              ariaLabel: `카드 ${index + 1} 뒷면`,
+              value: card.definitionRichText,
+              onChange: (html) => onUpdate(index, 'definitionRichText', html),
+              placeholder: '상세 설명, 해설, 예시 코드를 입력하세요...',
+            }}
+            height="135px"
+            autoFocusFront={autoFocusFront}
+          />
         </div>
 
         {/* 카드 간 새 카드 삽입 버튼 (마지막 카드가 아닐 때) */}
