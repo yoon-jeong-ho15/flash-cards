@@ -2,24 +2,23 @@ import { radius, useUI, useThemedStyles, type Palette } from './theme';
 import { Text } from './Typography';
 import * as Haptics from 'expo-haptics';
 import React, {
+  useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import type { GestureResponderEvent } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Card, CardInput } from "../core/types";
 import { folderCards, orderedCards, orderedFolderCards } from "../core/content";
 import { reconcileSession, startSession, stepSession } from "../core/study";
-import { RichText } from "../editor/RichText";
+import { offsetAfterTouch, type ScrollMetrics } from "../core/studyScroll";
 import { store, useStore } from "../platform/runtime";
-import { Attachment, Button, Empty, Progress, ProgressRing, Sheet, confirm, showError, useImage } from "./kit";
+import { Button, Empty, Progress, ProgressRing, Sheet, confirm, showError } from "./kit";
 import { CardComposer, type ComposerHandle } from "./CardComposer";
 import { StudyFontSettingsModal } from "./DisplaySettings";
 import { Icon } from "./Icon";
-import { useSwipeMotion } from "./useSwipeMotion";
+import { StudyCard, type StudyCardHandle } from "./StudyCard";
 
 function EditCard({ card, onClose }: { card: Card; onClose: () => void }) {
   const [value, setValue] = useState<CardInput>(card);
@@ -105,135 +104,33 @@ export function Study({
   const [editing, setEditing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
-  const ratingInFlight = useRef(false);
-  const rotation = useRef(new Animated.Value(0)).current;
-  const [turning, setTurning] = useState(false);
-  const flipInFlight = useRef(false);
-  const animationVersion = useRef(0);
-  const flipReady = useRef<() => void>(() => {});
-  const frontScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  const backScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  const pageScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const [controlsLocked, setControlsLocked] = useState(false);
   const [cardTouchActive, setCardTouchActive] = useState(false);
-  const scrollPositions = useRef({
-    front: { y: 0, height: 0, content: 0 },
-    back: { y: 0, height: 0, content: 0 },
-    page: { y: 0, height: 0, content: 0 },
-  });
-  const scrollVertically = (dy: number, animated = false) => {
-    const side = session.flipped ? "back" : "front";
-    const inner = scrollPositions.current[side];
-    const innerY = Math.max(0, Math.min(Math.max(0, inner.content - inner.height), inner.y - dy));
-    const consumed = inner.y - innerY;
-    inner.y = innerY;
-    (session.flipped ? backScroll : frontScroll).current?.scrollTo({ y: innerY, animated });
-
-    const page = scrollPositions.current.page;
-    const pageY = Math.max(0, Math.min(Math.max(0, page.content - page.height), page.y - (dy - consumed)));
-    page.y = pageY;
-    pageScroll.current?.scrollTo({ y: pageY, animated });
+  const ratingInFlight = useRef(false);
+  const cardView = useRef<StudyCardHandle>(null);
+  const pageScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const pagePosition = useRef<ScrollMetrics>({ y: 0, height: 0, content: 0 });
+  const setCardTouch = useCallback((active: boolean) => {
+    pageScroll.current?.setNativeProps({ scrollEnabled: !active });
+    setCardTouchActive(active);
+  }, []);
+  const scrollPageBy = (dy: number, animated: boolean) => {
+    const page = pagePosition.current;
+    const y = offsetAfterTouch(page, dy);
+    if (y === page.y) return;
+    page.y = y;
+    pageScroll.current?.scrollTo({ y, animated });
   };
-  const openImage = useImage();
   useEffect(() => {
     if (deckId !== undefined)
       void store.setPreferences({ lastStudiedDeckId: deckId }).catch(showError);
   }, [deckId]);
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-    const listener = AccessibilityInfo.addEventListener(
-      "reduceMotionChanged",
-      setReduceMotion,
-    );
-    return () => listener.remove();
-  }, []);
   useEffect(() => {
     setSession((previous) => reconcileSession(previous, own));
   }, [own]);
   const current = own.find((c) => c.id === session.ids[session.index]);
   const currentDeck = decks.find((d) => d.id === current?.deckId);
   const learned = own.filter((c) => c.learned).length;
-  const swipe = useSwipeMotion({
-    cardId: current?.id,
-    round: session.round,
-    finished: session.finished,
-    first: session.index === 0,
-    disabled: busy || editing || settingsOpen,
-    reduceMotion,
-    onNavigate: (delta, sourceId) =>
-      setSession((previous) =>
-        previous.ids[previous.index] === sourceId
-          ? stepSession(previous, delta)
-          : previous,
-      ),
-    onFlipReady: () => flipReady.current(),
-    onTouchActive: (active) => {
-      // Stop native scroll recognizers at touch-down while preserving tap targets.
-      // The card responder drives vertical scrolling until it turns horizontal.
-      for (const ref of [frontScroll, backScroll, pageScroll]) {
-        ref.current?.setNativeProps({ scrollEnabled: !active });
-      }
-      setCardTouchActive(active);
-    },
-    onVerticalDrag: (dy) => scrollVertically(dy),
-    onVerticalRelease: (velocityY) => {
-      if (Math.abs(velocityY) > 0.1) scrollVertically(velocityY * 160, !reduceMotion);
-    },
-    onSwipeStart: () => {
-      if (!flipInFlight.current) return;
-      animationVersion.current++;
-      rotation.stopAnimation();
-      rotation.setValue(session.flipped ? 1 : 0);
-      flipInFlight.current = false;
-      setTurning(false);
-    },
-  });
-  useLayoutEffect(() => {
-    frontScroll.current?.scrollTo({ y: 0, animated: false });
-    backScroll.current?.scrollTo({ y: 0, animated: false });
-    scrollPositions.current.front.y = 0;
-    scrollPositions.current.back.y = 0;
-  }, [current?.id]);
-  useLayoutEffect(() => {
-    // A different card or an interrupted animation must never inherit a partial turn.
-    animationVersion.current++;
-    rotation.stopAnimation();
-    rotation.setValue(session.flipped ? 1 : 0);
-    flipInFlight.current = false;
-    setTurning(false);
-    return () => {
-      animationVersion.current++;
-      rotation.stopAnimation();
-    };
-  }, [current?.id, session.round, session.finished, reduceMotion]);
-  useLayoutEffect(() => {
-    if (!flipInFlight.current) rotation.setValue(session.flipped ? 1 : 0);
-  }, [session.flipped]);
-  const flip = () => {
-    if (busy || editing || settingsOpen || flipInFlight.current || !swipe.prepareFlip()) return;
-    if (reduceMotion) {
-      setSession((previous) => ({ ...previous, flipped: !previous.flipped }));
-      return;
-    }
-    const version = ++animationVersion.current;
-    flipInFlight.current = true;
-    setTurning(true);
-    setSession((previous) => ({ ...previous, flipped: !previous.flipped }));
-    Animated.timing(rotation, {
-      toValue: session.flipped ? 0 : 1,
-      duration: 260,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      if (version !== animationVersion.current) return;
-      flipInFlight.current = false;
-      setTurning(false);
-    });
-  };
-  flipReady.current = flip;
-  const flipOnPress = (event: GestureResponderEvent) => {
-    if (swipe.isTap(event)) flip();
-  };
   if (!source)
     return (
       <View style={s.page}>
@@ -356,14 +253,19 @@ export function Study({
       </ScrollView>
     );
   const last = session.index === session.ids.length - 1;
+  const navigate = (delta: -1 | 1, sourceId: string) =>
+    setSession((previous) =>
+      !previous.finished && previous.ids[previous.index] === sourceId
+        ? stepSession(previous, delta)
+        : previous,
+    );
   const rate = (known: boolean) => {
     if (
       ratingInFlight.current ||
       busy ||
       editing ||
       settingsOpen ||
-      turning ||
-      swipe.transitioning
+      controlsLocked
     )
       return;
     const id = current.id;
@@ -383,13 +285,7 @@ export function Study({
     } else {
       void store
         .setLearned(id, false)
-        .then(() => {
-          setSession((previous) =>
-            previous.ids[previous.index] === id
-              ? stepSession(previous, 1)
-              : previous,
-          );
-        })
+        .then(() => navigate(1, id))
         .catch(showError)
         .finally(() => {
           ratingInFlight.current = false;
@@ -397,139 +293,21 @@ export function Study({
         });
     }
   };
-  const renderFace = (back: boolean) => {
-    const image = back
-      ? current.backImageUrl || current.imageUrl
-      : current.frontImageUrl;
-    const visible = session.flipped === back;
-    return (
-      <Animated.View
-        key={String(back)}
-        pointerEvents={visible ? "auto" : "none"}
-        accessibilityElementsHidden={!visible}
-        importantForAccessibility={visible ? "auto" : "no-hide-descendants"}
-        style={[
-          study.card,
-          study.faceLayer,
-          {
-            borderColor: current.learned ? colors.successBorder : colors.border,
-            transform: [
-              { perspective: 1200 },
-              {
-                rotateY: rotation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: back ? ["180deg", "360deg"] : ["0deg", "180deg"],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="카드 뒤집기"
-          accessibilityHint="왼쪽으로 빠르게 밀면 다음 카드, 오른쪽으로 빠르게 밀면 이전 카드"
-          accessibilityActions={[
-            { name: "increment", label: last ? "학습 결과 보기" : "다음 카드" },
-            { name: "decrement", label: "이전 카드" },
-          ]}
-          onAccessibilityAction={(event) => {
-            if (event.nativeEvent.actionName === "increment") swipe.navigate(1);
-            if (event.nativeEvent.actionName === "decrement")
-              swipe.navigate(-1);
-          }}
-          onPress={flipOnPress}
-          style={study.cardHeader}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text
-              style={[
-                study.face,
-                back && { backgroundColor: colors.successBg, color: colors.success },
-              ]}
-            >
-              {back ? "답변" : "질문"}
-            </Text>
-            {current.learned && (
-              <View style={study.knownBadge}>
-                <Icon name="check" size={12} color={colors.success} />
-                <Text style={study.knownBadgeText}>알아요</Text>
-              </View>
-            )}
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="카드 내용 수정"
-            disabled={busy}
-            onPress={(event) => {
-              event.stopPropagation();
-              setEditing(true);
-            }}
-            style={study.smallButton}
-          >
-            <Icon name="pencil" size={17} color={colors.icon} />
-          </Pressable>
-        </Pressable>
-        <Pressable onPress={flipOnPress} style={{ flex: 1 }} accessible={false}>
-          <ScrollView
-            ref={back ? backScroll : frontScroll}
-            scrollEnabled={!cardTouchActive}
-            scrollEventThrottle={16}
-            onScroll={(event) => {
-              scrollPositions.current[back ? "back" : "front"].y = event.nativeEvent.contentOffset.y;
-            }}
-            onLayout={(event) => {
-              scrollPositions.current[back ? "back" : "front"].height = event.nativeEvent.layout.height;
-            }}
-            onContentSizeChange={(_, height) => {
-              scrollPositions.current[back ? "back" : "front"].content = height;
-            }}
-            nestedScrollEnabled
-            style={{ flex: 1 }}
-            contentContainerStyle={{
-              flexGrow: 1,
-              justifyContent: "center",
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-            }}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="카드 뒤집기"
-              onPress={flipOnPress}
-            >
-              <Attachment url={image} />
-              <RichText
-                html={back ? current.definitionRichText : current.termRichText}
-                presentation={back ? "study-back" : "study-front"}
-                onImage={openImage}
-                onFlip={flip}
-                onCardDrag={(event) => swipe.onDrag(event, current.id)}
-              />
-            </Pressable>
-          </ScrollView>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="카드 뒤집기"
-          onPress={flipOnPress}
-          style={study.cardFooter}
-        >
-          <Icon name="rotate" size={15} color={colors.icon} />
-          <Text style={s.muted}>{back ? "질문 보기" : "답변 보기"}</Text>
-        </Pressable>
-      </Animated.View>
-    );
-  };
   return (
     <>
       <ScrollView
         ref={pageScroll}
         scrollEnabled={!cardTouchActive}
         scrollEventThrottle={16}
-        onScroll={(event) => { scrollPositions.current.page.y = event.nativeEvent.contentOffset.y; }}
-        onLayout={(event) => { scrollPositions.current.page.height = event.nativeEvent.layout.height; }}
-        onContentSizeChange={(_, height) => { scrollPositions.current.page.content = height; }}
+        onScroll={(event) => {
+          pagePosition.current.y = event.nativeEvent.contentOffset.y;
+        }}
+        onLayout={(event) => {
+          pagePosition.current.height = event.nativeEvent.layout.height;
+        }}
+        onContentSizeChange={(_, height) => {
+          pagePosition.current.content = height;
+        }}
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
       >
@@ -583,23 +361,25 @@ export function Study({
               현재 덱: {currentDeck.title}
             </Text>
           )}
-          <View style={{ flex: 1, minHeight: 180 }}>
-            <View
-              {...swipe.panHandlers}
-              {...swipe.touchHandlers}
-              pointerEvents={busy ? "none" : "auto"}
-              style={{ flex: 1 }}
-              accessible={false}
-            >
-              <Animated.View
-                style={[{ flex: 1 }, swipe.style]}
-                accessible={false}
-              >
-                {renderFace(false)}
-                {renderFace(true)}
-              </Animated.View>
-            </View>
-          </View>
+          <StudyCard
+            ref={cardView}
+            card={current}
+            flipped={session.flipped}
+            round={session.round}
+            isFirst={session.index === 0}
+            isLast={last}
+            disabled={busy || editing || settingsOpen}
+            onEdit={() => setEditing(true)}
+            onFlip={() => setSession((previous) =>
+              !previous.finished && previous.ids[previous.index] === current.id
+                ? { ...previous, flipped: !previous.flipped }
+                : previous,
+            )}
+            onNavigate={navigate}
+            onControlsLockedChange={setControlsLocked}
+            onTouchActiveChange={setCardTouch}
+            onVerticalOverflow={scrollPageBy}
+          />
         </View>
         <View style={study.dock}>
           <View
@@ -611,10 +391,8 @@ export function Study({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="이전 카드"
-              disabled={
-                session.index === 0 || busy || turning || swipe.transitioning
-              }
-              onPress={() => swipe.navigate(-1)}
+              disabled={session.index === 0 || busy || controlsLocked}
+              onPress={() => cardView.current?.navigate(-1)}
               style={[
                 study.navButton,
                 { opacity: session.index === 0 ? 0.3 : 1 },
@@ -626,8 +404,8 @@ export function Study({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={last ? "학습 결과 보기" : "다음 카드"}
-              disabled={busy || turning || swipe.transitioning}
-              onPress={() => swipe.navigate(1)}
+              disabled={busy || controlsLocked}
+              onPress={() => cardView.current?.navigate(1)}
               style={study.navButton}
             >
               <Icon name="arrow" size={20} color={colors.icon} />
@@ -638,7 +416,7 @@ export function Study({
               <Button
                 title="다시 볼게요"
                 tone="secondary"
-                disabled={busy || turning || swipe.transitioning}
+                disabled={busy || controlsLocked}
                 onPress={() => rate(false)}
               />
             </View>
@@ -648,7 +426,7 @@ export function Study({
                 icon={current.learned ? "close" : "check"}
                 iconPosition="end"
                 tone={current.learned ? "secondary" : "primary"}
-                disabled={busy || turning || swipe.transitioning}
+                disabled={busy || controlsLocked}
                 busy={busy}
                 onPress={() => rate(true)}
               />
@@ -691,69 +469,11 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 24,
   },
-  card: {
-    height: "100%",
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderRadius: radius.card,
-    padding: 18,
-    boxShadow: `0px 4px 16px ${colors.shadow}`,
-  },
-  faceLayer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backfaceVisibility: "hidden",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 4,
-  },
-  face: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.primary,
-    backgroundColor: colors.pale,
-    paddingHorizontal: 13,
-    paddingVertical: 6,
-    borderRadius: 9,
-    overflow: "hidden",
-  },
-  knownBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.successBg,
-    borderWidth: 1,
-    borderColor: colors.successBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  knownBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.success,
-  },
   smallButton: {
     minWidth: 44,
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
-  },
-  cardFooter: {
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    paddingTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    minHeight: 42,
   },
   dock: {
     width: "100%",

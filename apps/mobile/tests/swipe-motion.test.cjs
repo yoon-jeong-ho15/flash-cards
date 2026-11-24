@@ -40,9 +40,9 @@ function harness(overrides = {}) {
   render();
   return { render, calls, jobs, get motion() { return result; }, get x() { return result.style.transform[0].translateX.value; }, complete() { const job = jobs.find(j => !j.done); assert.ok(job, 'an animation must be pending'); job.complete(); } };
 }
-function nativeEvent(x, time) {
-  const touch = { pageX: x, pageY: 150, timestamp: time };
-  return { nativeEvent: { ...touch, touches: [touch], changedTouches: [touch] } };
+function nativeEvent(x, time, { y = 150, released = false } = {}) {
+  const touch = { pageX: x, pageY: y, timestamp: time };
+  return { nativeEvent: { ...touch, touches: released ? [] : [touch], changedTouches: [touch] } };
 }
 function beginNativeDrag(handlers, x) {
   handlers.onStartShouldSetPanResponderCapture(nativeEvent(150, 0));
@@ -242,29 +242,59 @@ test('the release speed decides whether a full drag springs back or flicks to an
   }
 });
 
-test('a drag tracks each move before release after a vertical swipe or flip, even with native reads pending', () => {
+test('the captured touch can scroll then drag sideways, and a drag after a tap tracks each move', () => {
   for (const firstGesture of ['scroll', 'flip']) {
-    const h = harness();
+    const verticalDeltas = [];
+    const verticalReleases = [];
+    const touchStates = [];
+    const h = harness({
+      onVerticalDrag: (dy) => verticalDeltas.push(dy),
+      onVerticalRelease: (velocity) => verticalReleases.push(velocity),
+      onTouchActive: (active) => touchStates.push(active),
+    });
     const style = h.motion.style;
     // Native position reads are asynchronous and may not arrive before release.
     style.transform[0].translateX.stopAnimation = () => {};
     const handlers = h.motion.panHandlers;
     handlers.onStartShouldSetPanResponderCapture(nativeEvent(150, 0));
+    let anchorX = 150;
+    let anchorY = 150;
     if (firstGesture === 'scroll') {
-      assert.equal(handlers.onMoveShouldSetPanResponderCapture(null, { dx: 1, dy: 80 }), false);
+      const scrollStart = nativeEvent(151, 32, { y: 180 });
+      assert.equal(handlers.onMoveShouldSetPanResponderCapture(scrollStart, { dx: 1, dy: 30 }), true);
+      handlers.onPanResponderGrant(scrollStart);
+      anchorX = 151;
+      anchorY = 230;
+      handlers.onPanResponderMove(nativeEvent(anchorX, 64, { y: anchorY }));
+      assert.deepEqual(verticalDeltas, [30, 50]);
+      assert.equal(h.x, 0);
+      assert.equal(h.motion.isTap(nativeEvent(anchorX, 64, { y: anchorY, released: true })), false);
     } else {
-      assert.equal(h.motion.isTap(nativeEvent(150, 16)), true);
+      const release = nativeEvent(150, 16, { released: true });
+      h.motion.touchHandlers.onTouchEnd(release);
+      assert.equal(h.motion.isTap(release), true);
       assert.equal(h.motion.prepareFlip(), true);
+      handlers.onStartShouldSetPanResponderCapture(nativeEvent(anchorX, 64));
     }
     h.render();
-    beginNativeDrag(handlers, -36);
+    assert.equal(h.motion.panHandlers, handlers);
+    const sideways = nativeEvent(anchorX - 36, 96, { y: anchorY });
+    if (firstGesture === 'scroll') {
+      // The responder already owns the vertical drag. The same finger turns sideways.
+      handlers.onPanResponderMove(sideways);
+    } else {
+      assert.equal(handlers.onMoveShouldSetPanResponderCapture(sideways, { dx: -36, dy: 0 }), true);
+      handlers.onPanResponderGrant(sideways);
+    }
     assert.equal(h.x, -36);
     h.render();
     assert.equal(h.motion.style, style);
-    handlers.onPanResponderMove(nativeEvent(60, 200));
+    handlers.onPanResponderMove(nativeEvent(anchorX - 90, 200, { y: anchorY }));
     assert.equal(h.x, -90);
     assert.deepEqual(h.calls, []);
-    handlers.onPanResponderRelease(nativeEvent(60, 350));
+    handlers.onPanResponderRelease(nativeEvent(anchorX - 90, 350, { y: anchorY, released: true }));
+    assert.deepEqual(touchStates, firstGesture === 'scroll' ? [true, false] : [true, false, true, false]);
+    assert.deepEqual(verticalReleases, []);
     h.complete();
     assert.equal(h.x, 0);
     assert.deepEqual(h.calls, []);

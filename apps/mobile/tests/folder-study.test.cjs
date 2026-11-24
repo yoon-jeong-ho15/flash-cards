@@ -14,29 +14,51 @@ const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail', 'StudySetu
 // Render the actual screen functions with deterministic hooks and native view stubs.
 function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckLibrary' : screen, dimensions = { width: 390, fontScale: 1 }) {
   const slots = [];
-  let cursor = 0, dirty = false, effects = [], swipeProps;
+  const cardSlots = [];
+  const flipAnimations = [];
+  let activeSlots = slots, cursor = 0, dirty = false, effects = [], swipeProps, reduceMotionChanged;
+  const cleanup = (hooks) => hooks.splice(0).forEach(slot => slot?.cleanup?.());
   const changed = (a, b) => !a || !b || a.length !== b.length || a.some((value, i) => !Object.is(value, b[i]));
   const effect = (fn, deps) => {
     const i = cursor++;
-    if (changed(slots[i]?.deps, deps)) effects.push(() => { slots[i]?.cleanup?.(); slots[i] = { deps, cleanup: fn() }; });
+    const hooks = activeSlots;
+    if (changed(hooks[i]?.deps, deps)) effects.push(() => { hooks[i]?.cleanup?.(); hooks[i] = { deps, cleanup: fn() }; });
   };
   const react = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }), Fragment: 'Fragment',
     useState(initial) {
       const i = cursor++;
-      if (!slots[i]) slots[i] = { value: typeof initial === 'function' ? initial() : initial };
-      return [slots[i].value, next => {
-        const value = typeof next === 'function' ? next(slots[i].value) : next;
-        if (!Object.is(value, slots[i].value)) { slots[i].value = value; dirty = true; }
-      }];
+      const hooks = activeSlots;
+      if (!hooks[i]) {
+        const slot = { value: typeof initial === 'function' ? initial() : initial };
+        slot.set = next => {
+          const value = typeof next === 'function' ? next(slot.value) : next;
+          if (!Object.is(value, slot.value)) { slot.value = value; dirty = true; }
+        };
+        hooks[i] = slot;
+      }
+      return [hooks[i].value, hooks[i].set];
     },
-    useRef(value) { const i = cursor++; return slots[i] ??= { current: value }; },
-    useMemo(fn, deps) { const i = cursor++; if (changed(slots[i]?.deps, deps)) slots[i] = { deps, value: fn() }; return slots[i].value; },
+    useRef(value) { const i = cursor++; return activeSlots[i] ??= { current: value }; },
+    useMemo(fn, deps) { const i = cursor++; if (changed(activeSlots[i]?.deps, deps)) activeSlots[i] = { deps, value: fn() }; return activeSlots[i].value; },
+    useCallback(fn, deps) { return react.useMemo(() => fn, deps); },
+    useImperativeHandle(ref, create) {
+      effect(() => {
+        ref.current = create();
+        return () => { ref.current = null; };
+      });
+    },
     useEffect: effect, useLayoutEffect: effect, useDeferredValue: value => value,
   };
   class Value { setValue() {} stopAnimation() {} interpolate() { return 0; } }
-  const native = { useWindowDimensions: () => dimensions, StyleSheet: { create: value => value }, Animated: { Value, View: 'Animated.View', timing: () => ({ start() {} }) }, Easing: { inOut: value => value, cubic: 'cubic' },
-    AccessibilityInfo: { isReduceMotionEnabled: async () => false, addEventListener: () => ({ remove() {} }) },
+  const native = { useWindowDimensions: () => dimensions, StyleSheet: { create: value => value }, Animated: { Value, View: 'Animated.View', timing: (_, config) => ({ start: () => flipAnimations.push(config) }) }, Easing: { inOut: value => value, cubic: 'cubic' },
+    AccessibilityInfo: {
+      isReduceMotionEnabled: async () => false,
+      addEventListener: (_, listener) => {
+        reduceMotionChanged = listener;
+        return { remove: () => { reduceMotionChanged = undefined; } };
+      },
+    },
     ...Object.fromEntries(['View', 'Text', 'Pressable', 'ScrollView', 'FlatList', 'ActivityIndicator', 'Modal'].map(name => [name, name])),
   };
   const mocks = {
@@ -51,7 +73,14 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     './kit': { colors: {}, s: {}, useImage: () => () => {}, attempt: fn => fn(), showError: error => { throw error; },
       ...Object.fromEntries(['Attachment', 'Button', 'Empty', 'Progress', 'Chips', 'Field', 'Select', 'ProgressRing', 'Sheet'].map(name => [name, name])),
     },
-    './useSwipeMotion': { useSwipeMotion: props => { swipeProps = props; return { panHandlers: {}, style: {}, transitioning: false, isTap: () => true, prepareFlip: () => true }; } },
+    './useSwipeMotion': { useSwipeMotion: props => {
+      swipeProps = props;
+      return {
+        panHandlers: {}, style: {}, transitioning: false,
+        isTap: () => true, prepareFlip: () => true,
+        navigate: delta => props.onNavigate(delta, props.cardId),
+      };
+    } },
     'expo-haptics': { impactAsync: async () => {}, ImpactFeedbackStyle: { Light: 'light' } },
   };
   const module = { exports: {} };
@@ -64,8 +93,16 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     render(props) {
       let tree, count = 0;
       do {
-        dirty = false; cursor = 0; effects = [];
+        dirty = false; cursor = 0; effects = []; activeSlots = slots;
         tree = module.exports[exportName](props);
+        const card = nodes(tree).find(node => node.type?.name === 'StudyCard');
+        if (card) {
+          activeSlots = cardSlots;
+          cursor = 0;
+          card.props.children = [card.type(card.props)];
+        } else {
+          cleanup(cardSlots);
+        }
         effects.forEach(fn => fn());
         assert.ok(++count < 20, 'screen should settle without a render loop');
       } while (dirty);
@@ -75,7 +112,10 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     currentId: () => swipeProps.cardId,
     swipeDisabled: () => swipeProps.disabled,
     startSwipe: () => swipeProps.onSwipeStart?.(),
-    cleanup: () => slots.forEach(slot => slot?.cleanup?.()),
+    swipe: () => swipeProps,
+    setReduceMotion: (enabled) => reduceMotionChanged(enabled),
+    flipAnimations,
+    cleanup: () => { cleanup(cardSlots); cleanup(slots); },
   };
 }
 
@@ -274,9 +314,13 @@ test('a swipe interrupts card flipping instead of waiting for the flip animation
   const flipControl = tree => nodes(tree).find(node => node.type === 'Pressable'
     && node.props.accessibilityLabel === '카드 뒤집기');
   try {
+    screen.render(props);
+    await tick();
     let tree = screen.render(props);
     flipControl(tree).props.onPress();
     tree = screen.render(props);
+    const visibleFace = nodes(tree).find(node => node.props?.importantForAccessibility === 'auto');
+    assert.ok(text(visibleFace).includes('답변'));
     assert.equal(button(tree, '알아요').disabled, true, 'rating stays disabled while the flip animation is in progress');
     assert.equal(screen.swipeDisabled(), false, 'flipping must not block a new swipe');
     screen.startSwipe();
@@ -284,6 +328,90 @@ test('a swipe interrupts card flipping instead of waiting for the flip animation
     assert.equal(button(tree, '알아요').disabled, false, 'the new swipe immediately cancels the flip');
     screen.next();
     assert.ok(button(screen.render(props), '전체 카드 다시 학습'));
+  } finally { screen.cleanup(); }
+});
+
+test('the card scrolls its visible face first and hands only the residual movement to the page', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'Study');
+  const props = { deckId: f.first, onExit() {} };
+  const scrollViews = tree => nodes(tree).filter(node => node.type === 'ScrollView');
+  const attach = (view, { y, height, content }) => {
+    const positions = [];
+    const enabled = [];
+    view.props.ref.current = {
+      scrollTo: value => positions.push(value),
+      setNativeProps: ({ scrollEnabled }) => enabled.push(scrollEnabled),
+    };
+    view.props.onScroll({ nativeEvent: { contentOffset: { y } } });
+    view.props.onLayout({ nativeEvent: { layout: { height } } });
+    view.props.onContentSizeChange(0, content);
+    return { positions, enabled };
+  };
+  try {
+    screen.render(props);
+    await tick();
+    const [page, front, back] = scrollViews(screen.render(props));
+    const outer = attach(page, { y: 40, height: 200, content: 420 });
+    const question = attach(front, { y: 30, height: 100, content: 150 });
+    const answer = attach(back, { y: 0, height: 100, content: 300 });
+    screen.swipe().onTouchActive(true);
+    assert.deepEqual(scrollViews(screen.render(props)).map(view => view.props.scrollEnabled), [false, false, false]);
+    assert.deepEqual(outer.enabled, [false]);
+
+    screen.swipe().onVerticalDrag(-12);
+    assert.deepEqual(question.positions, [{ y: 42, animated: false }]);
+    assert.deepEqual(outer.positions, []);
+
+    screen.swipe().onVerticalDrag(-28);
+    assert.deepEqual(question.positions.at(-1), { y: 50, animated: false });
+    assert.deepEqual(outer.positions, [{ y: 60, animated: false }]);
+    screen.swipe().onVerticalDrag(100);
+    assert.deepEqual(question.positions.at(-1), { y: 0, animated: false });
+    assert.deepEqual(outer.positions.at(-1), { y: 10, animated: false });
+    assert.deepEqual(answer.positions, []);
+
+    screen.swipe().onVerticalRelease(-0.5);
+    assert.deepEqual(question.positions.at(-1), { y: 50, animated: true });
+    assert.deepEqual(outer.positions.at(-1), { y: 40, animated: true });
+    screen.swipe().onTouchActive(false);
+    assert.deepEqual(scrollViews(screen.render(props)).map(view => view.props.scrollEnabled), [true, true, true]);
+
+    screen.swipe().onTouchActive(true);
+    screen.next();
+    assert.ok(button(screen.render(props), '전체 카드 다시 학습'));
+    assert.deepEqual(outer.enabled, [false, true, false, true], 'unmount releases the page scroll lock');
+  } finally { screen.cleanup(); }
+});
+
+test('reduced motion flips to the answer immediately and keeps dock navigation working', async () => {
+  const f = await fixture();
+  const screen = screenHarness(f.store, 'Study');
+  const props = { deckId: f.first, unlearnedOnly: false, onExit() {} };
+  try {
+    screen.render(props);
+    await tick();
+    screen.setReduceMotion(true);
+    let tree = screen.render(props);
+    assert.equal(screen.swipe().reduceMotion, true);
+    const flip = nodes(tree).find(node => node.type === 'Pressable' && node.props.accessibilityLabel === '카드 뒤집기');
+    flip.props.onPress();
+    tree = screen.render(props);
+    const visibleFace = nodes(tree).find(node => node.props?.importantForAccessibility === 'auto');
+    assert.ok(text(visibleFace).includes('답변'));
+    assert.deepEqual(screen.flipAnimations, []);
+    assert.equal(button(tree, '몰라요').disabled, false);
+
+    const next = accessible(tree, 'button', '다음 카드');
+    next.onPress();
+    next.onPress();
+    tree = screen.render(props);
+    assert.equal(screen.currentId(), f.ids[1]);
+    const nextFace = nodes(tree).find(node => node.props?.importantForAccessibility === 'auto');
+    assert.ok(text(nextFace).includes('질문'));
+    accessible(tree, 'button', '이전 카드').onPress();
+    screen.render(props);
+    assert.equal(screen.currentId(), f.ids[0]);
   } finally { screen.cleanup(); }
 });
 

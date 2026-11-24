@@ -257,7 +257,7 @@ export function useSwipeMotion({
     if (next && cardId && cardId !== next.sourceId && !finished && wantsFlip) {
       reset();
       const token = version.current;
-      // Run after the study screen has reset the new card's flip transform.
+      // Run after the new card has reset its flip transform.
       void Promise.resolve().then(() => {
         if (
           token === version.current &&
