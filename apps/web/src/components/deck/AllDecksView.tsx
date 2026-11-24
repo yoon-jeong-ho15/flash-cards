@@ -9,7 +9,8 @@ import { EmptyState } from '../common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BookOpen, Search } from 'lucide-react';
-import { DeckSortOption } from '../../types';
+import type { DeckSortOption } from '../../types';
+import { sortDecks } from '../../utils/deckSort';
 import { richTextToText } from '../../utils/search';
 
 interface AllDecksViewProps {
@@ -93,40 +94,7 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
       });
     }
 
-    // 정렬 적용
-    const list = [...result];
-    switch (sortBy) {
-      case 'name-asc':
-        return list.sort((a, b) => {
-          const diff = a.title.localeCompare(b.title, 'ko', { numeric: true });
-          return diff !== 0
-            ? diff
-            : (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
-        });
-      case 'name-desc':
-        return list.sort((a, b) => {
-          const diff = b.title.localeCompare(a.title, 'ko', { numeric: true });
-          return diff !== 0
-            ? diff
-            : (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0);
-        });
-      case 'date-desc':
-        return list.sort((a, b) => {
-          const timeA = a.updatedAt || a.createdAt || 0;
-          const timeB = b.updatedAt || b.createdAt || 0;
-          if (timeB !== timeA) return timeB - timeA;
-          return a.title.localeCompare(b.title, 'ko', { numeric: true });
-        });
-      case 'date-asc':
-        return list.sort((a, b) => {
-          const timeA = a.updatedAt || a.createdAt || 0;
-          const timeB = b.updatedAt || b.createdAt || 0;
-          if (timeA !== timeB) return timeA - timeB;
-          return a.title.localeCompare(b.title, 'ko', { numeric: true });
-        });
-      default:
-        return list;
-    }
+    return sortDecks(result, sortBy);
   }, [decks, cardIndex, deferredQuery, activeTab, sortBy, studyFilter]);
 
   return (
