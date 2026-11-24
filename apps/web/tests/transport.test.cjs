@@ -10,7 +10,7 @@ test('cloud reads never delete or migrate documents, and writes check account ow
     flashcard_cards:[...seed.data().cards,{...seed.card,id:'orphan',deckId:'missing'}]};
   const firestore={
     collection:(_db,name)=>name,query:name=>name,where:()=>{},doc:(_db,name,id)=>({name,id}),
-    getDocs:async name=>({docs:snapshots[name].map(item=>({id:item.id,data:()=>item}))}),
+    getDocsFromServer:async name=>({docs:snapshots[name].map(item=>({id:item.id,data:()=>item}))}),
     writeBatch:()=>({set:(ref,data)=>operations.push({type:'set',ref,data}),delete:ref=>operations.push({type:'delete',ref}),
       commit:async()=>{commits++;}}),
   };

@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 
 function seedData() {
   return {
-    folders: [],
-    decks: [{ id: 'd1', userId: 'a', title: 'deck', createdAt: 1, updatedAt: 1 }],
+    folders: [{ id: 'f1', userId: 'a', title: 'folder', createdAt: 1 }],
+    decks: [{ id: 'd1', userId: 'a', folderId: 'f1', title: 'deck', createdAt: 1, updatedAt: 1 }],
     cards: ['c1', 'c2', 'c3'].map((id, order) => ({
       id, order, userId: 'a', deckId: 'd1', termRichText: '<p>original</p>',
       definitionRichText: '<p>answer</p>', learned: false,
@@ -20,9 +20,15 @@ function firestoreFixture(data) {
   const writes = [];
   const denied = new Set();
   const missingCode = new Map();
-  const server = { cards, writes, denied, missingCode, beforeUpdate: async () => {} };
+  const server = {
+    cards, writes, denied, missingCode, beforeUpdate: async () => {},
+    serverReads: [], cacheReads: [], beforeRead: async () => {},
+    clearCollections: () => Object.values(documents).forEach(items => items.clear()),
+  };
   const read = async ({ name, filters }) => {
     assert.ok(filters.some(filter => filter.field === 'userId' && filter.value === 'a'));
+    server.serverReads.push(name);
+    await server.beforeRead(name);
     const docs = Array.from(documents[name], ([id, data]) => ({ id, data }))
       .filter(({ id, data }) => filters.every(({ field, value }) => (field === '__name__' ? id : data[field]) === value))
       .map(({ id, data }) => ({ id, data: () => data }));
@@ -38,7 +44,10 @@ function firestoreFixture(data) {
       return { field, value };
     },
     query: (name, ...filters) => ({ name, filters }),
-    getDocs: read,
+    getDocs: async ({ name }) => {
+      server.cacheReads.push(name);
+      return { docs: [], empty: true, metadata: { fromCache: true } };
+    },
     getDocsFromServer: read,
     updateDoc: async ({ name, id }, data) => {
       writes.push({ kind: 'update', name, id, data: { ...data } });

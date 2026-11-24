@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const esbuild = require('esbuild');
 const { firestoreFixture, registerLearnedSyncTests, seedData } = require('../../../tests/learned-sync-fixture.cjs');
+const { registerAccountPullTests } = require('../../../tests/account-pull-regressions.cjs');
 const { harness, user, accountKey, emptySnapshot } = require('./helpers.cjs');
 
 async function fixture(firestoreOverride) {
@@ -12,7 +13,7 @@ async function fixture(firestoreOverride) {
     doc: (_, name, id) => ({ name, id }), collection: (_, name) => name,
     where: (field, operator, value) => ({ field, operator, value }),
     query: (name, condition) => { context.queries.push({ name, condition }); return name; },
-    getDocs: async name => ({ docs: (context.records[name] || []).map(([id,data]) => ({ id, data: () => data })) }),
+    getDocsFromServer: async name => ({ docs: (context.records[name] || []).map(([id,data]) => ({ id, data: () => data })) }),
     writeBatch: () => { const operations = []; return { set: (doc, data, options) => operations.push({ type: 'set', doc, data, options }), delete: doc => operations.push({ type: 'delete', doc }), commit: async () => (() => { if (context.failBatch === context.batches.length + 1) throw Error('batch failed'); context.batches.push(operations); })() }; },
   };
   const storage = {
@@ -140,7 +141,7 @@ test('uploaded object is reused after local conversion persistence fails and the
   assert.equal(Object.keys(restarted.store.getState().outbox).length, 0);
 });
 
-registerLearnedSyncTests(async ({ legacy = false } = {}) => {
+async function syncFixture({ legacy = false } = {}) {
   const data = seedData();
   const server = firestoreFixture(data);
   const { cloud } = await fixture(server.sdk);
@@ -171,8 +172,14 @@ registerLearnedSyncTests(async ({ legacy = false } = {}) => {
       h.cloud.available = true;
       return h.store.sync();
     },
+    flush: () => h.store.sync(false),
     pending: (id) => Boolean(h.store.getState().outbox[`cards:${id}`]),
     status: () => h.store.getState().status,
+    error: () => h.store.getState().error,
+    lastSyncedAt: () => h.store.getState().lastSyncedAt,
+    durable: () => JSON.parse(map.get(accountKey('a'))),
     cards: () => h.store.getState().cards,
   };
-});
+}
+registerLearnedSyncTests(syncFixture);
+registerAccountPullTests(syncFixture);

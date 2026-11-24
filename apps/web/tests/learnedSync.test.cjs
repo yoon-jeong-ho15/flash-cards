@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { createHarness, seed } = require('./support.cjs');
 const { firestoreFixture, registerLearnedSyncTests, seedData } = require('../../../tests/learned-sync-fixture.cjs');
+const { registerAccountPullTests } = require('../../../tests/account-pull-regressions.cjs');
 
 function fixture({ legacy = false, cachedImage = false } = {}) {
   const data = seedData();
@@ -31,6 +32,7 @@ function fixture({ legacy = false, cachedImage = false } = {}) {
   let h;
   const reload = () => {
     h = createHarness({}, storage, overrides);
+    h.context.Date = Date;
     h.navigator.onLine = false;
     h.store.getState().setUser({ uid: 'a' });
   };
@@ -55,11 +57,15 @@ function fixture({ legacy = false, cachedImage = false } = {}) {
     },
     pending: (id) => h.store.getState().pendingSync.cardIds.includes(id),
     status: () => h.store.getState().syncStatus,
+    error: () => h.store.getState().syncError,
+    lastSyncedAt: () => h.store.getState().lastSyncedAt,
+    durable: () => JSON.parse(storage.get(key)),
     cards: () => h.store.getState().cards,
   };
 }
 
 registerLearnedSyncTests(fixture);
+registerAccountPullTests(fixture);
 
 test('web progress-only sync refreshes stale cached data images without uploading the old card', async () => {
   const h = fixture({ cachedImage: true });

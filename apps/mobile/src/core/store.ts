@@ -87,7 +87,7 @@ export class FlashcardStore {
         imageCache: before.imageCache, revision, outbox, preferences: before.preferences };
       try { await this.persist(next, before.user?.uid); }
       catch (error) { this.publish({ error: '기기 저장에 실패했습니다. 저장 공간을 확인해 주세요.' }); throw error; }
-      this.publish({ ...next, error: null, status: this.canSync() ? 'syncing' : 'offline' });
+      this.publish({ ...next, error: null });
       return result;
     }).then(result => { void this.sync(false); return result; });
   }
@@ -182,11 +182,15 @@ export class FlashcardStore {
     const uid = user!.uid;
     const active = () => session === this.state.session && uid === this.state.user?.uid;
     this.running = Promise.resolve().then(async () => {
-      this.publish({ status: 'syncing', error: null });
+      let didSync = false;
+      let pulling = false;
       try {
         while (active() && this.canSync()) {
           const sent = snapshotOf(this.state);
-          if (Object.keys(sent.outbox).length) {
+          const pending = Object.keys(sent.outbox).length > 0;
+          if (!pending && !this.pullRequested) break;
+          if (this.state.status !== 'syncing') this.publish({ status: 'syncing', error: null });
+          if (pending) {
             await this.transport.push(uid, sent, active, image => this.serial(async () => {
               if (!active() || !this.state.ready) throw new Error('계정이 변경되었습니다.');
               const next = snapshotOf(this.state);
@@ -206,23 +210,41 @@ export class FlashcardStore {
               const outbox = { ...next.outbox };
               for (const [key, operation] of Object.entries(sent.outbox)) if (outbox[key]?.revision === operation.revision) delete outbox[key];
               await this.persist({ ...next, outbox }, uid);
-              if (active()) this.publish({ outbox });
+              if (active()) {
+                this.publish({ outbox });
+                didSync = true;
+              }
             });
             continue;
           }
-          if (!this.pullRequested) break;
           this.pullRequested = false;
+          pulling = true;
           const cloud = await this.transport.pull(uid);
           await this.serial(async () => {
             if (!active()) return;
-            if (this.state.revision !== sent.revision) { this.pullRequested = true; return; }
+            if (!this.canSync() || this.state.revision !== sent.revision || Object.keys(this.state.outbox).length) {
+              this.pullRequested = true;
+              return;
+            }
             const next = { ...snapshotOf(this.state), ...cloud };
             await this.persist(next, uid);
-            if (active()) this.publish(cloud);
+            if (active()) {
+              this.publish(cloud);
+              didSync = true;
+            }
           });
+          pulling = false;
         }
-        if (active()) this.publish({ status: this.canSync() ? 'synced' : 'offline', lastSyncedAt: Date.now() });
-      } catch (error) { if (active()) this.publish({ status: this.state.online ? 'error' : 'offline', error: message(error) }); }
+        if (active()) {
+          if (!this.canSync()) this.publish({ status: 'offline' });
+          else if (didSync) this.publish({ status: 'synced', lastSyncedAt: Date.now() });
+        }
+      } catch (error) {
+        if (active()) {
+          this.pullRequested ||= pulling;
+          this.publish({ status: this.state.online ? 'error' : 'offline', error: message(error) });
+        }
+      }
     }).finally(() => {
       this.running = null;
       if (this.canSync() && (!active() || (this.state.status !== 'error' &&

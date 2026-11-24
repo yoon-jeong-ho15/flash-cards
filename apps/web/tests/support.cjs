@@ -26,7 +26,7 @@ function locksFor(storage) {
 function createHarness(service = {}, storage = new Map(), overrides = {}) {
   const navigator = { onLine: true, locks: locksFor(storage) };
   const localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key,value) => storage.set(key,value), removeItem: key => storage.delete(key) };
-  const transport = { commitChanges: async () => {}, fetchAllData: async () => null, sortCardsByOrder: cards => [...cards].sort((a,b)=>(a.order??0)-(b.order??0)), ...service };
+  const transport = { commitChanges: async () => {}, fetchAllData: async () => { throw Error('No server response configured'); }, sortCardsByOrder: cards => [...cards].sort((a,b)=>(a.order??0)-(b.order??0)), ...service };
   const mocks = {
     [path.join(root,'lib/firebase.ts')]: {isFirebaseConfigured:true,auth:{},googleProvider:{}},
     [path.join(root,'services/flashcardService.ts')]: {flashcardService:transport,sortCardsByOrder:transport.sortCardsByOrder},

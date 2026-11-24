@@ -133,15 +133,14 @@ export const flashcardService = {
   /**
    * Firebase Firestore로부터 현재 사용자의 모든 폴더, 덱, 카드 데이터를 조회합니다.
    */
-  async fetchAllData(userId: string, fromServer = false): Promise<{ folders: Folder[]; decks: Deck[]; cards: Card[] } | null> {
-    if (!db || !isFirebaseConfigured || !userId) return null;
+  async fetchAllData(userId: string): Promise<AccountData> {
+    if (!db || !isFirebaseConfigured || !userId) throw new Error('Firebase is unavailable');
 
     try {
-      const read = fromServer ? getDocsFromServer : getDocs;
       const [foldersSnap, decksSnap, cardsSnap] = await bounded(Promise.all([
-        read(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
-        read(query(collection(db, 'flashcard_decks'), where('userId', '==', userId))),
-        read(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
+        getDocsFromServer(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
+        getDocsFromServer(query(collection(db, 'flashcard_decks'), where('userId', '==', userId))),
+        getDocsFromServer(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
       ]));
 
       const folders: Folder[] = foldersSnap.docs

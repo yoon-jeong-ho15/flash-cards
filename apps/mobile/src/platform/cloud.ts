@@ -1,6 +1,6 @@
 import { digest, CryptoDigestAlgorithm } from 'expo-crypto';
 import { cardDataImages, replaceCardImage } from '../core/imageSync';
-import { collection, doc, documentId, getDocs, getDocsFromServer, query, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, documentId, getDocsFromServer, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, configured, db, storage } from './firebase';
 import { getDownloadURL, ref, uploadBytesResumable, type UploadTaskSnapshot } from 'firebase/storage';
 import type { Card, Data, Kind, Transport, ImageUpload } from '../core/types';
@@ -120,7 +120,9 @@ export const cloud: Transport = {
   async pull(uid) {
     if (!db || auth?.currentUser?.uid !== uid) throw new Error('로그인 상태를 확인해 주세요.');
     const kinds: Kind[] = ['folders', 'decks', 'cards'];
-    const snapshots = await bounded(Promise.all(kinds.map(kind => getDocs(query(collection(db!, names[kind]), where('userId', '==', uid))))));
+    const snapshots = await bounded(Promise.all(kinds.map(kind =>
+      getDocsFromServer(query(collection(db!, names[kind]), where('userId', '==', uid))),
+    )));
     const folders = snapshots[0].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, title: v.title || '', description: v.description || '', createdAt: Number(v.createdAt || 0) }; });
     const decks = snapshots[1].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, title: v.title || '', description: v.description || '', folderId: v.folderId || null, createdAt: Number(v.createdAt || 0), updatedAt: Number(v.updatedAt || 0) }; });
     const ids = new Set(decks.map(d => d.id));

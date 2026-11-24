@@ -41,7 +41,8 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
     const { uid, active } = sessionContext();
     running = Promise.resolve().then(async () => {
       if (!active()) return;
-      set({ syncStatus: 'syncing', syncError: null });
+      let didSync = false;
+      let pulling = false;
       try {
         // Hold the sync lock across network requests, but allow local durable edits
         // under the separate data lock. Closing a tab releases both browser locks.
@@ -66,6 +67,9 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                 for (const source of sources) images.add(source);
               }
             }
+            const pending = hasPending(snapshot.pendingSync);
+            if (!images.size && !pending && !pullRequested) break;
+            if (get().syncStatus !== 'syncing') set({ syncStatus: 'syncing', syncError: null });
             if (images.size) {
               for (const original of images) {
                 if (!active()) return;
@@ -83,14 +87,13 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
               // Reload durable versions, including edits/deletes made during upload.
               continue;
             }
-            if (hasPending(snapshot.pendingSync)) {
+            if (pending) {
               await flashcardService.commitChanges(snapshot, uid!, active);
               if (!active()) return;
               // Refresh stale images before acknowledgement, otherwise the next
               // pass would treat them as unqueued legacy images and push the old card.
-              const cloud = refreshCards.size ? await flashcardService.fetchAllData(uid!, true) : null;
+              const cloud = refreshCards.size ? await flashcardService.fetchAllData(uid!) : null;
               if (!active()) return;
-              if (refreshCards.size && !cloud) throw new Error('최신 카드 내용을 확인할 수 없습니다. 다시 동기화해 주세요.');
               const remoteCards = cloud && new Map(cloud.cards.map(card => [card.id, card]));
               await transactAccount(uid, latest => {
                 const cards = remoteCards ? latest.cards.flatMap(card => {
@@ -103,27 +106,39 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                   ...acknowledge(latest.pendingSync, latest.pendingVersions, snapshot.pendingSync, snapshot.pendingVersions),
                 };
               }, publish, active);
+              didSync = true;
               continue;
             }
-            if (!pullRequested) break;
             pullRequested = false;
+            pulling = true;
             const cloud = await flashcardService.fetchAllData(uid!);
             if (!active()) return;
-            if (cloud) await transactAccount(uid, latest => {
+            await transactAccount(uid, latest => {
               // Other tabs can edit while this pull is in flight. Never overwrite
               // their data or outbox with a stale server response.
-              if (snapshot.mutationRevision !== latest.mutationRevision || hasPending(latest.pendingSync)) {
+              if (!online() || snapshot.mutationRevision !== latest.mutationRevision || hasPending(latest.pendingSync)) {
                 pullRequested = true;
                 return null;
               }
               return { ...latest, ...cloud, cards: sortCardsByOrder(cloud.cards),
                 mutationRevision: latest.mutationRevision + 1 };
-            }, publish, active);
+            }, saved => {
+              publish(saved);
+              didSync = true;
+            }, active);
+            pulling = false;
           }
         });
-        if (active()) set({ isInitialSyncComplete: true, syncStatus: online() ? 'synced' : 'offline', lastSyncedAt: Date.now() });
+        if (active()) {
+          if (!online()) set({ isInitialSyncComplete: true, syncStatus: 'offline' });
+          else if (didSync) set({ isInitialSyncComplete: true, syncStatus: 'synced', lastSyncedAt: Date.now() });
+          else set({ isInitialSyncComplete: true });
+        }
       } catch (error) {
-        if (active()) set({ isInitialSyncComplete: true, syncStatus: 'error', syncError: message(error) });
+        if (active()) {
+          pullRequested ||= pulling;
+          set({ isInitialSyncComplete: true, syncStatus: online() ? 'error' : 'offline', syncError: message(error) });
+        }
       }
     }).finally(() => {
       running = null;
@@ -159,7 +174,6 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
             ...enqueueChanges(latest, after, latest.pendingSync, latest.pendingVersions, mutationRevision, cardChange) };
         }, publish, active);
         if (!active()) throw new Error('계정이 변경되었습니다.');
-        set({ syncStatus: online() ? 'syncing' : 'offline', syncError: null });
         void run(false);
       } catch (error) {
         if (active()) set({ storageError: message(error) });
