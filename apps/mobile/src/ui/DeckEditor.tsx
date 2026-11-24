@@ -1,15 +1,16 @@
 import { useUI } from './theme';
 import { Text } from './Typography';
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, AppState, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { randomUUID } from "expo-crypto";
-import type { CardInput, Draft } from "../core/types";
-import { hasContent, orderedCards, plainText } from "../core/content";
+import type { CardInput } from "../core/types";
+import { orderedCards, plainText } from "../core/content";
 import { store, useStore } from "../platform/runtime";
 import { Button, Empty, Field, Sheet, attempt, showError } from "./kit";
 import { CardComposer, type ComposerHandle } from "./CardComposer";
 import { FolderPicker } from "./FolderPicker";
 import { Icon } from "./Icon";
+import { useDeckDraft } from "./useDeckDraft";
 
 const emptyCard = (): CardInput => ({
   id: `temp-${randomUUID()}`,
@@ -39,7 +40,22 @@ export function DeckEditor({
   const originalCards = orderedCards(state.cards, deckId || "");
   const fingerprint = JSON.stringify([original, originalCards]);
   const [baseline, setBaseline] = useState(fingerprint);
-  const [draft, setDraft] = useState<Draft>(() => ({
+  const {
+    draft,
+    change,
+    ready,
+    busy: draftBusy,
+    savedAt,
+    draftError,
+    restore,
+    dirty,
+    read,
+    applyRestore,
+    discardRestore,
+    discardAndLeave,
+    saveAndLeave,
+    saveDeck,
+  } = useDeckDraft(deckId, folderId, () => ({
     title: original?.title || "",
     description: original?.description || "",
     folderId: original?.folderId || folderId || null,
@@ -50,7 +66,6 @@ export function DeckEditor({
       : [emptyCard(), emptyCard()],
     savedAt: 0,
   }));
-  const initial = useRef(JSON.stringify(draft));
   const [selected, setSelected] = useState(() =>
     appendCard && !focusCardId
       ? originalCards.length
@@ -59,8 +74,8 @@ export function DeckEditor({
           draft.cards.findIndex((c) => c.id === focusCardId),
         ),
   );
-  const [ready, setReady] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [changingCard, setChangingCard] = useState(false);
+  const busy = changingCard || draftBusy;
   const [picker, setPicker] = useState(false);
   const [details, setDetails] = useState(false);
   const [cardActions, setCardActions] = useState(false);
@@ -72,91 +87,17 @@ export function DeckEditor({
         animated: true,
       });
   }, [selected, ready]);
-  const [savedAt, setSavedAt] = useState(0);
-  const [draftError, setDraftError] = useState<string | null>(null);
-  const [restore, setRestore] = useState<Draft | null>(null);
   const composer = useRef<ComposerHandle>(null);
-  const key = useRef(store.draftKey(deckId, folderId)).current;
-  const latest = useRef(draft);
-  latest.current = draft;
-  const skip = useRef(false);
-  const loaded = useRef(false);
-  const dirty = initial.current !== JSON.stringify({ ...draft, savedAt: 0 });
   const external = Boolean(deckId && fingerprint !== baseline);
-  const change = (update: Partial<Draft>) =>
-    setDraft((previous) => {
-      const next = { ...previous, ...update };
-      latest.current = next;
-      return next;
+  const updateSelectedCard = (card: CardInput) =>
+    change((current) => {
+      const cards = [...current.cards];
+      cards[selected] = card;
+      return { cards };
     });
-  const meaningful = (value: Draft) =>
-    value.title.trim() ||
-    value.description.trim() ||
-    value.cards.some(hasContent);
-  const write = async () => {
-    if (skip.current || !loaded.current || !meaningful(latest.current)) return;
-    const value = { ...latest.current, savedAt: Date.now() };
-    await store.writeDraft(key, value);
-    setSavedAt(value.savedAt);
-    setDraftError(null);
-  };
-  useEffect(() => {
-    let active = true;
-    void store
-      .readDraft(key)
-      .then((value) => {
-        if (!active) return;
-        if (
-          value &&
-          Array.isArray(value.cards) &&
-          value.cards.length &&
-          meaningful(value) &&
-          JSON.stringify({ ...value, savedAt: 0 }) !== initial.current
-        )
-          setRestore(value);
-        else {
-          loaded.current = true;
-          setReady(true);
-        }
-      })
-      .catch((error) => {
-        if (active)
-          setDraftError(`임시 저장본을 읽지 못했습니다. ${String(error)}`);
-      });
-    return () => {
-      active = false;
-    };
-  }, [key]);
-  useEffect(() => {
-    if (!ready) return;
-    const timer = setTimeout(() => {
-      void write().catch(() =>
-        setDraftError("임시 저장에 실패했습니다. 저장 공간을 확인해 주세요."),
-      );
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [draft, ready]);
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (status) => {
-      if (status !== "active") void write().catch(() => {});
-    });
-    return () => {
-      subscription.remove();
-      if (!skip.current && loaded.current && meaningful(latest.current))
-        void store
-          .writeDraft(key, { ...latest.current, savedAt: Date.now() })
-          .catch(showError);
-    };
-  }, [key]);
   const flush = async () => {
     if (!composer.current) throw new Error("편집기를 불러오는 중입니다.");
-    const card = await composer.current.flush();
-    const cards = [...latest.current.cards];
-    cards[selected] = card;
-    const next = { ...latest.current, cards };
-    latest.current = next;
-    setDraft(next);
-    return next;
+    return updateSelectedCard(await composer.current.flush());
   };
   const leave = () => {
     if (busy) return;
@@ -172,28 +113,11 @@ export function DeckEditor({
         {
           text: "변경 버리기",
           style: "destructive",
-          onPress: () => {
-            void attempt(async () => {
-              skip.current = true;
-              try {
-                await store.removeDraft(key);
-                onClose();
-              } catch (error) {
-                skip.current = false;
-                throw error;
-              }
-            });
-          },
+          onPress: () => { void attempt(() => discardAndLeave(onClose)); },
         },
         {
           text: "임시 저장 후 나가기",
-          onPress: () => {
-            void attempt(async () => {
-              await flush();
-              await write();
-              onClose();
-            });
-          },
+          onPress: () => { void attempt(() => saveAndLeave(flush, onClose)); },
         },
       ],
     );
@@ -207,7 +131,7 @@ export function DeckEditor({
   const transform = async (
     action: (cards: CardInput[]) => { cards: CardInput[]; selected: number },
   ) => {
-    setBusy(true);
+    setChangingCard(true);
     try {
       const value = await flush();
       const next = action(value.cards);
@@ -216,7 +140,7 @@ export function DeckEditor({
     } catch (error) {
       showError(error);
     } finally {
-      setBusy(false);
+      setChangingCard(false);
     }
   };
   const save = async () => {
@@ -229,32 +153,22 @@ export function DeckEditor({
     }
     await saveConfirmed();
   };
-  const saveConfirmed = async () => {
-    setBusy(true);
-    try {
-      const value = await flush();
-      const id = await store.saveDeck(
-        deckId,
-        {
-          title: value.title,
-          description: value.description,
-          folderId: value.folderId,
-        },
-        value.cards,
-      );
-      skip.current = true;
-      try {
-        await store.removeDraft(key);
-      } catch {
-        /* Saved data is already durable. A stale draft can be discarded next time. */
-      }
-      onSaved(id);
-    } catch (error) {
-      showError(error);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const saveConfirmed = () =>
+    attempt(() =>
+      saveDeck(
+        flush,
+        (value) => store.saveDeck(
+          deckId,
+          {
+            title: value.title,
+            description: value.description,
+            folderId: value.folderId,
+          },
+          value.cards,
+        ),
+        onSaved,
+      ),
+    );
   if (deckId && !original)
     return (
       <View style={s.page}>
@@ -275,26 +189,16 @@ export function DeckEditor({
         </Text>
         <Button
           title="임시 저장본 복원"
+          disabled={busy}
           onPress={() => {
-            change(restore);
-            setSelected(0);
-            setSavedAt(restore.savedAt);
-            setRestore(null);
-            loaded.current = true;
-            setReady(true);
+            if (applyRestore()) setSelected(0);
           }}
         />
         <Button
           title="임시 저장본 버리기"
           tone="danger"
-          onPress={() => {
-            void attempt(async () => {
-              await store.removeDraft(key);
-              setRestore(null);
-              loaded.current = true;
-              setReady(true);
-            });
-          }}
+          busy={busy}
+          onPress={() => { void attempt(discardRestore); }}
         />
       </View>
     );
@@ -307,18 +211,7 @@ export function DeckEditor({
         {draftError && (
           <Button
             title="임시 저장 확인 다시 시도"
-            onPress={() => {
-              void store
-                .readDraft(key)
-                .then((value) => {
-                  if (value) setRestore(value);
-                  else {
-                    loaded.current = true;
-                    setReady(true);
-                  }
-                })
-                .catch(showError);
-            }}
+            onPress={() => { void read(); }}
           />
         )}
       </View>
@@ -556,11 +449,7 @@ export function DeckEditor({
               ref={composer}
               key={card.id}
               card={card}
-              onChange={(next) => {
-                const cards = [...latest.current.cards];
-                cards[selected] = next;
-                change({ cards });
-              }}
+              onChange={updateSelectedCard}
             />
           </View>
         )}
