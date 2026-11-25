@@ -3,7 +3,7 @@ import { FlashcardStoreState } from './types';
 import { createAuthSlice } from './slices/authSlice';
 import { createSyncSlice } from './slices/syncSlice';
 import { createFolderSlice } from './slices/folderSlice';
-import { createDeckSlice } from './slices/deckSlice';
+import { createSetSlice } from './slices/setSlice';
 import { createCardSlice } from './slices/cardSlice';
 import { loadAccountView } from './accountStorage';
 
@@ -15,7 +15,7 @@ export const useFlashcardStore = create<FlashcardStoreState>()((set, get, api) =
     ...createAuthSlice(set, get, api),
     ...createSyncSlice(set, get, api),
     ...createFolderSlice(set, get, api),
-    ...createDeckSlice(set, get, api),
+    ...createSetSlice(set, get, api),
     ...createCardSlice(set, get, api),
     ...loadAccountView(),
   };

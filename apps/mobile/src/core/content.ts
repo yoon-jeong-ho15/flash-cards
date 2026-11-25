@@ -1,5 +1,5 @@
 import { Parser } from 'htmlparser2';
-import type { Card, CardInput, Deck, DeckSortOption } from './types';
+import type { Card, CardInput, CardSet, SetSortOption } from './types';
 
 /** Decode entities and search visible text without indexing markup or image URLs. */
 export function plainText(html: string): string {
@@ -20,13 +20,13 @@ export function hasContent(card: CardInput): boolean {
 }
 export const matches = (text: string, query: string) => text.toLocaleLowerCase('ko-KR').includes(query.trim().toLocaleLowerCase('ko-KR'));
 export const cardMatches = (card: Card, query: string) => matches(plainText(`${card.termRichText} ${card.definitionRichText}`), query);
-export const orderedCards = (cards: Card[], deckId: string) => cards.filter(c => c.deckId === deckId).sort((a, b) =>
+export const orderedCards = (cards: Card[], setId: string) => cards.filter(c => c.setId === setId).sort((a, b) =>
   (a.order ?? Infinity) - (b.order ?? Infinity) || a.id.localeCompare(b.id));
-export function folderCards(cards: Card[], decks: Deck[], folderId: string): Card[] {
-  const deckIds = new Set(decks.filter(deck => deck.folderId === folderId).map(deck => deck.id));
-  return cards.filter(card => deckIds.has(card.deckId));
+export function folderCards(cards: Card[], sets: CardSet[], folderId: string): Card[] {
+  const setIds = new Set(sets.filter(item => item.folderId === folderId).map(item => item.id));
+  return cards.filter(card => setIds.has(card.setId));
 }
-export function sortDecks<T extends Pick<Deck, 'title' | 'createdAt'> & { updatedAt?: number }>(items: T[], sort: DeckSortOption): T[] {
+export function sortSets<T extends Pick<CardSet, 'title' | 'createdAt'> & { updatedAt?: number }>(items: T[], sort: SetSortOption): T[] {
   return [...items].sort((a, b) => {
     const name = a.title.localeCompare(b.title, 'ko', { numeric: true });
     const time = (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt);
@@ -35,9 +35,9 @@ export function sortDecks<T extends Pick<Deck, 'title' | 'createdAt'> & { update
     return (sort === 'date-asc' ? -time : time) || name;
   });
 }
-export function orderedFolderCards(cards: Card[], decks: Deck[], folderId: string, sort: DeckSortOption = 'date-desc'): Card[] {
-  return sortDecks(decks.filter(deck => deck.folderId === folderId), sort)
-    .flatMap(deck => orderedCards(cards, deck.id));
+export function orderedFolderCards(cards: Card[], sets: CardSet[], folderId: string, sort: SetSortOption = 'date-desc'): Card[] {
+  return sortSets(sets.filter(item => item.folderId === folderId), sort)
+    .flatMap(item => orderedCards(cards, item.id));
 }
 export function shuffled<T>(items: T[], random = Math.random): T[] {
   const copy = [...items];

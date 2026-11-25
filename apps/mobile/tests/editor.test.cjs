@@ -64,7 +64,7 @@ test('an editor-serialized image URL round-trips through offline reopen and save
     return store;
   };
   const initial = await openOffline();
-  await initial.saveDeck(undefined, { title: '오프라인 세트' }, [{ termRichText: serialized, definitionRichText: '' }]);
+  await initial.saveSet(undefined, { title: '오프라인 세트' }, [{ termRichText: serialized, definitionRichText: '' }]);
 
   for (let pass = 0; pass < 2; pass++) {
     const store = await openOffline();

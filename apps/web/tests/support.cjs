@@ -5,10 +5,10 @@ const ts = require('typescript');
 const { createRequire } = require('node:module');
 const webRequire = createRequire(path.resolve(__dirname, '../package.json'));
 const root = path.resolve(__dirname, '../src');
-const emptyPending = { folderIds: [], deckIds: [], cardIds: [], deletedFolderIds: [], deletedDeckIds: [], deletedCardIds: [] };
+const emptyPending = { folderIds: [], setIds: [], cardIds: [], deletedFolderIds: [], deletedSetIds: [], deletedCardIds: [] };
 const card = { termRichText: 'old', definitionRichText: 'answer', learned: true };
-const seed = { card, data: () => ({ folders: [], decks: [{id:'d1',title:'deck',createdAt:1,updatedAt:1}],
-  cards: ['c1','c2'].map(id => ({...card,id,deckId:'d1'})) }) };
+const seed = { card, data: () => ({ folders: [], sets: [{id:'s1',title:'set',createdAt:1,updatedAt:1}],
+  cards: ['c1','c2'].map(id => ({...card,id,setId:'s1'})) }) };
 seed.snapshot = () => ({ ...seed.data(), pendingSync: emptyPending, pendingVersions: {}, mutationRevision: 0 });
 
 const locksByStorage = new WeakMap();

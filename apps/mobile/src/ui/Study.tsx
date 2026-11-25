@@ -50,7 +50,7 @@ function EditCard({ card, onClose }: { card: Card; onClose: () => void }) {
         onPress={() =>
           confirm(
             "현재 카드를 삭제할까요?",
-            "덱에서도 이 카드가 삭제됩니다.",
+            "세트에서도 이 카드가 삭제됩니다.",
             async () => {
               await store.deleteCard(card.id);
               onClose();
@@ -62,13 +62,13 @@ function EditCard({ card, onClose }: { card: Card; onClose: () => void }) {
   );
 }
 export function Study({
-  deckId,
+  setId,
   folderId,
   shuffle = folderId !== undefined,
   unlearnedOnly,
   onExit,
 }: {
-  deckId?: string;
+  setId?: string;
   folderId?: string;
   shuffle?: boolean;
   unlearnedOnly?: boolean;
@@ -76,23 +76,23 @@ export function Study({
 }) {
   const { colors, s } = useUI();
   const study = useThemedStyles(createStyles);
-  const { decks, cards, folders, preferences } = useStore();
-  const deck = decks.find((d) => d.id === deckId);
+  const { sets, cards, folders, preferences } = useStore();
+  const cardSet = sets.find((d) => d.id === setId);
   const source =
-    folderId !== undefined ? folders.find((f) => f.id === folderId) : deck;
+    folderId !== undefined ? folders.find((f) => f.id === folderId) : cardSet;
   const own = useMemo(
     () =>
       folderId !== undefined
         ? shuffle
-          ? folderCards(cards, decks, folderId)
+          ? folderCards(cards, sets, folderId)
           : orderedFolderCards(
               cards,
-              decks,
+              sets,
               folderId,
-              preferences.folderDeckSort,
+              preferences.folderSetSort,
             )
-        : orderedCards(cards, deckId ?? ""),
-    [cards, decks, deckId, folderId, shuffle, preferences.folderDeckSort],
+        : orderedCards(cards, setId ?? ""),
+    [cards, sets, setId, folderId, shuffle, preferences.folderSetSort],
   );
   const [session, setSession] = useState(() =>
     startSession(
@@ -123,14 +123,14 @@ export function Study({
     pageScroll.current?.scrollTo({ y, animated });
   };
   useEffect(() => {
-    if (deckId !== undefined)
-      void store.setPreferences({ lastStudiedDeckId: deckId }).catch(showError);
-  }, [deckId]);
+    if (setId !== undefined)
+      void store.setPreferences({ lastStudiedSetId: setId }).catch(showError);
+  }, [setId]);
   useEffect(() => {
     setSession((previous) => reconcileSession(previous, own));
   }, [own]);
   const current = own.find((c) => c.id === session.ids[session.index]);
-  const currentDeck = decks.find((d) => d.id === current?.deckId);
+  const currentSet = sets.find((d) => d.id === current?.setId);
   const learned = own.filter((c) => c.learned).length;
   if (!source)
     return (
@@ -139,7 +139,7 @@ export function Study({
           title={
             folderId !== undefined
               ? "폴더를 찾을 수 없어요"
-              : "덱을 찾을 수 없어요"
+              : "세트를 찾을 수 없어요"
           }
         />
         <Button title="학습 나가기" onPress={onExit} />
@@ -150,10 +150,10 @@ export function Study({
       <View style={s.page}>
         <Empty
           title="학습할 카드가 없어요"
-          detail={`'${source.title}' ${folderId !== undefined ? "폴더 안의 덱에" : "덱에"} 카드를 추가해 주세요.`}
+          detail={`'${source.title}' ${folderId !== undefined ? "폴더 안의 세트에" : "세트에"} 카드를 추가해 주세요.`}
         />
         <Button
-          title={folderId !== undefined ? "폴더로 돌아가기" : "덱으로 돌아가기"}
+          title={folderId !== undefined ? "폴더로 돌아가기" : "세트로 돌아가기"}
           onPress={onExit}
         />
       </View>
@@ -163,14 +163,14 @@ export function Study({
     const target =
       folderId !== undefined
         ? shuffle
-          ? folderCards(latest.cards, latest.decks, folderId)
+          ? folderCards(latest.cards, latest.sets, folderId)
           : orderedFolderCards(
               latest.cards,
-              latest.decks,
+              latest.sets,
               folderId,
-              latest.preferences.folderDeckSort,
+              latest.preferences.folderSetSort,
             )
-        : orderedCards(latest.cards, deckId ?? "");
+        : orderedCards(latest.cards, setId ?? "");
     setSession(
       startSession(
         target,
@@ -247,7 +247,7 @@ export function Study({
           />
         )}
         <Button
-          title={folderId !== undefined ? "폴더로 돌아가기" : "덱으로 돌아가기"}
+          title={folderId !== undefined ? "폴더로 돌아가기" : "세트로 돌아가기"}
           tone="secondary"
           onPress={onExit}
         />
@@ -357,9 +357,9 @@ export function Study({
           </View>
         </View>
         <View style={study.page}>
-          {folderId !== undefined && currentDeck && (
+          {folderId !== undefined && currentSet && (
             <Text numberOfLines={1} style={[s.label, { marginBottom: 10 }]}>
-              현재 덱: {currentDeck.title}
+              현재 세트: {currentSet.title}
             </Text>
           )}
           <StudyCard

@@ -1,9 +1,9 @@
-import type { Deck, DeckSortOption } from '../types';
+import type { CardSet, SetSortOption } from '../types';
 
 const compareTitles = (a: string, b: string) => a.localeCompare(b, 'ko', { numeric: true });
 
-export function sortDecks(decks: readonly Deck[], sortBy: DeckSortOption): Deck[] {
-  return [...decks].sort((a, b) => {
+export function sortSets(sets: readonly CardSet[], sortBy: SetSortOption): CardSet[] {
+  return [...sets].sort((a, b) => {
     const timeA = a.updatedAt || a.createdAt || 0;
     const timeB = b.updatedAt || b.createdAt || 0;
 

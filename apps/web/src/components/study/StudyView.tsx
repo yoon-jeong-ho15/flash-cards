@@ -23,32 +23,32 @@ import {
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 
 interface StudyViewProps {
-  deckId?: string;
+  setId?: string;
   folderId?: string;
   onlyDifficult?: boolean;
   shuffle?: boolean;
   onExit: () => void;
-  onEditDeck: (id: string) => void;
+  onEditSet: (id: string) => void;
 }
 export const StudyView: React.FC<StudyViewProps> = ({
-  deckId,
+  setId,
   folderId,
   onlyDifficult = false,
   shuffle = folderId !== undefined,
   onExit,
-  onEditDeck,
+  onEditSet,
 }) => {
   const session = useStudySession({
-    deckId,
+    setId,
     folderId,
     onlyDifficult,
     shuffle,
     onExit,
   });
   const {
-    deck,
+    set: cardSet,
     folder,
-    deckCards,
+    setCards,
     sessionCards,
     currentIndex,
     sessionCardCount,
@@ -83,12 +83,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
     handleUpdateCurrentCard,
     handleDeleteCurrentCard,
   } = session;
-  const currentDeck = useFlashcardStore((state) =>
-    state.decks.find((item) => item.id === currentCard?.deckId)
+  const currentSet = useFlashcardStore((state) =>
+    state.sets.find((item) => item.id === currentCard?.setId)
   );
   const skipClick = useRef(false);
-  const source = folderId !== undefined ? folder : deck;
-  const sourceType = folderId !== undefined ? '폴더' : '덱';
+  const source = folderId !== undefined ? folder : cardSet;
+  const sourceType = folderId !== undefined ? '폴더' : '세트';
   if (!source)
     return (
       <div className="page-container">
@@ -98,7 +98,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
         />
       </div>
     );
-  if (!deckCards.length)
+  if (!setCards.length)
     return (
       <div className="mx-auto max-w-lg px-5 py-16">
         <EmptyState
@@ -110,8 +110,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
               <Button variant="outline" onClick={onExit}>
                 돌아가기
               </Button>
-              {deck && (
-                <Button onClick={() => onEditDeck(deck.id)} leftIcon={<Plus className="h-4 w-4" />}>
+              {cardSet && (
+                <Button onClick={() => onEditSet(cardSet.id)} leftIcon={<Plus className="h-4 w-4" />}>
                   카드 추가
                 </Button>
               )}
@@ -135,14 +135,14 @@ export const StudyView: React.FC<StudyViewProps> = ({
   if (isCompleted || isFinishModalOpen)
     return (
       <StudyComplete
-        deck={source}
+        set={source}
         sourceType={sourceType}
         totalCards={sessionCardCount}
         difficultCardsCount={Math.max(0, sessionCardCount - masteredCount)}
         roundCount={round}
         onRestartAll={handleRestartAll}
         onRestartDifficultOnly={handleRestartUnlearned}
-        onBackToDeck={onExit}
+        onBackToSet={onExit}
         onContinue={closeFinishModal}
       />
     );
@@ -189,9 +189,9 @@ export const StudyView: React.FC<StudyViewProps> = ({
             </span>
             <span className="font-medium text-emerald-700">기억한 카드 {masteredCount}장</span>
           </div>
-          {folderId !== undefined && currentDeck && (
+          {folderId !== undefined && currentSet && (
             <p className="mt-3 truncate text-xs text-muted-foreground">
-              현재 덱: <strong className="font-medium text-foreground">{currentDeck.title}</strong>
+              현재 세트: <strong className="font-medium text-foreground">{currentSet.title}</strong>
             </p>
           )}
         </div>

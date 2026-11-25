@@ -34,7 +34,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
       return items.length === old.length && items.every((item, i) => item === old[i]) ? old : items;
     };
     set({ ...saved, folders: reuse(current.folders, saved.folders),
-      decks: reuse(current.decks, saved.decks), cards: reuse(current.cards, saved.cards), storageError: null });
+      sets: reuse(current.sets, saved.sets), cards: reuse(current.cards, saved.cards), storageError: null });
   };
   const sessionContext = () => {
     const { user, sessionVersion } = get();

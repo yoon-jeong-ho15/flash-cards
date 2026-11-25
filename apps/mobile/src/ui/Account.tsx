@@ -81,7 +81,7 @@ export function Account() {
         <View style={[s.box, { gap: 12 }]}>
           <View style={[s.row, { justifyContent: "space-around" }]}>
             {([
-              [state.decks.length, "학습 세트", colors.primary],
+              [state.sets.length, "학습 세트", colors.primary],
               [state.cards.length, "전체 카드", colors.info],
               [learned, "기억한 카드", colors.success],
             ] as const).map(([value, label, color]) => (

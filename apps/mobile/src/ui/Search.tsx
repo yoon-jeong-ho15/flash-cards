@@ -1,9 +1,9 @@
 import React, { useDeferredValue, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
-import { cardMatches, matches, sortDecks } from '../core/content';
+import { cardMatches, matches, sortSets } from '../core/content';
 import { useStore } from '../platform/runtime';
 import { CollectionLayoutToggle } from './CollectionLayoutToggle';
-import { DeckTile } from './DeckTile';
+import { SetTile } from './SetTile';
 import { Button, Empty, Field } from './kit';
 import { libraryStyles } from './libraryShared';
 import type { Navigation } from './navigation';
@@ -11,19 +11,19 @@ import { useUI } from './theme';
 import { Text } from './Typography';
 import { useCollectionGrid } from './useCollectionGrid';
 
-/** Searches across folders, decks, and card content. */
+/** Searches across folders, sets, and card content. */
 export function Search({ nav }: { nav: Navigation }) {
   const { s } = useUI();
-  const { decks, folders, cards } = useStore();
+  const { sets, folders, cards } = useStore();
   const collectionGrid = useCollectionGrid();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
-  const matchingDecks = sortDecks(
-    decks.filter(
-      (deck) =>
-        matches(`${deck.title} ${deck.description || ''}`, deferredQuery) ||
+  const matchingSets = sortSets(
+    sets.filter(
+      (cardSet) =>
+        matches(`${cardSet.title} ${cardSet.description || ''}`, deferredQuery) ||
         cards.some(
-          (card) => card.deckId === deck.id && cardMatches(card, deferredQuery)
+          (card) => card.setId === cardSet.id && cardMatches(card, deferredQuery)
         )
     ),
     'date-desc'
@@ -41,8 +41,8 @@ export function Search({ nav }: { nav: Navigation }) {
       columnWrapperStyle={
         collectionGrid.columns > 1 ? collectionGrid.rowStyle : undefined
       }
-      data={matchingDecks}
-      keyExtractor={(deck) => deck.id}
+      data={matchingSets}
+      keyExtractor={(cardSet) => cardSet.id}
       contentContainerStyle={[s.page, { gap: 0 }]}
       ListHeaderComponentStyle={{ marginBottom: 12 }}
       keyboardShouldPersistTaps="handled"
@@ -102,7 +102,7 @@ export function Search({ nav }: { nav: Navigation }) {
             style={[s.label, { marginBottom: 6 }]}
           >
             {deferredQuery.trim()
-              ? `검색된 학습 세트 ${matchingDecks.length}개`
+              ? `검색된 학습 세트 ${matchingSets.length}개`
               : '최근 수정한 학습 세트'}
           </Text>
         </View>
@@ -123,9 +123,9 @@ export function Search({ nav }: { nav: Navigation }) {
           />
         ) : undefined
       }
-      renderItem={({ item: deck }) => (
+      renderItem={({ item: cardSet }) => (
         <View style={collectionGrid.itemStyle}>
-          <DeckTile deck={deck} nav={nav} />
+          <SetTile set={cardSet} nav={nav} />
         </View>
       )}
     />

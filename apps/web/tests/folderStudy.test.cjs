@@ -12,16 +12,16 @@ function folderSession() {
     title: id,
     createdAt: 1,
   }));
-  snapshot.decks = [
-    { id: 'd1', folderId: 'f1', title: 'First', createdAt: 1, updatedAt: 1 },
-    { id: 'd2', folderId: 'f1', title: 'Second', createdAt: 1, updatedAt: 1 },
-    { id: 'd3', folderId: 'f2', title: 'Other', createdAt: 1, updatedAt: 1 },
+  snapshot.sets = [
+    { id: 's1', folderId: 'f1', title: 'First', createdAt: 1, updatedAt: 1 },
+    { id: 's2', folderId: 'f1', title: 'Second', createdAt: 1, updatedAt: 1 },
+    { id: 's3', folderId: 'f2', title: 'Other', createdAt: 1, updatedAt: 1 },
     { id: 'root', title: 'Root', createdAt: 1, updatedAt: 1 },
   ];
-  snapshot.cards = ['d1', 'd1', 'd2', 'd3', 'root', 'missing'].map((deckId, order) => ({
+  snapshot.cards = ['s1', 's1', 's2', 's3', 'root', 'missing'].map((setId, order) => ({
     ...seed.card,
     id: `c${order + 1}`,
-    deckId,
+    setId,
     order,
     learned: order === 0,
   }));
@@ -48,7 +48,7 @@ function folderSession() {
 
 const ids = (cards) => Array.from(cards, (card) => card.id);
 
-test('folder study shuffles every card across its decks exactly once, including learned cards', async () => {
+test('folder study shuffles every card across its sets exactly once, including learned cards', async () => {
   const h = folderSession();
   try {
     const session = h.render();
@@ -65,7 +65,7 @@ test('folder study shuffles every card across its decks exactly once, including 
   }
 });
 
-test('folder progress and edits update the original deck without resetting the shuffled session', async () => {
+test('folder progress and edits update the original set without resetting the shuffled session', async () => {
   const h = folderSession();
   try {
     let session = h.render();
@@ -81,7 +81,7 @@ test('folder progress and edits update the original deck without resetting the s
     assert.equal(session.currentIndex, 1);
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c3', 'c1']);
     const edited = h.store.getState().cards.find((card) => card.id === 'c3');
-    assert.equal(edited.deckId, 'd2');
+    assert.equal(edited.setId, 's2');
     assert.equal(edited.learned, true);
     assert.equal(session.currentCard.termRichText, 'edited');
     assert.equal(session.remainingUnlearnedCount, 1);
@@ -94,7 +94,7 @@ test('folder progress and edits update the original deck without resetting the s
       h.store.getState().cards.some((card) => card.id === 'c3'),
       false
     );
-    assert.equal(h.store.getState().cards.find((card) => card.id === 'c4').deckId, 'd3');
+    assert.equal(h.store.getState().cards.find((card) => card.id === 'c4').setId, 's3');
   } finally {
     h.cleanup();
   }
@@ -180,7 +180,7 @@ test('folder restarts filter unlearned cards or reshuffle all cards from the cur
     assert.equal(session.round, 2);
     session.handleNext();
     assert.equal(h.render().isFinishModalOpen, true);
-    await h.store.getState().moveDeck('d2', 'f2');
+    await h.store.getState().moveSet('s2', 'f2');
     session.handleRestartAll();
     session = h.render();
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c1']);
@@ -196,7 +196,7 @@ test('empty folders wait for cards and changing the folder initializes a fresh s
   const h = folderSession();
   try {
     assert.equal(h.render({ folderId: 'empty' }).sessionCards.length, 0);
-    await h.store.getState().moveDeck('d2', 'empty');
+    await h.store.getState().moveSet('s2', 'empty');
     assert.deepEqual(ids(h.render({ folderId: 'empty' }).sessionCards), ['c3']);
     const second = h.render({ folderId: 'f2' });
     assert.deepEqual(ids(second.sessionCards), ['c4']);
@@ -207,14 +207,14 @@ test('empty folders wait for cards and changing the folder initializes a fresh s
   }
 });
 
-test('deck study still starts with only that deck’s unlearned cards in order', async () => {
+test('set study still starts with only that set’s unlearned cards in order', async () => {
   const h = folderSession();
   try {
-    const session = h.render({ deckId: 'd1' });
+    const session = h.render({ setId: 's1' });
     assert.equal(session.isShuffle, false);
     assert.deepEqual(ids(session.sessionCards), ['c2']);
     session.handleRestartAll();
-    assert.deepEqual(ids(h.render({ deckId: 'd1' }).sessionCards), ['c1', 'c2']);
+    assert.deepEqual(ids(h.render({ setId: 's1' }).sessionCards), ['c1', 'c2']);
   } finally {
     h.cleanup();
   }
@@ -247,17 +247,17 @@ test('rating stores the answer once before advancing and supports correcting a f
   }
 });
 
-test('a mastered deck starts a full review and restarts accept ratings again', async () => {
+test('a mastered set starts a full review and restarts accept ratings again', async () => {
   const h = folderSession();
   try {
     await h.store.getState().setCardLearned('c2', true);
-    let session = h.render({ deckId: 'd1' });
+    let session = h.render({ setId: 's1' });
     assert.deepEqual(ids(session.sessionCards), ['c1', 'c2']);
     await session.handleRate(false);
     assert.equal(h.store.getState().cards.find((card) => card.id === 'c1').learned, false);
-    session = h.render({ deckId: 'd1' });
+    session = h.render({ setId: 's1' });
     session.handleRestartAll();
-    session = h.render({ deckId: 'd1' });
+    session = h.render({ setId: 's1' });
     await session.handleRate(true);
     assert.equal(h.store.getState().cards.find((card) => card.id === 'c1').learned, true);
   } finally {

@@ -6,7 +6,7 @@ import { auth, configured, db, storage } from './firebase';
 import { getDownloadURL, ref, uploadBytesResumable, type UploadTaskSnapshot } from 'firebase/storage';
 import type { Card, Data, Kind, Transport, ImageUpload } from '../core/types';
 
-const names: Record<Kind, string> = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
+const names: Record<Kind, string> = { folders: 'flashcard_folders', sets: 'flashcard_sets', cards: 'flashcard_cards' };
 async function bounded<T>(work: PromiseLike<T>, milliseconds = 20000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([work, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('연결 시간이 초과되었습니다. 다시 동기화해 주세요.')), milliseconds); })]); }
@@ -80,7 +80,7 @@ async function uploadEmbeddedImages(card: Card, uid: string, active: () => boole
 }
 function readCard(id: string, data: DocumentData, uid: string): Card {
   return {
-    id, userId: uid, deckId: data.deckId || '', order: data.order == null ? undefined : Number(data.order),
+    id, userId: uid, setId: data.setId || '', order: data.order == null ? undefined : Number(data.order),
     termRichText: data.termRichText || '', definitionRichText: data.definitionRichText || '',
     learned: Boolean(data.learned), frontImageUrl: data.frontImageUrl || undefined,
     backImageUrl: data.backImageUrl || data.imageUrl || undefined,
@@ -201,14 +201,14 @@ export const cloud: Transport = {
   },
   async pull(uid) {
     if (!db || auth?.currentUser?.uid !== uid) throw new Error('로그인 상태를 확인해 주세요.');
-    const kinds: Kind[] = ['folders', 'decks', 'cards'];
+    const kinds: Kind[] = ['folders', 'sets', 'cards'];
     const snapshots = await bounded(Promise.all(kinds.map(kind =>
       getDocsFromServer(query(collection(db!, names[kind]), where('userId', '==', uid))),
     )));
     const folders = snapshots[0].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, title: v.title || '', description: v.description || '', createdAt: Number(v.createdAt || 0) }; });
-    const decks = snapshots[1].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, title: v.title || '', description: v.description || '', folderId: v.folderId || null, createdAt: Number(v.createdAt || 0), updatedAt: Number(v.updatedAt || 0) }; });
-    const ids = new Set(decks.map(d => d.id));
-    const cards = snapshots[2].docs.map(d => readCard(d.id, d.data(), uid)).filter(c => ids.has(c.deckId));
-    return { folders, decks, cards } satisfies Data;
+    const sets = snapshots[1].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, title: v.title || '', description: v.description || '', folderId: v.folderId || null, createdAt: Number(v.createdAt || 0), updatedAt: Number(v.updatedAt || 0) }; });
+    const ids = new Set(sets.map(item => item.id));
+    const cards = snapshots[2].docs.map(d => readCard(d.id, d.data(), uid)).filter(c => ids.has(c.setId));
+    return { folders, sets, cards } satisfies Data;
   },
 };

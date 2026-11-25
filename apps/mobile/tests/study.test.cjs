@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { load } = require('./helpers.cjs');
 const { startSession, stepSession, reconcileSession } = load('core/study.ts');
-const { plainText, hasContent, shuffled, sortDecks } = load('core/content.ts');
+const { plainText, hasContent, shuffled, sortSets } = load('core/content.ts');
 const cards = [{ id: 'a', learned: true }, { id: 'b', learned: false }, { id: 'c', learned: false }];
 test('study starts with unlearned cards, supports all-card review and round restart, and marks finish at the boundary', () => {
   let session = startSession(cards);
@@ -30,6 +30,6 @@ test('visible-text search decodes numeric/entities, excludes scripts, attributes
 });
 test('shuffle is non-mutating and complete; numeric Korean name sorting and date ties are stable', () => {
   const input = ['a','b','c']; const copy = shuffled(input, () => 0); assert.deepEqual(input, ['a','b','c']); assert.deepEqual([...copy].sort(), input);
-  const decks = [{ title: '덱 10', createdAt: 1 }, { title: '덱 2', createdAt: 1 }];
-  assert.deepEqual(sortDecks(decks, 'name-asc').map(d => d.title), ['덱 2','덱 10']);
+  const sets = [{ title: '세트 10', createdAt: 1 }, { title: '세트 2', createdAt: 1 }];
+  assert.deepEqual(sortSets(sets, 'name-asc').map(d => d.title), ['세트 2','세트 10']);
 });

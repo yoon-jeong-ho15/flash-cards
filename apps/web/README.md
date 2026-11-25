@@ -46,10 +46,10 @@ existing screen props; the URL is the only source of navigation state.
 
 - `/`: dashboard
 - `/folders`, `/folders/:folderId`, `/folders/:folderId/study`
-- `/decks`, `/decks/:deckId`
-- `/decks/new?folderId=...`: create a deck, optionally inside a folder
-- `/decks/:deckId/edit?cardId=...`: edit a deck and optionally focus a card
-- `/decks/:deckId/study?shuffle=1&onlyDifficult=1`: study options
+- `/sets`, `/sets/:setId`
+- `/sets/new?folderId=...`: create a set, optionally inside a folder
+- `/sets/:setId/edit?cardId=...`: edit a set and optionally focus a card
+- `/sets/:setId/study?shuffle=1&onlyDifficult=1`: study options
 
 Direct links wait for authentication restoration and the account's initial sync
 attempt before mounting a screen. Account changes preserve the URL, reload the
@@ -84,9 +84,9 @@ ID와 작업 버전이 모두 일치하는 항목만 제거합니다. 다운로�
 
 `storage`, `pageshow`, 탭 재표시 시 현재 계정을 다시 읽습니다. 알림에 포함된 과거
 스냅샷을 쓰지 않습니다. 변경되지 않은 객체는 재사용하며 편집기의 입력 버퍼와
-외부 변경 안내를 유지합니다. 덱 전체 저장도 편집 시작 시 원본을 기준으로 바뀐
+외부 변경 안내를 유지합니다. 세트 전체 저장도 편집 시작 시 원본을 기준으로 바뀐
 필드와 카드만 적용하므로 다른 탭의 카드 추가·관계없는 수정이 남습니다.
-삭제된 덱과 수정 중 삭제된 카드는 저장을 거절하고 입력을 유지합니다.
+삭제된 세트와 수정 중 삭제된 카드는 저장을 거절하고 입력을 유지합니다.
 
 계정 변경은 세션 번호로 대기 중인 변경과 이전 계정의 응답을 무효화합니다.
 기존 계정의 디스크 데이터·대기 목록은 그대로 남고 로그아웃에는 쓰기가 필요 없습니다.
@@ -110,7 +110,7 @@ Web Locks가 없거나 사용할 수 없으면 기존 데이터 읽기만 허용
   처리 여부는 확정할 수 없어 재전송할 수 있습니다. 서버 측 fencing/CAS는 추가하지
   않았으므로 종료 직전 요청이나 다른 기기의 서버 쓰기까지 전역 순서를 보장하지 않습니다.
 - 응답하지 않는 네트워크 작업은 동기화 잠금을 유지할 수 있습니다. 로컬 저장은 계속
-  가능하며 해당 탭 종료 시 잠금이 풀립니다. 기존 초안 저장 키는 계정·덱별로 공유됩니다.
+  가능하며 해당 탭 종료 시 잠금이 풀립니다. 기존 초안 저장 키는 계정·세트별로 공유됩니다.
 - 실제 브라우저 검증은 로컬 저장과 UI를 대상으로 합니다. 클라우드 충돌·실패는
   서비스 모형을 사용한 두 독립 저장소 인스턴스 테스트로 검증합니다.
 
@@ -125,5 +125,5 @@ node --test apps/web/tests/browser/multitab.cjs
 브라우저 테스트는 임시 Chrome 프로필과 로컬 Vite 서버를 생성하고 종료 후 삭제합니다.
 Chrome/Chromium 경로를 자동으로 찾지 못하면 건너뛰므로 `CHROME_PATH`를 지정합니다.
 별도 브라우저 자동화 패키지는 필요하지 않으며 Node 22 이상을 사용합니다.
-실제 두 페이지의 저장 경쟁, 동일 덱의 카드 추가, 삭제와 수정, 외부 변경 시 입력
+실제 두 페이지의 저장 경쟁, 동일 세트의 카드 추가, 삭제와 수정, 외부 변경 시 입력
 유지, 저장 실패 시 입력 유지, 탭 종료 시 잠금 해제와 새 페이지 재로딩을 확인합니다.

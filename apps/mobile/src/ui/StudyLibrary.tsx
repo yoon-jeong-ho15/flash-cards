@@ -1,12 +1,12 @@
 import { CollectionLayoutToggle } from './CollectionLayoutToggle';
-import { CollectionIcon, CollectionSurface, DeckSummary } from './CollectionSurface';
+import { CollectionIcon, CollectionSurface, SetSummary } from './CollectionSurface';
 import { StudyOrderModal } from './StudyOrderModal';
 import { useCollectionGrid } from './useCollectionGrid';
 import { useUI, useThemedStyles, type Palette } from './theme';
 import { Text } from './Typography';
 import React, { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { sortDecks } from "../core/content";
+import { sortSets } from "../core/content";
 import { useStore } from "../platform/runtime";
 import { Button, Empty } from "./kit";
 import { Icon } from "./Icon";
@@ -15,58 +15,58 @@ import type { Navigation } from "./navigation";
 export function StudyLibrary({ nav }: { nav: Navigation }) {
   const { colors, s } = useUI();
   const styles = useThemedStyles(createStyles);
-  const { folders, decks, cards, preferences } = useStore();
+  const { folders, sets, cards, preferences } = useStore();
   const grid = useCollectionGrid();
   const { columns } = grid;
-  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const { topics, unfiled } = useMemo(() => {
     const counts = new Map<string, { count: number; learned: number }>();
     cards.forEach((card) => {
-      const value = counts.get(card.deckId) || { count: 0, learned: 0 };
+      const value = counts.get(card.setId) || { count: 0, learned: 0 };
       value.count++;
       if (card.learned) value.learned++;
-      counts.set(card.deckId, value);
+      counts.set(card.setId, value);
     });
     const folderCounts = new Map<
       string,
-      { deckCount: number; count: number; learned: number }
+      { setCount: number; count: number; learned: number }
     >();
-    decks.forEach((deck) => {
-      if (!deck.folderId) return;
-      const value = folderCounts.get(deck.folderId) || {
-        deckCount: 0,
+    sets.forEach((cardSet) => {
+      if (!cardSet.folderId) return;
+      const value = folderCounts.get(cardSet.folderId) || {
+        setCount: 0,
         count: 0,
         learned: 0,
       };
-      const own = counts.get(deck.id);
-      value.deckCount++;
+      const own = counts.get(cardSet.id);
+      value.setCount++;
       value.count += own?.count || 0;
       value.learned += own?.learned || 0;
-      folderCounts.set(deck.folderId, value);
+      folderCounts.set(cardSet.folderId, value);
     });
     const folderIds = new Set(folders.map((folder) => folder.id));
     return {
-      topics: sortDecks(folders, preferences.folderSort || "date-desc").map(
+      topics: sortSets(folders, preferences.folderSort || "date-desc").map(
         (folder) => ({
           ...folder,
           ...(folderCounts.get(folder.id) || {
-            deckCount: 0,
+            setCount: 0,
             count: 0,
             learned: 0,
           }),
         }),
       ),
-      unfiled: sortDecks(
-        decks.filter((deck) => !deck.folderId || !folderIds.has(deck.folderId)),
-        preferences.deckSort || "date-desc",
-      ).map((deck) => ({
-        ...deck,
-        ...(counts.get(deck.id) || { count: 0, learned: 0 }),
+      unfiled: sortSets(
+        sets.filter((cardSet) => !cardSet.folderId || !folderIds.has(cardSet.folderId)),
+        preferences.setSort || "date-desc",
+      ).map((cardSet) => ({
+        ...cardSet,
+        ...(counts.get(cardSet.id) || { count: 0, learned: 0 }),
       })),
     };
-  }, [folders, decks, cards, preferences.folderSort, preferences.deckSort]);
+  }, [folders, sets, cards, preferences.folderSort, preferences.setSort]);
   const hasContent = topics.length > 0 || unfiled.length > 0;
-  const selectedDeck = unfiled.find((deck) => deck.id === selectedDeckId);
+  const selectedSet = unfiled.find((cardSet) => cardSet.id === selectedSetId);
 
   return (
     <>
@@ -87,7 +87,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
                 </Text>
                 <View style={styles.dot} />
                 <Text style={styles.summaryText}>
-                  <Text style={styles.summaryValue}>{decks.length}</Text> 덱
+                  <Text style={styles.summaryValue}>{sets.length}</Text> 세트
                 </Text>
                 <View style={styles.dot} />
                 <Text style={styles.summaryText}>
@@ -97,7 +97,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
             )}
             {hasContent && (
               <View style={styles.sectionHeading}>
-                <Text numberOfLines={1} style={[styles.sectionTitle, { flex: 1, minWidth: 0 }]}>{topics.length ? '폴더' : '미분류 덱'}</Text>
+                <Text numberOfLines={1} style={[styles.sectionTitle, { flex: 1, minWidth: 0 }]}>{topics.length ? '폴더' : '미분류 세트'}</Text>
                 <Text numberOfLines={1} style={styles.sectionCount}>{topics.length || unfiled.length}개</Text>
                 <CollectionLayoutToggle />
               </View>
@@ -113,7 +113,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
               <Button
                 title="학습 세트 만들기"
                 icon="plus"
-                onPress={() => nav.go({ type: "edit-deck" })}
+                onPress={() => nav.go({ type: "edit-set" })}
               />
             </View>
           ) : undefined
@@ -128,7 +128,7 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
             >
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${item.title}, 덱 ${item.deckCount}개, 카드 ${item.count}장, 기억한 카드 ${item.learned}장, 폴더 열기`}
+                accessibilityLabel={`${item.title}, 세트 ${item.setCount}개, 카드 ${item.count}장, 기억한 카드 ${item.learned}장, 폴더 열기`}
                 onPress={() =>
                   nav.go({ type: "study-folder", folderId: item.id })
                 }
@@ -176,23 +176,23 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
             >
               {topics.length > 0 && (
                 <View style={[styles.sectionHeading, styles.unfiledHeading]}>
-                  <Text style={styles.sectionTitle}>미분류 덱</Text>
+                  <Text style={styles.sectionTitle}>미분류 세트</Text>
                   <Text style={styles.sectionCount}>{unfiled.length}개</Text>
                 </View>
               )}
               <View style={grid.wrapStyle}>
-                {unfiled.map((deck) => (
-                  <View key={deck.id} style={grid.itemStyle}>
+                {unfiled.map((cardSet) => (
+                  <View key={cardSet.id} style={grid.itemStyle}>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`${deck.title}, 카드 ${deck.count}장, ${deck.count ? "학습 순서 선택" : "학습할 카드 없음"}`}
-                      accessibilityState={{ disabled: !deck.count }}
-                      disabled={!deck.count}
+                      accessibilityLabel={`${cardSet.title}, 카드 ${cardSet.count}장, ${cardSet.count ? "학습 순서 선택" : "학습할 카드 없음"}`}
+                      accessibilityState={{ disabled: !cardSet.count }}
+                      disabled={!cardSet.count}
                       style={{ flex: 1 }}
-                      onPress={() => setSelectedDeckId(deck.id)}
+                      onPress={() => setSelectedSetId(cardSet.id)}
                     >
                       {({ pressed }) => (
-                        <DeckSummary hideDetails pressed={pressed} title={deck.title} count={deck.count} learned={deck.learned} />
+                        <SetSummary hideDetails pressed={pressed} title={cardSet.title} count={cardSet.count} learned={cardSet.learned} />
                       )}
                     </Pressable>
                   </View>
@@ -202,13 +202,13 @@ export function StudyLibrary({ nav }: { nav: Navigation }) {
           ) : undefined
         }
       />
-      {selectedDeck && (
+      {selectedSet && (
         <StudyOrderModal
-          title={selectedDeck.title}
-          onClose={() => setSelectedDeckId(null)}
+          title={selectedSet.title}
+          onClose={() => setSelectedSetId(null)}
           onChoose={(shuffle) => {
-            setSelectedDeckId(null);
-            nav.go({ type: "study", deckId: selectedDeck.id, shuffle, onlyDifficult: false });
+            setSelectedSetId(null);
+            nav.go({ type: "study", setId: selectedSet.id, shuffle, onlyDifficult: false });
           }}
         />
       )}

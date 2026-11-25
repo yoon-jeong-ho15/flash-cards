@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { ImageWithSkeleton } from '../common/ImageWithSkeleton';
 import { cn } from '@/lib/utils';
 
-interface DeckCardPreviewItemProps {
+interface SetCardPreviewItemProps {
   card: CardType;
   index: number;
   layout?: 'grid' | 'list';
   onEdit: (cardId: string) => void;
 }
 
-export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(
+export const SetCardPreviewItem: React.FC<SetCardPreviewItemProps> = memo(
   ({ card, index, onEdit, layout = 'list' }) => {
     const setLearned = useFlashcardStore((state) => state.setCardLearned);
     const backImage = card.backImageUrl || card.imageUrl;
@@ -98,4 +98,4 @@ export const DeckCardPreviewItem: React.FC<DeckCardPreviewItemProps> = memo(
   }
 );
 
-DeckCardPreviewItem.displayName = 'DeckCardPreviewItem';
+SetCardPreviewItem.displayName = 'SetCardPreviewItem';

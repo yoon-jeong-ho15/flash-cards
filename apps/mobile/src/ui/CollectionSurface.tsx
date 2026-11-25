@@ -6,7 +6,7 @@ import { Icon } from './Icon';
 import { Text } from './Typography';
 import { Progress } from './kit';
 
-export function DeckSummary({ title, count, learned, detail, description, pressed = false, hideDetails = false }: {
+export function SetSummary({ title, count, learned, detail, description, pressed = false, hideDetails = false }: {
   title: string;
   count: number;
   learned: number;
@@ -17,8 +17,8 @@ export function DeckSummary({ title, count, learned, detail, description, presse
 }) {
   const { colors, s } = useUI();
   return (
-    <CollectionSurface kind="deck" pressed={pressed} style={{ minHeight: 152, padding: 10, gap: 8 }}>
-      <DeckCardHeader title={title} pressed={pressed} />
+    <CollectionSurface kind="set" pressed={pressed} style={{ minHeight: 152, padding: 10, gap: 8 }}>
+      <SetCardHeader title={title} pressed={pressed} />
       <View style={{ flex: 1, gap: 4 }}>
         {hideDetails ? <View style={{ minHeight: 18 }} /> : (
           <Text style={[s.muted, { fontSize: 12, lineHeight: 18 }]}>{detail || (count ? `카드 ${count}장 · 기억한 카드 ${learned}장` : '학습할 카드가 없어요')}</Text>
@@ -57,9 +57,9 @@ function folderOutline(width: number, height: number) {
   ].join(' ');
 }
 
-/** Warm folders and blue deck edges keep collection types easy to recognize. */
+/** Warm folders and blue set edges keep collection types easy to recognize. */
 export function CollectionSurface({ kind, children, style, pressed = false }: {
-  kind: 'folder' | 'deck';
+  kind: 'folder' | 'set';
   pressed?: boolean;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -118,8 +118,8 @@ export function CollectionSurface({ kind, children, style, pressed = false }: {
   );
 }
 
-/** Full-width heading for the compact deck cards, whose content padding is 10. */
-export function DeckCardHeader({ title, pressed = false }: { title: string; pressed?: boolean }) {
+/** Full-width heading for the compact set cards, whose content padding is 10. */
+export function SetCardHeader({ title, pressed = false }: { title: string; pressed?: boolean }) {
   const { colors, s } = useUI();
   return (
     <View style={{
@@ -141,7 +141,7 @@ export function DeckCardHeader({ title, pressed = false }: { title: string; pres
 }
 
 /** Keep the original Lucide artwork; only the surrounding collection surface changes shape. */
-export function CollectionIcon({ kind, size = 36 }: { kind: 'folder' | 'deck'; size?: number }) {
+export function CollectionIcon({ kind, size = 36 }: { kind: 'folder' | 'set'; size?: number }) {
   const { colors } = useUI();
   return (
     <View pointerEvents="none" accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants"

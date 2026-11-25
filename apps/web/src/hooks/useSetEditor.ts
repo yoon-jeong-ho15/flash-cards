@@ -1,28 +1,27 @@
-import { selectDeckCards, indexCards } from '../store/cardSelectors';
+import { selectSetCards, indexCards } from '../store/cardSelectors';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
-import { CardFormItem } from '../components/deck/DeckCardEditorItem';
+import { CardFormItem } from '../components/set/SetCardEditorItem';
 import { sortCardsByOrder } from '../services/flashcardService';
 import { isCardItemEmpty } from '../utils/cardValidation';
+import {
+  SetDraftData,
+  loadSetDraft,
+  saveSetDraft,
+  removeSetDraft,
+} from '../services/setDraftStorage';
 
-interface UseDeckEditorOptions {
-  deckId?: string;
+interface UseSetEditorOptions {
+  setId?: string;
   initialFolderId?: string;
   focusCardId?: string;
-  onSaved: (savedDeckId: string) => void;
+  onSaved: (savedSetId: string) => void;
 }
 
-export interface DeckEditorErrors {
+export interface SetEditorErrors {
   title?: string;
   general?: string;
 }
-
-import {
-  DeckDraftData,
-  loadDeckDraft,
-  saveDeckDraft,
-  removeDeckDraft,
-} from '../services/deckDraftStorage';
 
 const isDraftMeaningful = (
   title: string,
@@ -35,7 +34,7 @@ const isDraftMeaningful = (
 };
 
 const isDraftDifferentFromOriginal = (
-  draft: DeckDraftData,
+  draft: SetDraftData,
   origTitle: string,
   origDesc: string,
   origFolderId: string | null,
@@ -84,42 +83,42 @@ const createEmptyCardItem = (): CardFormItem => ({
   definitionRichText: '',
 });
 
-export const useDeckEditor = ({
-  deckId,
+export const useSetEditor = ({
+  setId,
   initialFolderId,
   focusCardId,
   onSaved,
-}: UseDeckEditorOptions) => {
-  const decks = useFlashcardStore((state) => state.decks);
-  const cards = useFlashcardStore((state) => selectDeckCards(state, deckId || ''));
+}: UseSetEditorOptions) => {
+  const sets = useFlashcardStore((state) => state.sets);
+  const cards = useFlashcardStore((state) => selectSetCards(state, setId || ''));
   const folders = useFlashcardStore((state) => state.folders);
-  const saveDeckWithCards = useFlashcardStore((state) => state.saveDeckWithCards);
+  const saveSetWithCards = useFlashcardStore((state) => state.saveSetWithCards);
   const user = useFlashcardStore((state) => state.user);
 
   const [title, setTitle] = useState(() => {
-    if (deckId) {
-      const existingDeck = decks.find((d) => d.id === deckId);
-      if (existingDeck) return existingDeck.title;
+    if (setId) {
+      const existingSet = sets.find((s) => s.id === setId);
+      if (existingSet) return existingSet.title;
     }
     return '';
   });
   const [description, setDescription] = useState(() => {
-    if (deckId) {
-      const existingDeck = decks.find((d) => d.id === deckId);
-      if (existingDeck) return existingDeck.description || '';
+    if (setId) {
+      const existingSet = sets.find((s) => s.id === setId);
+      if (existingSet) return existingSet.description || '';
     }
     return '';
   });
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
-    if (deckId) {
-      const existingDeck = decks.find((d) => d.id === deckId);
-      if (existingDeck) return existingDeck.folderId || null;
+    if (setId) {
+      const existingSet = sets.find((s) => s.id === setId);
+      if (existingSet) return existingSet.folderId || null;
     }
     return initialFolderId || null;
   });
   const [cardItems, setCardItems] = useState<CardFormItem[]>(() => {
-    if (deckId) {
-      const existingCards = sortCardsByOrder(cards.filter((c) => c.deckId === deckId));
+    if (setId) {
+      const existingCards = sortCardsByOrder(cards.filter((c) => c.setId === setId));
       if (existingCards.length > 0) {
         return existingCards.map((c) => ({
           id: c.id,
@@ -136,10 +135,10 @@ export const useDeckEditor = ({
     return [createEmptyCardItem(), createEmptyCardItem()];
   });
   const [newlyAddedCardId, setNewlyAddedCardId] = useState<string | null>(null);
-  const [errors, setErrors] = useState<DeckEditorErrors>({});
+  const [errors, setErrors] = useState<SetEditorErrors>({});
 
   // 임시 저장(Draft) 관련 상태
-  const [draftToRestore, setDraftToRestore] = useState<DeckDraftData | null>(null);
+  const [draftToRestore, setDraftToRestore] = useState<SetDraftData | null>(null);
   const [showDraftRestoreModal, setShowDraftRestoreModal] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [isReadyForAutoSave, setReadyForAutoSave] = useState(false);
@@ -148,20 +147,20 @@ export const useDeckEditor = ({
 
   // 마운트 시 로컬 임시 저장본(Draft) 확인
   useEffect(() => {
-    const draft = loadDeckDraft(user?.uid, deckId);
+    const draft = loadSetDraft(user?.uid, setId);
     if (draft && isDraftMeaningful(draft.title, draft.description, draft.cardItems)) {
       let origTitle = '';
       let origDesc = '';
       let origFolderId: string | null = initialFolderId || null;
       let origCards: CardFormItem[] = [];
 
-      if (deckId) {
-        const existingDeck = decks.find((d) => d.id === deckId);
-        if (existingDeck) {
-          origTitle = existingDeck.title;
-          origDesc = existingDeck.description || '';
-          origFolderId = existingDeck.folderId || null;
-          origCards = sortCardsByOrder(cards.filter((c) => c.deckId === deckId)).map((c) => ({
+      if (setId) {
+        const existingSet = sets.find((s) => s.id === setId);
+        if (existingSet) {
+          origTitle = existingSet.title;
+          origDesc = existingSet.description || '';
+          origFolderId = existingSet.folderId || null;
+          origCards = sortCardsByOrder(cards.filter((c) => c.setId === setId)).map((c) => ({
             id: c.id,
             order: c.order,
             termRichText: c.termRichText,
@@ -180,12 +179,12 @@ export const useDeckEditor = ({
         // 복원 여부 결정을 기다리는 동안 자동 저장 보류
         return;
       } else {
-        removeDeckDraft(user?.uid, deckId);
+        removeSetDraft(user?.uid, setId);
       }
     }
 
     setReadyForAutoSave(true);
-  }, [deckId, user?.uid]);
+  }, [setId, user?.uid]);
 
   // 임시 저장본 복원 실행
   const handleRestoreDraft = useCallback(() => {
@@ -209,18 +208,18 @@ export const useDeckEditor = ({
 
   // 임시 저장본 삭제하고 원본/초기 상태 유지
   const handleDiscardDraft = useCallback(() => {
-    removeDeckDraft(user?.uid, deckId);
+    removeSetDraft(user?.uid, setId);
     setDraftToRestore(null);
     setShowDraftRestoreModal(false);
     setReadyForAutoSave(true);
-  }, [deckId, user?.uid]);
+  }, [setId, user?.uid]);
 
   // 임시 저장본 완전 제거 (정식 저장 성공 또는 취소 확인 시)
   const clearDraft = useCallback(() => {
     skipDraftFlushRef.current = true;
-    removeDeckDraft(user?.uid, deckId);
+    removeSetDraft(user?.uid, setId);
     setLastSavedAt(null);
-  }, [deckId, user?.uid]);
+  }, [setId, user?.uid]);
 
   // 주기적 로컬 임시 저장 (디바운스 2초 + 내용 변경 감지)
   useEffect(() => {
@@ -240,8 +239,8 @@ export const useDeckEditor = ({
       const currentJson = JSON.stringify(currentData);
       if (currentJson === lastSavedJsonRef.current) return;
       const now = Date.now();
-      const saved = saveDeckDraft(user?.uid, {
-        deckId,
+      const saved = saveSetDraft(user?.uid, {
+        setId,
         title,
         description,
         selectedFolderId,
@@ -261,31 +260,31 @@ export const useDeckEditor = ({
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [title, description, selectedFolderId, cardItems, deckId, user?.uid, isReadyForAutoSave]);
+  }, [title, description, selectedFolderId, cardItems, setId, user?.uid, isReadyForAutoSave]);
 
   // Track the original independently of the editable draft. Remote refreshes must not reset inputs.
-  const originalDeck = decks.find((d) => d.id === deckId);
+  const originalSet = sets.find((s) => s.id === setId);
   const fingerprint = useMemo(
-    () => JSON.stringify({ deck: originalDeck, cards: cards.filter(card => card.deckId === deckId) }),
-    [originalDeck, cards, deckId]
+    () => JSON.stringify({ set: originalSet, cards: cards.filter(card => card.setId === setId) }),
+    [originalSet, cards, setId]
   );
   const [baseline, setBaseline] = useState(fingerprint);
-  const hasExternalChanges = Boolean(deckId && baseline !== fingerprint);
+  const hasExternalChanges = Boolean(setId && baseline !== fingerprint);
   const reloadOriginal = useCallback(() => {
-    const deck = decks.find((d) => d.id === deckId);
-    if (!deck) return;
-    setTitle(deck.title);
-    setDescription(deck.description || '');
-    setSelectedFolderId(deck.folderId || null);
-    setCardItems(sortCardsByOrder(cards.filter((c) => c.deckId === deckId)));
+    const cardSet = sets.find((s) => s.id === setId);
+    if (!cardSet) return;
+    setTitle(cardSet.title);
+    setDescription(cardSet.description || '');
+    setSelectedFolderId(cardSet.folderId || null);
+    setCardItems(sortCardsByOrder(cards.filter((c) => c.setId === setId)));
     setBaseline(fingerprint);
-  }, [decks, cards, deckId, fingerprint]);
+  }, [sets, cards, setId, fingerprint]);
 
   // Flush the latest draft on navigation and page close, preserving the account at mount time.
-  const latestDraftRef = useRef<DeckDraftData | null>(null);
+  const latestDraftRef = useRef<SetDraftData | null>(null);
   latestDraftRef.current = isReadyForAutoSave
     ? {
-        deckId,
+        setId,
         title,
         description,
         selectedFolderId,
@@ -301,7 +300,7 @@ export const useDeckEditor = ({
         draft &&
         isDraftMeaningful(draft.title, draft.description, draft.cardItems)
       ) {
-        saveDeckDraft(user?.uid, draft);
+        saveSetDraft(user?.uid, draft);
       }
     };
     window.addEventListener('beforeunload', flush);
@@ -309,13 +308,13 @@ export const useDeckEditor = ({
       window.removeEventListener('beforeunload', flush);
       flush();
     };
-  }, [user?.uid, deckId]);
+  }, [user?.uid, setId]);
 
   const saveDraftNow = useCallback(() => {
     const draft = latestDraftRef.current;
     if (!draft) return false;
     if (!isDraftMeaningful(draft.title, draft.description, draft.cardItems)) return true;
-    const saved = saveDeckDraft(user?.uid, { ...draft, savedAt: Date.now() });
+    const saved = saveSetDraft(user?.uid, { ...draft, savedAt: Date.now() });
     if (!saved)
       setErrors((previous) => ({
         ...previous,
@@ -358,7 +357,7 @@ export const useDeckEditor = ({
   // 카드 삭제
   const handleRemoveCard = useCallback((index: number) => {
     if (cardItemsRef.current.length <= 1) {
-      alert('덱에는 최소 1개의 카드가 필요합니다.');
+      alert('세트에는 최소 1개의 카드가 필요합니다.');
       return;
     }
     setCardItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
@@ -427,10 +426,10 @@ export const useDeckEditor = ({
   // 저장 처리
   const handleSave = useCallback(async () => {
     const trimmedTitle = title.trim();
-    const newErrors: DeckEditorErrors = {};
+    const newErrors: SetEditorErrors = {};
 
     if (!trimmedTitle) {
-      newErrors.title = '덱 제목을 입력해 주세요.';
+      newErrors.title = '세트 제목을 입력해 주세요.';
     }
 
     // 앞뒤가 모두 비어있는 카드(스페이스, 줄바꿈만 있는 카드 포함)를 자동으로 제외/삭제
@@ -449,8 +448,8 @@ export const useDeckEditor = ({
     savingRef.current = true;
     setIsSaving(true);
     try {
-      const savedDeckId = await saveDeckWithCards(
-        deckId || null,
+      const savedSetId = await saveSetWithCards(
+        setId || null,
         {
           title: trimmedTitle,
           description: description.trim(),
@@ -470,16 +469,16 @@ export const useDeckEditor = ({
         JSON.parse(baseline)
       );
 
-      // saveDeckWithCards returns only after both data and outbox are durable locally.
+      // saveSetWithCards returns only after both data and outbox are durable locally.
       skipDraftFlushRef.current = true;
-      removeDeckDraft(user?.uid, deckId);
+      removeSetDraft(user?.uid, setId);
       setLastSavedAt(null);
 
-      onSaved(savedDeckId);
+      onSaved(savedSetId);
     } catch (err: any) {
-      console.error('덱 저장 중 오류:', err);
+      console.error('세트 저장 중 오류:', err);
       setErrors({
-        general: typeof err?.message === 'string' ? err.message : '덱을 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.',
+        general: typeof err?.message === 'string' ? err.message : '세트를 저장하는 중 오류가 발생했습니다. 다시 시도해 주세요.',
       });
     } finally {
       savingRef.current = false;
@@ -490,9 +489,9 @@ export const useDeckEditor = ({
     cardItems,
     description,
     selectedFolderId,
-    deckId,
+    setId,
     cards,
-    saveDeckWithCards,
+    saveSetWithCards,
     baseline,
     onSaved,
     user?.uid,

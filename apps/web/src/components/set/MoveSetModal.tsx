@@ -5,24 +5,24 @@ import { Modal } from '../common/Modal';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-interface MoveDeckModalProps {
-  deckId: string;
+interface MoveSetModalProps {
+  setId: string;
   currentFolderId?: string | null;
   onClose: () => void;
 }
 
-export const MoveDeckModal: React.FC<MoveDeckModalProps> = ({
-  deckId,
+export const MoveSetModal: React.FC<MoveSetModalProps> = ({
+  setId,
   currentFolderId,
   onClose,
 }) => {
   const folders = useFlashcardStore(state => state.folders);
-  const moveDeck = useFlashcardStore(state => state.moveDeck);
+  const moveSet = useFlashcardStore(state => state.moveSet);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId || null);
 
   const handleSave = async () => {
     try {
-      await moveDeck(deckId, selectedFolderId);
+      await moveSet(setId, selectedFolderId);
       onClose();
     } catch { /* The global storage alert reports the failure; keep the selection. */ }
   };
@@ -31,12 +31,12 @@ export const MoveDeckModal: React.FC<MoveDeckModalProps> = ({
     <Modal
       isOpen={true}
       onClose={onClose}
-      title="덱 폴더 이동"
+      title="세트 폴더 이동"
       icon={<Folder className="w-5 h-5 text-primary" />}
       maxWidth="md"
     >
       <p className="text-sm text-muted-foreground mb-4">
-        덱을 보관할 폴더를 선택하세요. 미분류를 선택하면 루트 대시보드에 위치합니다.
+        세트를 보관할 폴더를 선택하세요. 미분류를 선택하면 루트 대시보드에 위치합니다.
       </p>
 
       <div className="space-y-2 max-h-60 overflow-y-auto mb-6 pr-1">

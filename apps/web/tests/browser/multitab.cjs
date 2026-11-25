@@ -91,28 +91,28 @@ test('two real pages preserve folders, cards, deletion, dirty editor input, and 
     const folders = [evaluate(a, `store.getState().addFolder('page a')`), evaluate(b, `store.getState().addFolder('page b')`)];
     await evaluate(a, `window.release(); true`);
     const [fa, fb] = await Promise.all(folders);
-    const [da, db] = await Promise.all([
-      evaluate(a, `store.getState().addDeck({title:'deck a'}, [{termRichText:'a', definitionRichText:'answer a'}])`),
-      evaluate(b, `store.getState().addDeck({title:'deck b'}, [{termRichText:'b', definitionRichText:'answer b'}])`),
+    const [sa, sb] = await Promise.all([
+      evaluate(a, `store.getState().addSet({title:'set a'}, [{termRichText:'a', definitionRichText:'answer a'}])`),
+      evaluate(b, `store.getState().addSet({title:'set b'}, [{termRichText:'b', definitionRichText:'answer b'}])`),
     ]);
     const persisted = () => evaluate(a, `JSON.parse(localStorage.getItem('flashcards_account_v1:guest'))`);
     let saved = await persisted();
     assert.deepEqual(new Set(saved.folders.map(f => f.id)), new Set([fa, fb]));
-    assert.deepEqual(new Set(saved.decks.map(d => d.id)), new Set([da, db]));
+    assert.deepEqual(new Set(saved.sets.map(s => s.id)), new Set([sa, sb]));
     assert.equal(saved.cards.length, 2);
-    // Both whole-deck editor forms also retain independently added cards.
+    // Both whole-set editor forms also retain independently added cards.
     for (const page of [a, b]) await evaluate(page, `(async () => {
       await store.getState().refreshAccount();
-      window.formBase = {deck:store.getState().decks.find(d=>d.id===${JSON.stringify(da)}),
-        cards:store.getState().cards.filter(c=>c.deckId===${JSON.stringify(da)})};
+      window.formBase = {set:store.getState().sets.find(s=>s.id===${JSON.stringify(sa)}),
+        cards:store.getState().cards.filter(c=>c.setId===${JSON.stringify(sa)})};
       return true;
     })()`);
     await Promise.all([a, b].map((page, i) => evaluate(page,
-      `store.getState().saveDeckWithCards(${JSON.stringify(da)}, {title:'deck a'},
+      `store.getState().saveSetWithCards(${JSON.stringify(sa)}, {title:'set a'},
         [...window.formBase.cards, {termRichText:'extra ${i}',definitionRichText:'added'}], window.formBase)`)));
     saved = await persisted();
     assert.equal(saved.cards.length, 4);
-    const card = saved.cards.find(c => c.deckId === db).id;
+    const card = saved.cards.find(c => c.setId === sb).id;
     await Promise.all([
       evaluate(a, `store.getState().deleteFolder(${JSON.stringify(fa)})`),
       evaluate(b, `store.getState().updateCard(${JSON.stringify(card)}, {termRichText:'edited in b'})`),
@@ -124,13 +124,13 @@ test('two real pages preserve folders, cards, deletion, dirty editor input, and 
     assert.ok(saved.pendingSync.cardIds.includes(card));
 
     // Load the actual editor, enter a dirty title, and receive a storage event.
-    await cdp.send('Page.navigate', { url: `${url}/decks/${encodeURIComponent(db)}/edit` }, b.sessionId);
-    await until(() => evaluate(b, `document.querySelector('input[value="deck b"]') !== null`));
-    await evaluate(b, `(() => { const input = document.querySelector('input[value="deck b"]');
+    await cdp.send('Page.navigate', { url: `${url}/sets/${encodeURIComponent(sb)}/edit` }, b.sessionId);
+    await until(() => evaluate(b, `document.querySelector('input[value="set b"]') !== null`));
+    await evaluate(b, `(() => { const input = document.querySelector('input[value="set b"]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'unsaved input');
       input.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`);
     await until(() => evaluate(b, `document.querySelector('input[value="unsaved input"]') !== null`));
-    await evaluate(a, `store.getState().updateDeck(${JSON.stringify(db)}, {title:'external title'})`);
+    await evaluate(a, `store.getState().updateSet(${JSON.stringify(sb)}, {title:'external title'})`);
     await until(() => evaluate(b, `document.body.textContent.includes('외부') || document.body.textContent.includes('변경되었')`));
     assert.equal(await evaluate(b, `document.querySelector('input[value="unsaved input"]') !== null`), true);
 
@@ -140,7 +140,7 @@ test('two real pages preserve folders, cards, deletion, dirty editor input, and 
       [...document.querySelectorAll('button')].find(button => button.textContent.trim() === '저장하기').click(); true`);
     await until(() => evaluate(b, `document.body.textContent.includes('test quota failure')`));
     assert.equal(await evaluate(b, `document.querySelector('input[value="unsaved input"]') !== null`), true);
-    assert.equal((await persisted()).decks.find(deck => deck.id === db).title, 'external title');
+    assert.equal((await persisted()).sets.find(cardSet => cardSet.id === sb).title, 'external title');
     await evaluate(b, `Storage.prototype.setItem = window.originalSetItem; true`);
 
     // Closing a page holding a lock must allow another page's queued durable edit.
@@ -153,7 +153,7 @@ test('two real pages preserve folders, cards, deletion, dirty editor input, and 
     await until(() => evaluate(reload, `document.querySelector('#main-content') !== null`));
     const final = await evaluate(reload, `JSON.parse(localStorage.getItem('flashcards_account_v1:guest'))`);
     assert.equal(final.folders.length, 2); assert.ok(final.folders.some(f => f.id === finalId));
-    assert.equal(final.decks.length, 2); assert.equal(final.cards.length, 4);
+    assert.equal(final.sets.length, 2); assert.equal(final.cards.length, 4);
   } finally {
     if (ws) ws.close();
     if (chrome && chrome.exitCode === null) { chrome.kill(); await new Promise(resolve => chrome.once('exit', resolve)); }

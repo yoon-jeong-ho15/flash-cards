@@ -21,7 +21,7 @@ export function AccountView() {
   const user = useFlashcardStore((state) => state.user);
   const login = useFlashcardStore((state) => state.loginWithGoogle);
   const logout = useFlashcardStore((state) => state.logout);
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const folders = useFlashcardStore((state) => state.folders);
   const cards = useFlashcardStore((state) => state.cards);
   const syncStatus = useFlashcardStore((state) => state.syncStatus);
@@ -92,13 +92,13 @@ export function AccountView() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 id="learning-summary" className="text-sm font-semibold">나의 학습 현황</h2>
               <div className="flex gap-4 text-xs font-medium text-primary">
-                <Link to={viewUrl({ type: 'all-decks' })} className="py-2 hover:underline">학습 세트 보기</Link>
+                <Link to={viewUrl({ type: 'all-sets' })} className="py-2 hover:underline">학습 세트 보기</Link>
                 <Link to={viewUrl({ type: 'all-folders' })} className="py-2 hover:underline">폴더 보기</Link>
               </div>
             </div>
             <dl className="grid grid-cols-2 gap-5 sm:grid-cols-4">
               {([
-                ['학습 세트', decks.length], ['폴더', folders.length],
+                ['학습 세트', sets.length], ['폴더', folders.length],
                 ['전체 카드', cards.length], ['기억한 카드', learned],
               ] as const).map(([label, value]) => (
                 <div key={label}>
@@ -119,8 +119,8 @@ export function AccountView() {
                   : '첫 학습 세트를 만들고 학습을 시작해 보세요.'}
               </p>
             </div>
-            {!decks.length && (
-              <Link to={viewUrl({ type: 'edit-deck' })} className={buttonVariants({ size: 'sm' })}>
+            {!sets.length && (
+              <Link to={viewUrl({ type: 'edit-set' })} className={buttonVariants({ size: 'sm' })}>
                 새 학습 세트 만들기 <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>
             )}

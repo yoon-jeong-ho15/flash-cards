@@ -16,20 +16,20 @@ test('grid fits phones and tablets, list remains one column, and large text stay
 test('collection layout survives reopening without changing sort preferences or library content', async () => {
   const h = harness();
   await h.store.switchUser(null);
-  const id = await h.store.saveDeck(undefined, { title: '세트' }, [item()]);
-  await h.store.setPreferences({ deckSort: 'name-asc', folderSort: 'date-asc' });
+  const id = await h.store.saveSet(undefined, { title: '세트' }, [item()]);
+  await h.store.setPreferences({ setSort: 'name-asc', folderSort: 'date-asc' });
   await Promise.all([
     h.store.setPreferences({ collectionLayout: 'list' }),
-    h.store.setPreferences({ folderDeckSort: 'name-desc' }),
+    h.store.setPreferences({ folderSetSort: 'name-desc' }),
   ]);
   const saved = JSON.parse(h.map.get(accountKey()));
   assert.equal(saved.preferences.collectionLayout, 'list');
   const reopened = harness({}, h.map);
   await reopened.store.switchUser(null);
   assert.deepEqual(reopened.store.getState().preferences, {
-    deckSort: 'name-asc', folderSort: 'date-asc', collectionLayout: 'list', folderDeckSort: 'name-desc',
+    setSort: 'name-asc', folderSort: 'date-asc', collectionLayout: 'list', folderSetSort: 'name-desc',
   });
-  assert.equal(reopened.store.getState().decks[0].id, id);
+  assert.equal(reopened.store.getState().sets[0].id, id);
   await reopened.store.setPreferences({ collectionLayout: 'grid' });
   assert.equal(reopened.store.getState().preferences.collectionLayout, 'grid');
 });

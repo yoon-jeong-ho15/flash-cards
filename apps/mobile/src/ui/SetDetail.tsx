@@ -121,17 +121,17 @@ export function CardPreview({
   return <View style={{ minHeight: 22 }}>{content}</View>;
 }
 
-export function DeckDetail({
-  deckId,
+export function SetDetail({
+  setId,
   nav,
 }: {
-  deckId: string;
+  setId: string;
   nav: Navigation;
 }) {
   const { colors, s } = useUI();
-  const { decks, folders, cards } = useStore();
+  const { sets, folders, cards } = useStore();
   const grid = useCollectionGrid();
-  const deck = decks.find((d) => d.id === deckId);
+  const cardSet = sets.find((d) => d.id === setId);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "learned" | "unlearned">("all");
   const [moving, setMoving] = useState(false);
@@ -139,23 +139,23 @@ export function DeckDetail({
   const [ordering, setOrdering] = useState(false);
   const [studyOptionsOpen, setStudyOptionsOpen] = useState(false);
   const openImage = useImage();
-  const own = orderedCards(cards, deckId);
+  const own = orderedCards(cards, setId);
   const visible = own.filter(
     (c) =>
       (filter === "all" || c.learned === (filter === "learned")) &&
       cardMatches(c, query),
   );
-  if (!deck)
+  if (!cardSet)
     return (
       <View style={s.page}>
         <Empty
-          title="덱을 찾을 수 없어요"
+          title="세트를 찾을 수 없어요"
           detail="다른 기기에서 삭제되었을 수 있습니다."
         />
         <Button title="돌아가기" onPress={nav.back} />
       </View>
     );
-  const folder = folders.find((f) => f.id === deck.folderId);
+  const folder = folders.find((f) => f.id === cardSet.folderId);
   return (
     <>
       <FlatList
@@ -210,15 +210,15 @@ export function DeckDetail({
               </Pressable>
             </View>
             <View style={[s.row, { flexWrap: "nowrap", alignItems: "flex-start", gap: 12 }]}>
-              <CollectionIcon kind="deck" size={40} />
+              <CollectionIcon kind="set" size={40} />
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={s.title}>{deck.title}</Text>
-                {Boolean(deck.description) && (
-                  <Text style={s.muted}>{deck.description}</Text>
+                <Text style={s.title}>{cardSet.title}</Text>
+                {Boolean(cardSet.description) && (
+                  <Text style={s.muted}>{cardSet.description}</Text>
                 )}
                 <Text style={s.label}>
                   {own.length}장의 카드 ·{" "}
-                  {new Date(deck.updatedAt).toLocaleDateString("ko-KR", {
+                  {new Date(cardSet.updatedAt).toLocaleDateString("ko-KR", {
                     month: "long",
                     day: "numeric",
                   })}{" "}
@@ -230,7 +230,7 @@ export function DeckDetail({
               <Text style={s.h2}>카드 관리</Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => nav.go({ type: "edit-deck", deckId })}
+                onPress={() => nav.go({ type: "edit-set", setId })}
                 style={[s.row, { minHeight: 44 }]}
               >
                 <Icon name="pencil" size={16} />
@@ -279,7 +279,7 @@ export function DeckDetail({
                 title="카드 추가하기"
                 icon="plus"
                 onPress={() =>
-                  nav.go({ type: "edit-deck", deckId, appendCard: true })
+                  nav.go({ type: "edit-set", setId, appendCard: true })
                 }
               />
             )}
@@ -299,7 +299,7 @@ export function DeckDetail({
                   accessibilityRole="button"
                   accessibilityLabel="카드 수정"
                   onPress={() =>
-                    nav.go({ type: "edit-deck", deckId, focusCardId: item.id })
+                    nav.go({ type: "edit-set", setId, focusCardId: item.id })
                   }
                   style={{
                     minWidth: 44,
@@ -368,7 +368,7 @@ export function DeckDetail({
             title="카드 추가하기"
             icon="plus"
             onPress={() =>
-              nav.go({ type: "edit-deck", deckId, appendCard: true })
+              nav.go({ type: "edit-set", setId, appendCard: true })
             }
           />
         </View>
@@ -393,29 +393,29 @@ export function DeckDetail({
       </View>
       {studyOptionsOpen && (
         <StudyOrderModal
-          title={deck.title}
+          title={cardSet.title}
           onClose={() => setStudyOptionsOpen(false)}
           onChoose={shuffle => {
             setStudyOptionsOpen(false);
-            nav.go({ type: 'study', deckId, shuffle, onlyDifficult: false });
+            nav.go({ type: 'study', setId, shuffle, onlyDifficult: false });
           }}
         />
       )}
       {ordering && (
         <CardOrderSheet
           cards={own}
-          deckTitle={deck.title}
+          setTitle={cardSet.title}
           onClose={() => setOrdering(false)}
-          onSave={ids => store.reorderCards(deckId, ids)}
+          onSave={ids => store.reorderCards(setId, ids)}
         />
       )}
       {moving && (
         <FolderPicker
-          value={deck.folderId || null}
+          value={cardSet.folderId || null}
           onClose={() => setMoving(false)}
           onSelect={(folderId) => {
             void attempt(async () => {
-              await store.moveDeck(deckId, folderId);
+              await store.moveSet(setId, folderId);
               setMoving(false);
             });
           }}
@@ -423,13 +423,13 @@ export function DeckDetail({
       )}
       {actions && (
         <Sheet title="학습 세트 관리" onClose={() => setActions(false)}>
-          <Text style={s.h2}>{deck.title}</Text>
+          <Text style={s.h2}>{cardSet.title}</Text>
           <Button
             title="세트 편집"
             tone="secondary"
             onPress={() => {
               setActions(false);
-              nav.go({ type: "edit-deck", deckId });
+              nav.go({ type: "edit-set", setId });
             }}
           />
           <Button
@@ -448,7 +448,7 @@ export function DeckDetail({
                 "학습 진행도를 초기화할까요?",
                 "모든 카드를 미학습 상태로 변경합니다.",
                 async () => {
-                  await store.resetProgress(deckId);
+                  await store.resetProgress(setId);
                   setActions(false);
                 },
               )
@@ -462,7 +462,7 @@ export function DeckDetail({
                 "학습 세트를 삭제할까요?",
                 "세트와 모든 카드가 삭제됩니다.",
                 async () => {
-                  await store.deleteDeck(deckId);
+                  await store.deleteSet(setId);
                   setActions(false);
                   nav.back();
                 },

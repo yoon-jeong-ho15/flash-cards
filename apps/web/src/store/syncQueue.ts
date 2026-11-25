@@ -5,7 +5,7 @@ import type { Card } from '../types';
 
 export const collections = [
   ['folders', 'folderIds', 'deletedFolderIds'],
-  ['decks', 'deckIds', 'deletedDeckIds'],
+  ['sets', 'setIds', 'deletedSetIds'],
   ['cards', 'cardIds', 'deletedCardIds'],
 ] as const;
 

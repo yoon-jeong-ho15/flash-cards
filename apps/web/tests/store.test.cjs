@@ -6,48 +6,48 @@ test('failed writes remain durable and retry successfully', async () => {
   let fail = true;
   const h = createHarness({ commitChanges: async () => { if (fail) throw Error('network'); } });
   h.store.getState().setUser({ uid: 'a' });
-  const id = await h.store.getState().addDeck({ title: 'deck' }, [seed.card]);
+  const id = await h.store.getState().addSet({ title: 'set' }, [seed.card]);
   await h.store.getState().flushPendingSync();
   assert.equal(h.store.getState().syncStatus, 'error');
-  assert.ok(h.store.getState().pendingSync.deckIds.includes(id));
+  assert.ok(h.store.getState().pendingSync.setIds.includes(id));
   const reloaded = createHarness({}, h.storage);
   reloaded.store.getState().setUser({ uid: 'a' });
-  assert.ok(reloaded.store.getState().pendingSync.deckIds.includes(id));
+  assert.ok(reloaded.store.getState().pendingSync.setIds.includes(id));
   fail = false;
   await h.store.getState().flushPendingSync();
-  assert.equal(h.store.getState().pendingSync.deckIds.length, 0);
+  assert.equal(h.store.getState().pendingSync.setIds.length, 0);
 });
 
-test('offline deck replacement queues removed cards and progress reset', async () => {
+test('offline set replacement queues removed cards and progress reset', async () => {
   const h = createHarness();
   h.store.getState().setUser({ uid: 'a' });
-  const id = await h.store.getState().addDeck({ title: 'deck' }, [seed.card, seed.card]);
+  const id = await h.store.getState().addSet({ title: 'set' }, [seed.card, seed.card]);
   await h.store.getState().flushPendingSync();
   h.navigator.onLine = false;
   const [first, second] = h.store.getState().cards;
-  await h.store.getState().saveDeckWithCards(id, { title: 'deck' }, [first]);
+  await h.store.getState().saveSetWithCards(id, { title: 'set' }, [first]);
   assert.ok(h.store.getState().pendingSync.deletedCardIds.includes(second.id));
   assert.ok(!h.store.getState().pendingSync.cardIds.includes(second.id));
-  await h.store.getState().resetDeckProgress(id);
+  await h.store.getState().resetSetProgress(id);
   assert.equal(h.store.getState().cards[0].learned, false);
   assert.ok(h.store.getState().pendingSync.cardIds.includes(first.id));
 });
 
-test('folder deletion queues deck detachment and cascading deletes', async () => {
+test('folder deletion queues set detachment and cascading deletes', async () => {
   const h = createHarness();
   h.store.getState().setUser({ uid: 'a' });
   const folderId = await h.store.getState().addFolder('folder');
-  const deckId = await h.store.getState().addDeck({ title: 'deck', folderId }, [seed.card]);
+  const setId = await h.store.getState().addSet({ title: 'set', folderId }, [seed.card]);
   await h.store.getState().flushPendingSync();
   h.navigator.onLine = false;
   await h.store.getState().deleteFolder(folderId);
-  assert.equal(h.store.getState().decks[0].folderId, null);
-  assert.ok(h.store.getState().pendingSync.deckIds.includes(deckId));
+  assert.equal(h.store.getState().sets[0].folderId, null);
+  assert.ok(h.store.getState().pendingSync.setIds.includes(setId));
   const second = await h.store.getState().addFolder('second');
-  await h.store.getState().moveDeck(deckId, second);
+  await h.store.getState().moveSet(setId, second);
   await h.store.getState().deleteFolder(second, true);
   assert.equal(h.store.getState().cards.length, 0);
-  assert.ok(h.store.getState().pendingSync.deletedDeckIds.includes(deckId));
+  assert.ok(h.store.getState().pendingSync.deletedSetIds.includes(setId));
   assert.equal(h.store.getState().pendingSync.cardIds.length, 0);
 });
 
@@ -55,25 +55,25 @@ test('an edit during a write is sent again, with one writer at a time', async ()
   const gate = deferred(); const sent = []; let concurrent = 0; let maximum = 0;
   const h = createHarness({ commitChanges: async snapshot => {
     concurrent++; maximum = Math.max(maximum, concurrent);
-    sent.push(snapshot.decks[0].title);
+    sent.push(snapshot.sets[0].title);
     if (sent.length === 1) await gate.promise;
     concurrent--;
   } });
   h.store.getState().setUser({ uid: 'a' });
-  const id = await h.store.getState().addDeck({ title: 'first' });
+  const id = await h.store.getState().addSet({ title: 'first' });
   await tick();
-  await h.store.getState().updateDeck(id, { title: 'second' });
+  await h.store.getState().updateSet(id, { title: 'second' });
   gate.resolve();
   await h.store.getState().flushPendingSync();
   assert.deepEqual(sent, ['first', 'second']);
   assert.equal(maximum, 1);
-  assert.equal(h.store.getState().pendingSync.deckIds.length, 0);
+  assert.equal(h.store.getState().pendingSync.setIds.length, 0);
 });
 
 test('edits and deletes during a pull invalidate the stale result', async () => {
   const gate = deferred(); let reads = 0; let server = seed.data();
   const h = createHarness({ fetchAllData: async () => ++reads === 1 ? gate.promise : server,
-    commitChanges: async snapshot => { server = { folders: snapshot.folders, decks: snapshot.decks, cards: snapshot.cards }; } });
+    commitChanges: async snapshot => { server = { folders: snapshot.folders, sets: snapshot.sets, cards: snapshot.cards }; } });
   h.storage.set('flashcards_account_v1:user:a', JSON.stringify(seed.snapshot()));
   h.store.getState().setUser({ uid: 'a' });
   const sync = h.store.getState().initCloudSync(); await tick();
@@ -91,15 +91,15 @@ test('logout invalidates old reads and preserves the original account outbox', a
   h.store.getState().setUser({ uid: 'a' });
   const sync = h.store.getState().initCloudSync(); await tick();
   h.navigator.onLine = false;
-  await h.store.getState().addDeck({ title: 'private' });
+  await h.store.getState().addSet({ title: 'private' });
   h.store.getState().setUser(null);
   gate.resolve(seed.data()); await sync;
-  assert.equal(h.store.getState().decks.length, 0);
+  assert.equal(h.store.getState().sets.length, 0);
   h.store.getState().setUser({ uid: 'b' });
-  assert.equal(h.store.getState().decks.length, 0);
+  assert.equal(h.store.getState().sets.length, 0);
   h.store.getState().setUser({ uid: 'a' });
-  assert.equal(h.store.getState().decks[0].title, 'private');
-  assert.equal(h.store.getState().pendingSync.deckIds.length, 1);
+  assert.equal(h.store.getState().sets[0].title, 'private');
+  assert.equal(h.store.getState().pendingSync.setIds.length, 1);
 });
 
 test('legacy cache is loaded only for its owner', async () => {
@@ -118,9 +118,9 @@ test('local persistence failure does not publish or upload an unsaved mutation',
   const h = createHarness({ commitChanges: async () => { writes++; } });
   h.store.getState().setUser({ uid: 'a' });
   h.localStorage.setItem = () => { throw Error('quota'); };
-  await assert.rejects(h.store.getState().addDeck({ title: 'unsaved' }), /quota/);
+  await assert.rejects(h.store.getState().addSet({ title: 'unsaved' }), /quota/);
   await tick();
-  assert.equal(h.store.getState().decks.length, 0);
+  assert.equal(h.store.getState().sets.length, 0);
   assert.equal(writes, 0);
 });
 
@@ -129,13 +129,13 @@ function createMultiAccountCloudHarness(beforeBatch = async () => {}) {
   const auth = { currentUser: { uid: 'a' } };
   const collections = {
     flashcard_folders: new Map([['f1', { id: 'f1', userId: 'a', title: 'folder', createdAt: 1 }]]),
-    flashcard_decks: new Map([
-      ['d1', { id: 'd1', userId: 'a', folderId: 'f1', title: 'deck A', createdAt: 1, updatedAt: 1 }],
-      ['bd1', { id: 'bd1', userId: 'b', folderId: null, title: 'deck B', createdAt: 1, updatedAt: 1 }],
+    flashcard_sets: new Map([
+      ['s1', { id: 's1', userId: 'a', folderId: 'f1', title: 'set A', createdAt: 1, updatedAt: 1 }],
+      ['bs1', { id: 'bs1', userId: 'b', folderId: null, title: 'set B', createdAt: 1, updatedAt: 1 }],
     ]),
     flashcard_cards: new Map([
-      ['c1', { id: 'c1', userId: 'a', deckId: 'd1', order: 0, termRichText: 'original A', definitionRichText: 'answer A', learned: false, contentVersion: 'v0' }],
-      ['bc1', { id: 'bc1', userId: 'b', deckId: 'bd1', order: 0, termRichText: 'original B', definitionRichText: 'answer B', learned: false, contentVersion: 'bv0' }],
+      ['c1', { id: 'c1', userId: 'a', setId: 's1', order: 0, termRichText: 'original A', definitionRichText: 'answer A', learned: false, contentVersion: 'v0' }],
+      ['bc1', { id: 'bc1', userId: 'b', setId: 'bs1', order: 0, termRichText: 'original B', definitionRichText: 'answer B', learned: false, contentVersion: 'bv0' }],
     ]),
   };
   const writes = [];
@@ -182,7 +182,7 @@ function createMultiAccountCloudHarness(beforeBatch = async () => {}) {
   const storage = new Map([
     ['flashcards_account_v1:user:a', JSON.stringify({
       folders: [collections.flashcard_folders.get('f1')],
-      decks: [collections.flashcard_decks.get('d1')],
+      sets: [collections.flashcard_sets.get('s1')],
       cards: [collections.flashcard_cards.get('c1')],
       pendingSync: seed.snapshot().pendingSync,
       pendingVersions: {},
@@ -191,7 +191,7 @@ function createMultiAccountCloudHarness(beforeBatch = async () => {}) {
     })],
     ['flashcards_account_v1:user:b', JSON.stringify({
       folders: [],
-      decks: [collections.flashcard_decks.get('bd1')],
+      sets: [collections.flashcard_sets.get('bs1')],
       cards: [{ ...collections.flashcard_cards.get('bc1'), termRichText: 'pending B' }],
       pendingSync: { ...seed.snapshot().pendingSync, cardIds: ['bc1'], writeStates: { 'cards:bc1': 'existing' } },
       pendingVersions: { 'cards:bc1': 1 },
@@ -231,7 +231,7 @@ test('write acknowledgement after logout and switching to B clears A queue witho
   auth.currentUser = { uid: 'b' };
   h.store.getState().setUser({ uid: 'b' });
   const bStateBefore = {
-    decks: h.store.getState().decks,
+    sets: h.store.getState().sets,
     cards: h.store.getState().cards,
     pendingSync: h.store.getState().pendingSync,
     pendingVersions: h.store.getState().pendingVersions,
@@ -245,7 +245,7 @@ test('write acknowledgement after logout and switching to B clears A queue witho
 
   assert.equal(h.store.getState().user.uid, 'b');
   assert.deepEqual({
-    decks: h.store.getState().decks,
+    sets: h.store.getState().sets,
     cards: h.store.getState().cards,
     pendingSync: h.store.getState().pendingSync,
     pendingVersions: h.store.getState().pendingVersions,

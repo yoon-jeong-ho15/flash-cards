@@ -10,15 +10,15 @@ import { Button, Empty, Field, Sheet, attempt, showError } from "./kit";
 import { CardComposer, type ComposerHandle } from "./CardComposer";
 import { FolderPicker } from "./FolderPicker";
 import { Icon } from "./Icon";
-import { useDeckDraft } from "./useDeckDraft";
+import { useSetDraft } from "./useSetDraft";
 
 const emptyCard = (): CardInput => ({
   id: `temp-${randomUUID()}`,
   termRichText: "",
   definitionRichText: "",
 });
-export function DeckEditor({
-  deckId,
+export function SetEditor({
+  setId,
   folderId,
   focusCardId,
   appendCard = false,
@@ -26,7 +26,7 @@ export function DeckEditor({
   onSaved,
   guard,
 }: {
-  deckId?: string;
+  setId?: string;
   folderId?: string;
   focusCardId?: string;
   appendCard?: boolean;
@@ -36,8 +36,8 @@ export function DeckEditor({
 }) {
   const { colors, s } = useUI();
   const state = useStore();
-  const original = state.decks.find((d) => d.id === deckId);
-  const originalCards = orderedCards(state.cards, deckId || "");
+  const original = state.sets.find((d) => d.id === setId);
+  const originalCards = orderedCards(state.cards, setId || "");
   const fingerprint = JSON.stringify([original, originalCards]);
   const [baseline, setBaseline] = useState(fingerprint);
   const {
@@ -54,8 +54,8 @@ export function DeckEditor({
     discardRestore,
     discardAndLeave,
     saveAndLeave,
-    saveDeck,
-  } = useDeckDraft(deckId, folderId, () => ({
+    saveSet,
+  } = useSetDraft(setId, folderId, () => ({
     title: original?.title || "",
     description: original?.description || "",
     folderId: original?.folderId || folderId || null,
@@ -88,7 +88,7 @@ export function DeckEditor({
       });
   }, [selected, ready]);
   const composer = useRef<ComposerHandle>(null);
-  const external = Boolean(deckId && fingerprint !== baseline);
+  const external = Boolean(setId && fingerprint !== baseline);
   const updateSelectedCard = (card: CardInput) =>
     change((current) => {
       const cards = [...current.cards];
@@ -155,10 +155,10 @@ export function DeckEditor({
   };
   const saveConfirmed = () =>
     attempt(() =>
-      saveDeck(
+      saveSet(
         flush,
-        (value) => store.saveDeck(
-          deckId,
+        (value) => store.saveSet(
+          setId,
           {
             title: value.title,
             description: value.description,
@@ -169,11 +169,11 @@ export function DeckEditor({
         onSaved,
       ),
     );
-  if (deckId && !original)
+  if (setId && !original)
     return (
       <View style={s.page}>
         <Empty
-          title="덱이 삭제되었습니다"
+          title="세트가 삭제되었습니다"
           detail="작성하던 내용은 이 계정의 임시 저장본으로 유지됩니다."
         />
         <Button title="돌아가기" onPress={onClose} />
@@ -182,7 +182,7 @@ export function DeckEditor({
   if (restore)
     return (
       <View style={s.page}>
-        <Text style={s.title}>작성 중이던 덱이 있어요</Text>
+        <Text style={s.title}>작성 중이던 세트가 있어요</Text>
         <Text style={s.text}>
           {new Date(restore.savedAt).toLocaleString("ko-KR")}에 저장된 내용을
           복원할까요?
@@ -236,7 +236,7 @@ export function DeckEditor({
       >
         <View style={{ gap: 5 }}>
           <Text style={s.title}>
-            {deckId ? "세트 편집" : "새 세트"}
+            {setId ? "세트 편집" : "새 세트"}
           </Text>
         </View>
         <Text

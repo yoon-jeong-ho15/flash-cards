@@ -113,11 +113,11 @@
     background: #6155e8;
   }
 
-  .deck-illustration {
+  .set-illustration {
     @apply pointer-events-none relative h-44 w-44 shrink-0;
   }
 
-  .deck-illustration > div {
+  .set-illustration > div {
     @apply absolute flex h-36 w-28 flex-col justify-between rounded-2xl border p-4 shadow-sm;
   }
 

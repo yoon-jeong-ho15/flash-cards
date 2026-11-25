@@ -14,7 +14,7 @@ import {
   WriteBatch,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../lib/firebase';
-import { Card, Deck, Folder } from '../types';
+import { Card, CardSet, Folder } from '../types';
 import { AccountData, PendingSync } from '../store/types';
 import { collections } from '../store/syncQueue';
 import { bounded, cardDataImages, validateDocument } from './imageSync';
@@ -86,7 +86,7 @@ function readCard(id: string, data: DocumentData, userId: string): Card {
   return {
     id: data.id || id,
     userId: data.userId || userId,
-    deckId: data.deckId || '',
+    setId: data.setId || '',
     order: data.order !== undefined ? Number(data.order) : undefined,
     termRichText: data.termRichText || '',
     definitionRichText: data.definitionRichText || '',
@@ -112,7 +112,7 @@ export const flashcardService = {
     const individualWrites: Array<() => Promise<SyncWriteResult>> = [];
     const missingDeletes: string[] = [];
     const active = () => isActive() && auth?.currentUser?.uid === userId;
-    const names = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
+    const names = { folders: 'flashcard_folders', sets: 'flashcard_sets', cards: 'flashcard_cards' };
     const notSent = new Set(collections.flatMap(([kind, upserts]) =>
       snapshot.pendingSync[upserts].map(id => `${kind}:${id}`)));
     try {
@@ -220,15 +220,15 @@ export const flashcardService = {
   },
 
   /**
-   * Firebase Firestore로부터 현재 사용자의 모든 폴더, 덱, 카드 데이터를 조회합니다.
+   * Firebase Firestore로부터 현재 사용자의 모든 폴더, 세트, 카드 데이터를 조회합니다.
    */
   async fetchAllData(userId: string): Promise<AccountData> {
     if (!db || !isFirebaseConfigured || !userId) throw new Error('Firebase is unavailable');
 
     try {
-      const [foldersSnap, decksSnap, cardsSnap] = await bounded(Promise.all([
+      const [foldersSnap, setsSnap, cardsSnap] = await bounded(Promise.all([
         getDocsFromServer(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
-        getDocsFromServer(query(collection(db, 'flashcard_decks'), where('userId', '==', userId))),
+        getDocsFromServer(query(collection(db, 'flashcard_sets'), where('userId', '==', userId))),
         getDocsFromServer(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
       ]));
 
@@ -245,7 +245,7 @@ export const flashcardService = {
         })
         .sort((a, b) => b.createdAt - a.createdAt);
 
-      const decks: Deck[] = decksSnap.docs
+      const sets: CardSet[] = setsSnap.docs
         .map((d) => {
           const data = d.data();
           return {
@@ -262,32 +262,32 @@ export const flashcardService = {
 
       const rawCards = cardsSnap.docs.map(d => readCard(d.id, d.data(), userId));
 
-      // 1. 현재 존재하는 유효 덱 ID 목록 확인
-      const validDeckIds = new Set(decks.map((d) => d.id));
+      // 1. 현재 존재하는 유효 세트 ID 목록 확인
+      const validSetIds = new Set(sets.map((s) => s.id));
       const validRawCards: Card[] = [];
       const orphanCardIds: string[] = [];
 
       rawCards.forEach((c) => {
-        if (validDeckIds.has(c.deckId)) {
+        if (validSetIds.has(c.setId)) {
           validRawCards.push(c);
         } else {
           orphanCardIds.push(c.id);
         }
       });
 
-      // 3. 유효 덱의 카드들만 덱별로 묶어서 정렬하고, order가 없는 카드는 index를 부여
-      const cardsByDeck = new Map<string, Card[]>();
+      // 3. 유효 세트의 카드들만 세트별로 묶어서 정렬하고, order가 없는 카드는 index를 부여
+      const cardsBySet = new Map<string, Card[]>();
       validRawCards.forEach((c) => {
-        const list = cardsByDeck.get(c.deckId) || [];
+        const list = cardsBySet.get(c.setId) || [];
         list.push(c);
-        cardsByDeck.set(c.deckId, list);
+        cardsBySet.set(c.setId, list);
       });
 
       const cards: Card[] = [];
       const cardsToMigrate: Card[] = [];
 
-      cardsByDeck.forEach((deckCardsList) => {
-        const sorted = sortCardsByOrder(deckCardsList);
+      cardsBySet.forEach((setCardsList) => {
+        const sorted = sortCardsByOrder(setCardsList);
         sorted.forEach((card, index) => {
           if (card.order === undefined) {
             const updatedCard = { ...card, order: index };
@@ -299,7 +299,7 @@ export const flashcardService = {
         });
       });
 
-      return { folders, decks, cards };
+      return { folders, sets, cards };
     } catch (err) {
       console.error('Firebase Firestore 데이터 조회 실패:', err);
       throw err;
@@ -367,43 +367,43 @@ export const flashcardService = {
   },
 
   /**
-   * 단건 덱 저장
+   * 단건 세트 저장
    */
-  async upsertDeck(deck: Deck, userId: string): Promise<void> {
+  async upsertSet(cardSet: CardSet, userId: string): Promise<void> {
     if (!db || !isFirebaseConfigured || !userId) return;
-    const docRef = doc(db, 'flashcard_decks', deck.id);
+    const docRef = doc(db, 'flashcard_sets', cardSet.id);
     await setDoc(
       docRef,
       {
-        id: deck.id,
+        id: cardSet.id,
         userId,
-        folderId: deck.folderId || null,
-        title: deck.title,
-        description: deck.description || null,
-        createdAt: deck.createdAt,
-        updatedAt: deck.updatedAt,
+        folderId: cardSet.folderId || null,
+        title: cardSet.title,
+        description: cardSet.description || null,
+        createdAt: cardSet.createdAt,
+        updatedAt: cardSet.updatedAt,
       },
       { merge: true }
     );
   },
 
   /**
-   * 복수 덱 일괄 저장
+   * 복수 세트 일괄 저장
    */
-  async batchUpsertDecks(decks: Deck[], userId: string): Promise<void> {
-    if (!db || !isFirebaseConfigured || !userId || decks.length === 0) return;
-    const ops = decks.map((d) => (batch: WriteBatch) => {
-      const docRef = doc(db!, 'flashcard_decks', d.id);
+  async batchUpsertSets(sets: CardSet[], userId: string): Promise<void> {
+    if (!db || !isFirebaseConfigured || !userId || sets.length === 0) return;
+    const ops = sets.map((s) => (batch: WriteBatch) => {
+      const docRef = doc(db!, 'flashcard_sets', s.id);
       batch.set(
         docRef,
         {
-          id: d.id,
+          id: s.id,
           userId,
-          folderId: d.folderId || null,
-          title: d.title,
-          description: d.description || null,
-          createdAt: d.createdAt,
-          updatedAt: d.updatedAt,
+          folderId: s.folderId || null,
+          title: s.title,
+          description: s.description || null,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
         },
         { merge: true }
       );
@@ -412,20 +412,20 @@ export const flashcardService = {
   },
 
   /**
-   * 덱 단건 삭제
+   * 세트 단건 삭제
    */
-  async deleteDeck(deckId: string): Promise<void> {
+  async deleteSet(setId: string): Promise<void> {
     if (!db || !isFirebaseConfigured) return;
-    await deleteDoc(doc(db, 'flashcard_decks', deckId));
+    await deleteDoc(doc(db, 'flashcard_sets', setId));
   },
 
   /**
-   * 복수 덱 일괄 삭제
+   * 복수 세트 일괄 삭제
    */
-  async batchDeleteDecks(deckIds: string[]): Promise<void> {
-    if (!db || !isFirebaseConfigured || deckIds.length === 0) return;
-    const ops = deckIds.map((id) => (batch: WriteBatch) => {
-      batch.delete(doc(db!, 'flashcard_decks', id));
+  async batchDeleteSets(setIds: string[]): Promise<void> {
+    if (!db || !isFirebaseConfigured || setIds.length === 0) return;
+    const ops = setIds.map((id) => (batch: WriteBatch) => {
+      batch.delete(doc(db!, 'flashcard_sets', id));
     });
     await commitInBatches(ops);
   },

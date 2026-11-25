@@ -39,10 +39,10 @@ interface SidebarProps {
   onNavigateHome: () => void;
   onNavigateAccount: () => void;
   onOpenSearch: () => void;
-  onChooseStudyDeck: () => void;
+  onChooseStudySet: () => void;
   onNavigateFolder: (folderId: string) => void;
-  onNavigateDeck: (deckId: string) => void;
-  onCreateDeck: () => void;
+  onNavigateSet: (setId: string) => void;
+  onCreateSet: () => void;
   onCreateFolder: () => void;
 }
 
@@ -55,14 +55,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigateHome,
   onNavigateAccount,
   onOpenSearch,
-  onChooseStudyDeck,
+  onChooseStudySet,
   onNavigateFolder,
-  onNavigateDeck,
-  onCreateDeck,
+  onNavigateSet,
+  onCreateSet,
   onCreateFolder,
 }) => {
   const folders = useFlashcardStore((state) => state.folders);
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const cards = useFlashcardStore((state) => state.cards);
   const user = useFlashcardStore((state) => state.user);
   const syncStatus = useFlashcardStore((state) => state.syncStatus);
@@ -75,19 +75,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const drawerRef = useRef<HTMLDivElement>(null);
   useDialogFocus(drawerRef, isMobileOpen, onCloseMobile);
-  const counts = useMemo(() => indexCards(cards).byDeck, [cards]);
+  const counts = useMemo(() => indexCards(cards).bySet, [cards]);
   const sortedFolders = useMemo(
     () => [...folders].sort((a, b) => a.title.localeCompare(b.title, 'ko', { numeric: true })),
     [folders]
   );
-  const sortedDecks = useMemo(
-    () => [...decks].sort((a, b) => a.title.localeCompare(b.title, 'ko', { numeric: true })),
-    [decks]
+  const sortedSets = useMemo(
+    () => [...sets].sort((a, b) => a.title.localeCompare(b.title, 'ko', { numeric: true })),
+    [sets]
   );
-  const rootDecks = useMemo(() => {
+  const rootSets = useMemo(() => {
     const folderIds = new Set(folders.map((folder) => folder.id));
-    return sortedDecks.filter((deck) => !deck.folderId || !folderIds.has(deck.folderId));
-  }, [folders, sortedDecks]);
+    return sortedSets.filter((cardSet) => !cardSet.folderId || !folderIds.has(cardSet.folderId));
+  }, [folders, sortedSets]);
   const pendingCount = countPending(pendingSync);
   const navigate = (action: () => void) => {
     action();
@@ -103,19 +103,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsLoggingIn(false);
     }
   };
-  const isCurrentDeck = (id: string) =>
-    'deckId' in currentView && currentView.deckId === id;
-  const renderDeck = (deck: (typeof decks)[number], collapsed: boolean) => (
+  const isCurrentSet = (id: string) =>
+    'setId' in currentView && currentView.setId === id;
+  const renderSet = (cardSet: (typeof sets)[number], collapsed: boolean) => (
     <button
-      key={deck.id}
+      key={cardSet.id}
       type="button"
-      onClick={() => navigate(() => onNavigateDeck(deck.id))}
-      aria-current={isCurrentDeck(deck.id) ? 'page' : undefined}
-      aria-label={collapsed ? deck.title : undefined}
-      title={collapsed ? deck.title : undefined}
+      onClick={() => navigate(() => onNavigateSet(cardSet.id))}
+      aria-current={isCurrentSet(cardSet.id) ? 'page' : undefined}
+      aria-label={collapsed ? cardSet.title : undefined}
+      title={collapsed ? cardSet.title : undefined}
       className={cn(
         'flex w-full min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
-        isCurrentDeck(deck.id)
+        isCurrentSet(cardSet.id)
           ? 'bg-secondary font-semibold text-secondary-foreground'
           : 'text-muted-foreground hover:bg-muted',
         collapsed && 'h-10 justify-center px-0'
@@ -124,9 +124,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <FileText className="h-3.5 w-3.5 shrink-0 opacity-65" />
       {!collapsed && (
         <>
-          <span className="min-w-0 flex-1 truncate">{deck.title}</span>
+          <span className="min-w-0 flex-1 truncate">{cardSet.title}</span>
           <span className="shrink-0 tabular-nums text-[10px] opacity-75">
-            {counts.get(deck.id)?.length ?? 0}
+            {counts.get(cardSet.id)?.length ?? 0}
           </span>
         </>
       )}
@@ -178,10 +178,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
       <div className={cn('px-4 pb-5 pt-6', collapsed && 'px-2')}>
         <Button
-          onClick={() => navigate(onChooseStudyDeck)}
+          onClick={() => navigate(onChooseStudySet)}
           className={cn('w-full gap-2', collapsed ? 'px-0' : 'justify-start')}
           aria-label="학습하기"
-          aria-current={currentView.type === 'all-decks' ? 'page' : undefined}
+          aria-current={currentView.type === 'all-sets' ? 'page' : undefined}
           title="학습하기"
         >
           <Play className="h-4 w-4" />
@@ -238,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate(onCreateDeck)}
+                  onClick={() => navigate(onCreateSet)}
                   aria-label="새 학습 세트 만들기"
                   title="새 학습 세트 만들기"
                   className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-primary"
@@ -247,7 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               </div>
             </div>
-            {!folders.length && !decks.length && (
+            {!folders.length && !sets.length && (
               <div className="rounded-xl border border-dashed border-border p-4 text-xs leading-relaxed text-muted-foreground">
                 배우고 싶은 것들을
                 <br />
@@ -263,15 +263,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
             {sortedFolders.map((folder) => {
-              const folderDecks = sortedDecks.filter((deck) => deck.folderId === folder.id);
-              const folderCardCount = folderDecks.reduce(
-                (sum, deck) => sum + (counts.get(deck.id)?.length ?? 0),
+              const folderSets = sortedSets.filter((cardSet) => cardSet.folderId === folder.id);
+              const folderCardCount = folderSets.reduce(
+                (sum, cardSet) => sum + (counts.get(cardSet.id)?.length ?? 0),
                 0
               );
               const isExpanded =
                 expanded[folder.id] ??
                 ((currentView.type === 'folder' && currentView.folderId === folder.id) ||
-                  folderDecks.some((deck) => isCurrentDeck(deck.id)));
+                  folderSets.some((cardSet) => isCurrentSet(cardSet.id)));
               const selected = currentView.type === 'folder' && currentView.folderId === folder.id;
               return (
                 <div key={folder.id} className="mb-0.5">
@@ -309,9 +309,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span className="min-w-0 flex-1 truncate">{folder.title}</span>
                       <span
                         className="flex shrink-0 items-baseline gap-1 tabular-nums text-muted-foreground"
-                        title={`덱 ${folderDecks.length}개 · 총 카드 ${folderCardCount}장`}
+                        title={`세트 ${folderSets.length}개 · 총 카드 ${folderCardCount}장`}
                       >
-                        <span className="text-[10px]">{folderDecks.length}</span>
+                        <span className="text-[10px]">{folderSets.length}</span>
                         <span className="text-[9px] text-muted-foreground/60">
                           ({folderCardCount}장)
                         </span>
@@ -320,8 +320,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                   {isExpanded && (
                     <div className="ml-3 min-w-0 space-y-0.5 border-l border-border pl-2 py-0.5">
-                      {folderDecks.length ? (
-                        folderDecks.map((deck) => renderDeck(deck, false))
+                      {folderSets.length ? (
+                        folderSets.map((cardSet) => renderSet(cardSet, false))
                       ) : (
                         <p className="p-2 text-xs text-muted-foreground">아직 세트가 없어요.</p>
                       )}
@@ -345,9 +345,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           ))
         )}
-        {rootDecks.length > 0 && (
+        {rootSets.length > 0 && (
           <div className={collapsed ? 'space-y-2' : 'space-y-0.5'}>
-            {rootDecks.map((deck) => renderDeck(deck, collapsed))}
+            {rootSets.map((cardSet) => renderSet(cardSet, collapsed))}
           </div>
         )}
       </div>

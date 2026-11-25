@@ -10,12 +10,12 @@ const hasDraftContent = (draft: Draft) =>
   draft.title.trim() || draft.description.trim() || draft.cards.some(hasContent);
 const writeError = "임시 저장에 실패했습니다. 저장 공간을 확인해 주세요.";
 
-export function useDeckDraft(
-  deckId: string | undefined,
+export function useSetDraft(
+  setId: string | undefined,
   folderId: string | undefined,
   createDraft: () => Draft,
 ) {
-  const [key] = useState(() => store.draftKey(deckId, folderId));
+  const [key] = useState(() => store.draftKey(setId, folderId));
   const [draft, setDraft] = useState(createDraft);
   const [initial] = useState(() => fingerprint(draft));
   const [ready, setReady] = useState(false);
@@ -184,7 +184,7 @@ export function useDeckDraft(
     if (lifecycle.active) onClose();
   });
 
-  const saveDeck = (
+  const saveSet = (
     flush: () => Promise<Draft>,
     persist: (value: Draft) => Promise<string>,
     onSaved: (id: string) => void,
@@ -206,7 +206,7 @@ export function useDeckDraft(
     try {
       await store.removeDraft(key);
     } catch {
-      // The deck is already durable; the user can discard a leftover draft later.
+      // The set is already durable; the user can discard a leftover draft later.
     }
     if (lifecycle.active) onSaved(id);
   });
@@ -214,6 +214,6 @@ export function useDeckDraft(
   return {
     draft, change, ready, busy, savedAt, draftError, restore,
     dirty: initial !== fingerprint(draft),
-    read, applyRestore, discardRestore, discardAndLeave, saveAndLeave, saveDeck,
+    read, applyRestore, discardRestore, discardAndLeave, saveAndLeave, saveSet,
   };
 }

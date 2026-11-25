@@ -8,7 +8,7 @@ const { act } = React;
 const { harness, deferred, item, tick, user, accountKey } = require('./helpers.cjs');
 
 const source = esbuild.buildSync({
-  entryPoints: [path.resolve(__dirname, '../src/ui/DeckEditor.tsx')],
+  entryPoints: [path.resolve(__dirname, '../src/ui/SetEditor.tsx')],
   bundle: true,
   platform: 'node',
   format: 'cjs',
@@ -32,8 +32,8 @@ async function fixture(t) {
   const { store, storage, map } = harness();
   const uid = 'author';
   await store.switchUser(user(uid));
-  const deckId = await store.saveDeck(undefined, { title: 'Original' }, [item()]);
-  const key = store.draftKey(deckId);
+  const setId = await store.saveSet(undefined, { title: 'Original' }, [item()]);
+  const key = store.draftKey(setId);
   const guard = { current: null };
   const events = [];
   const errors = [];
@@ -115,7 +115,7 @@ async function fixture(t) {
   const setItem = storage.setItem;
   const removeItem = storage.removeItem;
   storage.setItem = async (storageKey, value) => {
-    events.push(storageKey === key ? 'write draft' : 'write deck');
+    events.push(storageKey === key ? 'write draft' : 'write set');
     await setItem(storageKey, value);
   };
   storage.removeItem = async (storageKey) => {
@@ -124,11 +124,11 @@ async function fixture(t) {
   };
 
   return {
-    store, storage, map, key, deckId, accountKey: accountKey(uid), events, errors, timers, listeners,
+    store, storage, map, key, setId, accountKey: accountKey(uid), events, errors, timers, listeners,
     mount: () => act(async () => {
       root = createRoot(dom.window.document.getElementById('app'));
-      root.render(React.createElement(module.exports.DeckEditor, {
-        deckId, guard,
+      root.render(React.createElement(module.exports.SetEditor, {
+        setId, guard,
         onClose: () => events.push('close'),
         onSaved: () => events.push('saved'),
       }));
@@ -203,7 +203,7 @@ test('restore waits for a decision, then saves the latest edit on debounce, back
   assert.equal((await h.store.readDraft(h.key)).cards[0].termRichText, '<p>unmount edit</p>');
 });
 
-test('discarding a recovery keeps the original deck and leaves no draft on exit', async (t) => {
+test('discarding a recovery keeps the original set and leaves no draft on exit', async (t) => {
   const h = await fixture(t);
   await seedDraft(h);
   await h.mount();
@@ -281,7 +281,7 @@ test('successful final save flushes first and removes drafts queued during the s
   const saved = JSON.parse(h.map.get(h.accountKey));
   assert.equal(saved.cards[0].termRichText, '<p>final body</p>');
   assert.equal(await h.store.readDraft(h.key), null);
-  assert.deepEqual(h.events, ['flush', 'write deck', 'write draft', 'remove draft', 'saved']);
+  assert.deepEqual(h.events, ['flush', 'write set', 'write draft', 'remove draft', 'saved']);
 });
 
 test('failed final save persists the flushed edits for recovery before closing the editor', async (t) => {
@@ -290,12 +290,12 @@ test('failed final save persists the flushed edits for recovery before closing t
   h.flushWith('keep after failure');
   const setItem = h.storage.setItem;
   h.storage.setItem = async (key, value) => {
-    if (key === h.accountKey) throw new Error('deck write failed');
+    if (key === h.accountKey) throw new Error('set write failed');
     await setItem(key, value);
   };
 
   await h.press('세트 저장');
-  assert.deepEqual(h.errors, ['deck write failed']);
+  assert.deepEqual(h.errors, ['set write failed']);
   assert.deepEqual(h.events, ['flush', 'write draft']);
   assert.equal((await h.store.readDraft(h.key)).cards[0].termRichText, '<p>keep after failure</p>');
   assert.equal(h.store.getState().cards[0].termRichText, '<p>질문</p>');

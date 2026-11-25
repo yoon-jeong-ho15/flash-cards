@@ -7,7 +7,7 @@ export function downloadLearningData(data: AccountData): void {
     version: 1,
     exportedAt,
     folders: data.folders.map(({ userId, ...folder }) => folder),
-    decks: data.decks.map(({ userId, ...deck }) => deck),
+    sets: data.sets.map(({ userId, ...cardSet }) => cardSet),
     cards: data.cards.map(({ userId, ...card }) => card),
   }, null, 2);
   const url = URL.createObjectURL(new Blob([contents], { type: 'application/json;charset=utf-8' }));

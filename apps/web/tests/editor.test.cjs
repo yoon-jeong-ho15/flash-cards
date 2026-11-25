@@ -21,36 +21,36 @@ function editorFixture() {
       useFlashcardStore: mockStore,
     },
   });
-  const { useDeckEditor } = loader.load(path.join(h.root, 'hooks/useDeckEditor.ts'));
-  const options = { deckId: 'd1', onSaved: () => {} };
+  const { useSetEditor } = loader.load(path.join(h.root, 'hooks/useSetEditor.ts'));
+  const options = { setId: 's1', onSaved: () => {} };
   return {
     ...h,
     renderer,
     editorStorage: loader.localStorage,
-    render: () => renderer.render(() => useDeckEditor(options)),
+    render: () => renderer.render(() => useSetEditor(options)),
   };
 }
 
 test('draft keys isolate accounts and report persistence failure', async () => {
   const h = createHarness();
-  const drafts = h.load(path.join(h.root, 'services/deckDraftStorage.ts'));
+  const drafts = h.load(path.join(h.root, 'services/setDraftStorage.ts'));
   const draft = {
-    deckId: 'd1',
+    setId: 's1',
     title: 'private',
     description: '',
     selectedFolderId: null,
     cardItems: [seed.card],
     savedAt: 1,
   };
-  assert.equal(drafts.saveDeckDraft('a', draft), true);
-  assert.equal(drafts.loadDeckDraft('b', 'd1'), null);
-  assert.equal(drafts.loadDeckDraft('a', 'd1').title, 'private');
-  drafts.removeDeckDraft('a', 'd1');
-  assert.equal(drafts.loadDeckDraft('a', 'd1'), null);
+  assert.equal(drafts.saveSetDraft('a', draft), true);
+  assert.equal(drafts.loadSetDraft('b', 's1'), null);
+  assert.equal(drafts.loadSetDraft('a', 's1').title, 'private');
+  drafts.removeSetDraft('a', 's1');
+  assert.equal(drafts.loadSetDraft('a', 's1'), null);
   h.localStorage.setItem = () => {
     throw Error('quota');
   };
-  assert.equal(drafts.saveDeckDraft('a', draft), false);
+  assert.equal(drafts.saveSetDraft('a', draft), false);
 });
 
 test('remote refresh preserves dirty inputs and offers explicit reload', async () => {
@@ -60,7 +60,7 @@ test('remote refresh preserves dirty inputs and offers explicit reload', async (
     editor.setTitle('unsaved title');
     editor.handleUpdateCard(0, 'termRichText', 'unsaved text');
     h.render();
-    await h.store.getState().updateDeck('d1', { title: 'remote title' });
+    await h.store.getState().updateSet('s1', { title: 'remote title' });
     await h.store.getState().updateCard('c1', { termRichText: 'remote text' });
     editor = h.render();
     assert.equal(editor.title, 'unsaved title');
@@ -82,23 +82,23 @@ test('navigation flushes a draft but saving does not recreate it on unmount', as
   editor.setTitle('draft');
   h.render();
   h.renderer.cleanup();
-  assert.equal(JSON.parse(h.storage.get('flashcards_draft_v2:user:a:d1')).title, 'draft');
+  assert.equal(JSON.parse(h.storage.get('flashcards_draft_v2:user:a:s1')).title, 'draft');
   const saved = editorFixture();
   editor = saved.render();
   editor.setTitle('saved');
   editor = saved.render();
   await editor.handleSave();
   saved.renderer.cleanup();
-  assert.equal(saved.storage.get('flashcards_draft_v2:user:a:d1'), 'null');
-  assert.equal(saved.store.getState().decks[0].title, 'saved');
+  assert.equal(saved.storage.get('flashcards_draft_v2:user:a:s1'), 'null');
+  assert.equal(saved.store.getState().sets[0].title, 'saved');
 });
 
-test('deck saves retain image-only cards and exclude empty cards', async () => {
+test('set saves retain image-only cards and exclude empty cards', async () => {
   const h = editorFixture();
   const accountKey = 'flashcards_account_v1:user:a';
   try {
     let editor = h.render();
-    editor.setTitle('edited deck');
+    editor.setTitle('edited set');
     for (const index of [0, 1]) {
       editor.handleUpdateCard(index, 'termRichText', '<p>&nbsp;</p>');
       editor.handleUpdateCard(index, 'definitionRichText', '<p><br></p>');
@@ -113,8 +113,8 @@ test('deck saves retain image-only cards and exclude empty cards', async () => {
     const imageUrl = 'https://example.com/legacy.png';
     editor.handleUpdateCard(0, 'imageUrl', imageUrl);
     await h.render().handleSave();
-    const { cards, decks } = JSON.parse(h.storage.get(accountKey));
-    assert.equal(decks[0].title, 'edited deck');
+    const { cards, sets } = JSON.parse(h.storage.get(accountKey));
+    assert.equal(sets[0].title, 'edited set');
     assert.deepEqual(cards.map(({ id }) => id), ['c1']);
     assert.equal(cards[0].termRichText, '<p>&nbsp;</p>');
     assert.equal(cards[0].definitionRichText, '<p><br></p>');
@@ -135,7 +135,7 @@ test('deleting one duplicated card retains the shared image on the other', async
     },
   });
   h.navigator.onLine = false;
-  await h.store.getState().addDeck({ title: 'deck' }, [
+  await h.store.getState().addSet({ title: 'set' }, [
     { ...seed.card, frontImageUrl: 'shared' },
     { ...seed.card, frontImageUrl: 'shared' },
   ]);
@@ -152,7 +152,7 @@ test('saving a draft before leaving persists the latest edits and reports a fail
     editor.handleUpdateCard(0, 'definitionRichText', '<p>latest answer</p>');
     editor = h.render();
     assert.equal(editor.saveDraftNow(), true);
-    const draft = JSON.parse(h.storage.get('flashcards_draft_v2:user:a:d1'));
+    const draft = JSON.parse(h.storage.get('flashcards_draft_v2:user:a:s1'));
     assert.equal(draft.title, 'continue later');
     assert.equal(draft.cardItems[0].definitionRichText, '<p>latest answer</p>');
     const write = h.editorStorage.setItem;
@@ -166,7 +166,7 @@ test('saving a draft before leaving persists the latest edits and reports a fail
     h.editorStorage.setItem = write;
     assert.equal(h.render().saveDraftNow(), true);
     assert.equal(
-      JSON.parse(h.storage.get('flashcards_draft_v2:user:a:d1')).title,
+      JSON.parse(h.storage.get('flashcards_draft_v2:user:a:s1')).title,
       'must not disappear'
     );
   } finally {
@@ -184,12 +184,12 @@ test('an asynchronous save failure keeps the editor input and draft for retry', 
     await editor.handleSave();
     editor = h.render();
     assert.equal(editor.title, 'keep my input'); assert.match(editor.errors.general, /quota/);
-    assert.equal(h.store.getState().decks[0].title, 'deck');
-    assert.equal(JSON.parse(h.storage.get('flashcards_draft_v2:user:a:d1')).title, 'keep my input');
+    assert.equal(h.store.getState().sets[0].title, 'set');
+    assert.equal(JSON.parse(h.storage.get('flashcards_draft_v2:user:a:s1')).title, 'keep my input');
     h.localStorage.setItem = write;
     await editor.handleSave();
-    assert.equal(h.store.getState().decks[0].title, 'keep my input');
-    assert.equal(h.storage.get('flashcards_draft_v2:user:a:d1'), 'null');
+    assert.equal(h.store.getState().sets[0].title, 'keep my input');
+    assert.equal(h.storage.get('flashcards_draft_v2:user:a:s1'), 'null');
   } finally { h.renderer.cleanup(); }
 });
 
@@ -226,8 +226,8 @@ test('removing the last card alerts once and duplicating a card matches newlyAdd
   });
   let alerts = 0;
   loader.context.alert = () => { alerts++; };
-  const { useDeckEditor } = loader.load(path.join(h.root, 'hooks/useDeckEditor.ts'));
-  const render = () => renderer.render(() => useDeckEditor({ deckId: 'd1', onSaved: () => {} }));
+  const { useSetEditor } = loader.load(path.join(h.root, 'hooks/useSetEditor.ts'));
+  const render = () => renderer.render(() => useSetEditor({ setId: 's1', onSaved: () => {} }));
   try {
     let editor = render();
     assert.equal(editor.cardItems.length, 2);

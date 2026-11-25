@@ -1,15 +1,15 @@
 import { decideMissingCardSync, shouldPromoteCardToLearnedOnly, type RecordSyncWrites } from '@flashcards/types';
-import { accountKey, emptySnapshot, type Card, type CardInput, type Data, type DeckInput, type Draft, type Kind,
+import { accountKey, emptySnapshot, type Card, type CardInput, type Data, type SetInput, type Draft, type Kind,
   type Operation, type Preferences, type Snapshot, type State, type Storage, type Transport, type UserProfile } from './types';
 import { mergeCardImage, mapSources } from './imageSync';
 import { hasContent } from './content';
 
-const kinds: Kind[] = ['folders', 'decks', 'cards'];
+const kinds: Kind[] = ['folders', 'sets', 'cards'];
 const conflictMessage = '다른 탭 또는 기기에서 저장한 카드가 반영되었습니다. 충돌한 편집은 이 기기에 보관했습니다.';
 const deleteRetryInterval = 5_000;
 const maxDeleteRetryInterval = 300_000;
 const message = (error: unknown) => error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
-const snapshotOf = (s: State): Snapshot => ({ folders: s.folders, decks: s.decks, cards: s.cards,
+const snapshotOf = (s: State): Snapshot => ({ folders: s.folders, sets: s.sets, cards: s.cards,
   imageCache: s.imageCache, cardConflicts: s.cardConflicts, outbox: s.outbox, revision: s.revision, preferences: s.preferences });
 
 /** Serialized durable mutations. No UI or network write is acknowledged before local persistence. */
@@ -49,7 +49,7 @@ export class FlashcardStore {
         if (!kinds.every(k => Array.isArray(saved[k])) || !saved.outbox || !Number.isFinite(saved.revision)) {
           throw new Error('기기에 저장된 데이터를 읽을 수 없습니다. 저장소를 확인한 뒤 다시 시도해 주세요.');
         }
-        this.publish({ folders: saved.folders, decks: saved.decks, cards: saved.cards,
+        this.publish({ folders: saved.folders, sets: saved.sets, cards: saved.cards,
           imageCache: saved.imageCache || {}, cardConflicts: saved.cardConflicts || {}, revision: saved.revision, outbox: saved.outbox, preferences: saved.preferences || {}, ready: true });
       } catch (error) { this.publish({ error: message(error) }); throw error; }
     }).then(() => { void this.sync(); });
@@ -104,7 +104,7 @@ export class FlashcardStore {
             writeState: queued && queued.writeState !== 'existing' ? 'attempted' : 'existing' };
         }
       }
-      const next: Snapshot = { folders: data.folders, decks: data.decks, cards: data.cards,
+      const next: Snapshot = { folders: data.folders, sets: data.sets, cards: data.cards,
         imageCache: before.imageCache, cardConflicts: before.cardConflicts, revision, outbox, preferences: before.preferences };
       try { await this.persist(next, before.user?.uid); }
       catch (error) { this.publish({ error: '기기 저장에 실패했습니다. 저장 공간을 확인해 주세요.' }); throw error; }
@@ -120,51 +120,51 @@ export class FlashcardStore {
       [...s.folders, { id: folderId, title: title.trim(), description: description.trim(), createdAt: Date.now(), userId: s.user?.uid }] }, result: folderId };
   });
   deleteFolder = (id: string, deleteContents = false) => this.mutate(s => {
-    const ids = new Set(s.decks.filter(d => d.folderId === id).map(d => d.id));
+    const ids = new Set(s.sets.filter(item => item.folderId === id).map(item => item.id));
     return { data: { ...s, folders: s.folders.filter(f => f.id !== id),
-      decks: deleteContents ? s.decks.filter(d => !ids.has(d.id)) : s.decks.map(d => ids.has(d.id) ? { ...d, folderId: null, updatedAt: Date.now() } : d),
-      cards: deleteContents ? s.cards.filter(c => !ids.has(c.deckId)) : s.cards }, result: undefined };
+      sets: deleteContents ? s.sets.filter(item => !ids.has(item.id)) : s.sets.map(item => ids.has(item.id) ? { ...item, folderId: null, updatedAt: Date.now() } : item),
+      cards: deleteContents ? s.cards.filter(c => !ids.has(c.setId)) : s.cards }, result: undefined };
   });
-  reorderCards = (deckId: string, ids: string[]) => this.mutate(s => {
-    const own = s.cards.filter(card => card.deckId === deckId);
+  reorderCards = (setId: string, ids: string[]) => this.mutate(s => {
+    const own = s.cards.filter(card => card.setId === setId);
     const order = new Map(ids.map((id, index) => [id, index]));
     if (order.size !== ids.length || own.length !== ids.length || own.some(card => !order.has(card.id))) {
       throw new Error('카드 구성이 변경되었습니다. 순서 변경 화면을 다시 열어 주세요.');
     }
     return { data: { ...s,
-      cards: s.cards.map(card => card.deckId === deckId ? { ...card, order: order.get(card.id)! } : card),
-      decks: s.decks.map(deck => deck.id === deckId ? { ...deck, updatedAt: Date.now() } : deck),
+      cards: s.cards.map(card => card.setId === setId ? { ...card, order: order.get(card.id)! } : card),
+      sets: s.sets.map(item => item.id === setId ? { ...item, updatedAt: Date.now() } : item),
     }, result: undefined };
   });
-  saveDeck = (id: string | undefined, input: DeckInput, items: CardInput[]) => this.mutate(s => {
-    if (!input.title.trim()) throw new Error('덱 제목을 입력해 주세요.');
-    if (id && !s.decks.some(d => d.id === id)) throw new Error('덱을 찾을 수 없습니다. 다른 기기에서 삭제되었을 수 있습니다.');
+  saveSet = (id: string | undefined, input: SetInput, items: CardInput[]) => this.mutate(s => {
+    if (!input.title.trim()) throw new Error('세트 제목을 입력해 주세요.');
+    if (id && !s.sets.some(item => item.id === id)) throw new Error('세트를 찾을 수 없습니다. 다른 기기에서 삭제되었을 수 있습니다.');
     if (input.folderId && !s.folders.some(f => f.id === input.folderId)) throw new Error('선택한 폴더가 삭제되었습니다. 다른 폴더를 선택해 주세요.');
     const valid = items.filter(hasContent);
     if (!valid.length) throw new Error('내용이 있는 카드를 하나 이상 추가해 주세요.');
-    const deckId = id || `deck-${this.uuid()}`;
+    const setId = id || `set-${this.uuid()}`;
     const now = Date.now();
-    const previous = s.decks.find(d => d.id === deckId);
-    const deck = { ...previous, ...input, id: deckId, title: input.title.trim(), description: input.description?.trim(),
+    const previous = s.sets.find(item => item.id === setId);
+    const cardSet = { ...previous, ...input, id: setId, title: input.title.trim(), description: input.description?.trim(),
       userId: s.user?.uid, folderId: input.folderId || null, createdAt: previous?.createdAt ?? now, updatedAt: now };
-    const existing = new Map(s.cards.filter(c => c.deckId === deckId).map(c => [c.id, c]));
+    const existing = new Map(s.cards.filter(c => c.setId === setId).map(c => [c.id, c]));
     const used = new Set<string>();
     const cards = valid.map((c, order) => {
       const cardId = c.id && !c.id.startsWith('temp-') && existing.has(c.id) ? c.id : `card-${this.uuid()}`;
       if (used.has(cardId)) throw new Error('중복된 카드가 있습니다. 편집기를 다시 열어 주세요.');
       used.add(cardId);
-      return { ...c, id: cardId, deckId, userId: s.user?.uid, order,
+      return { ...c, id: cardId, setId, userId: s.user?.uid, order,
         contentVersion: existing.get(cardId)?.contentVersion,
         learned: existing.get(cardId)?.learned ?? c.learned ?? false,
         backImageUrl: c.backImageUrl || c.imageUrl, imageUrl: c.backImageUrl || c.imageUrl };
     });
-    return { data: { ...s, decks: previous ? s.decks.map(d => d.id === deckId ? deck : d) : [deck, ...s.decks],
-      cards: [...s.cards.filter(c => c.deckId !== deckId), ...cards] }, result: deckId };
+    return { data: { ...s, sets: previous ? s.sets.map(item => item.id === setId ? cardSet : item) : [cardSet, ...s.sets],
+      cards: [...s.cards.filter(c => c.setId !== setId), ...cards] }, result: setId };
   });
-  deleteDeck = (id: string) => this.mutate(s => ({ data: { ...s, decks: s.decks.filter(d => d.id !== id), cards: s.cards.filter(c => c.deckId !== id) }, result: undefined }));
-  moveDeck = (id: string, folderId: string | null) => this.mutate(s => {
+  deleteSet = (id: string) => this.mutate(s => ({ data: { ...s, sets: s.sets.filter(item => item.id !== id), cards: s.cards.filter(c => c.setId !== id) }, result: undefined }));
+  moveSet = (id: string, folderId: string | null) => this.mutate(s => {
     if (folderId && !s.folders.some(f => f.id === folderId)) throw new Error('폴더를 찾을 수 없습니다.');
-    return { data: { ...s, decks: s.decks.map(d => d.id === id ? { ...d, folderId, updatedAt: Date.now() } : d) }, result: undefined };
+    return { data: { ...s, sets: s.sets.map(item => item.id === id ? { ...item, folderId, updatedAt: Date.now() } : item) }, result: undefined };
   });
   updateCard = (id: string, input: Partial<CardInput>, base?: Pick<Card, 'contentVersion'>) => this.mutate(s => {
     const card = s.cards.find(c => c.id === id);
@@ -176,15 +176,15 @@ export class FlashcardStore {
     const next = { ...card, ...updates, contentVersion: card.contentVersion };
     if (!hasContent(next)) throw new Error('앞면 또는 뒷면에 내용을 입력해 주세요.');
     return { data: { ...s, cards: s.cards.map(c => c.id === id ? next : c),
-      decks: s.decks.map(d => d.id === card.deckId ? { ...d, updatedAt: Date.now() } : d) }, result: undefined };
+      sets: s.sets.map(item => item.id === card.setId ? { ...item, updatedAt: Date.now() } : item) }, result: undefined };
   }, Object.keys(input).length === 1 && typeof input.learned === 'boolean' ? 'learned' : undefined);
   deleteCard = (id: string) => this.mutate(s => {
     const card = s.cards.find(c => c.id === id);
     return { data: { ...s, cards: s.cards.filter(c => c.id !== id),
-      decks: s.decks.map(d => d.id === card?.deckId ? { ...d, updatedAt: Date.now() } : d) }, result: undefined };
+      sets: s.sets.map(item => item.id === card?.setId ? { ...item, updatedAt: Date.now() } : item) }, result: undefined };
   });
   setLearned = (id: string, learned: boolean) => this.mutate(s => ({ data: { ...s, cards: s.cards.map(c => c.id === id ? { ...c, learned } : c) }, result: undefined }), 'learned');
-  resetProgress = (id: string) => this.mutate(s => ({ data: { ...s, cards: s.cards.map(c => c.deckId === id ? { ...c, learned: false } : c) }, result: undefined }), 'learned');
+  resetProgress = (id: string) => this.mutate(s => ({ data: { ...s, cards: s.cards.map(c => c.setId === id ? { ...c, learned: false } : c) }, result: undefined }), 'learned');
   setPreferences = (update: Partial<Preferences>) => {
     const session = this.state.session;
     return this.serial(async () => {
@@ -194,7 +194,7 @@ export class FlashcardStore {
       this.publish({ preferences: next.preferences });
     });
   };
-  draftKey = (deckId?: string, folderId?: string) => `${accountKey(this.state.user?.uid)}:draft:${deckId || `new:${folderId || 'root'}`}`;
+  draftKey = (setId?: string, folderId?: string) => `${accountKey(this.state.user?.uid)}:draft:${setId || `new:${folderId || 'root'}`}`;
   readDraft = async (key: string): Promise<Draft | null> => { const raw = await this.storage.getItem(key); return raw ? JSON.parse(raw) : null; };
   writeDraft = (key: string, draft: Draft) => this.serial(() => this.storage.setItem(key, JSON.stringify(draft)));
   removeDraft = (key: string) => this.serial(() => this.storage.removeItem(key));

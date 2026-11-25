@@ -1,18 +1,18 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-function seedData(existingDeck = false) {
+function seedData(existingSet = false) {
   const data = {
     folders: [{ id: 'f1', userId: 'a', title: 'folder', createdAt: 1 }],
-    decks: [{ id: 'd1', userId: 'a', folderId: 'f1', title: 'deck', createdAt: 1, updatedAt: 1 }],
+    sets: [{ id: 's1', userId: 'a', folderId: 'f1', title: 'set', createdAt: 1, updatedAt: 1 }],
     cards: ['c1', 'c2', 'c3'].map((id, order) => ({
-      id, order, userId: 'a', deckId: 'd1', termRichText: '<p>original</p>',
+      id, order, userId: 'a', setId: 's1', termRichText: '<p>original</p>',
       definitionRichText: '<p>answer</p>', learned: false,
     })),
   };
-  if (existingDeck) {
-    data.decks.push({ ...data.decks[0], id: 'd2', title: 'another deck' });
-    data.cards.push({ ...data.cards[0], id: 'd2-card', deckId: 'd2' });
+  if (existingSet) {
+    data.sets.push({ ...data.sets[0], id: 's2', title: 'another set' });
+    data.cards.push({ ...data.cards[0], id: 's2-card', setId: 's2' });
   }
   return data;
 }
@@ -26,7 +26,7 @@ function firestoreFixture(data) {
   const denied = new Set();
   const missingCode = new Map();
   const server = {
-    cards, decks: documents.flashcard_decks, writes, denied, missingCode,
+    cards, sets: documents.flashcard_sets, writes, denied, missingCode,
     beforeUpdate: async () => {}, beforeBatch: async () => {},
     serverReads: [], cacheReads: [], beforeRead: async () => {},
     clearCollections: () => Object.values(documents).forEach(items => items.clear()),
@@ -172,7 +172,7 @@ function registerLearnedSyncTests(fixture) {
     assert.equal(h.cards().some(card => card.id === 'c1'), false);
     const copies = [...h.server.cards.values()].filter(card => card.termRichText === 'keep this concurrent edit');
     assert.equal(copies.length, 1);
-    assert.equal(copies[0].deckId, 'd1');
+    assert.equal(copies[0].setId, 's1');
   });
 
   test('offline ratings preserve another device’s card edits and never recreate deleted cards', async () => {
@@ -261,11 +261,11 @@ function registerLearnedSyncTests(fixture) {
     assert.equal(h.server.cards.get('c1').learned, true);
   });
 
-  test('saving another card in the deck does not turn a rating into a full write', async () => {
+  test('saving another card in the set does not turn a rating into a full write', async () => {
     const h = await fixture();
     await h.rate('c1', true);
     h.server.cards.set('c1', { ...h.server.cards.get('c1'), termRichText: '<p>remote edit</p>' });
-    await h.editInDeck('c2', '<p>local edit</p>');
+    await h.editInSet('c2', '<p>local edit</p>');
     await h.connect();
 
     assert.equal(h.server.cards.get('c1').termRichText, '<p>remote edit</p>');

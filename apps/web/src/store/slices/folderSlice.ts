@@ -13,13 +13,13 @@ export const createFolderSlice: StateCreator<FlashcardStoreState, [], [], Folder
     if (!state.folders.some(folder => folder.id === id)) throw new Error('폴더가 다른 탭에서 삭제되었습니다.');
     return { folders: state.folders.map(folder => folder.id === id ? { ...folder, ...updates } : folder) };
   }),
-  deleteFolder: (id, deleteContainedDecks = false) => get().applyChanges(state => {
-    const deckIds = new Set(state.decks.filter(deck => deck.folderId === id).map(deck => deck.id));
+  deleteFolder: (id, deleteContainedSets = false) => get().applyChanges(state => {
+    const setIds = new Set(state.sets.filter(item => item.folderId === id).map(item => item.id));
     return {
       folders: state.folders.filter(folder => folder.id !== id),
-      decks: deleteContainedDecks ? state.decks.filter(deck => !deckIds.has(deck.id)) :
-        state.decks.map(deck => deckIds.has(deck.id) ? { ...deck, folderId: null, updatedAt: Date.now() } : deck),
-      cards: deleteContainedDecks ? state.cards.filter(card => !deckIds.has(card.deckId)) : state.cards,
+      sets: deleteContainedSets ? state.sets.filter(item => !setIds.has(item.id)) :
+        state.sets.map(item => setIds.has(item.id) ? { ...item, folderId: null, updatedAt: Date.now() } : item),
+      cards: deleteContainedSets ? state.cards.filter(card => !setIds.has(card.setId)) : state.cards,
     };
   }),
 });

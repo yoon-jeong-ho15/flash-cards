@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { DeckCardEditorItem } from './DeckCardEditorItem';
-import { DeckEditorOutline } from './DeckEditorOutline';
-import { useDeckEditor, formatDraftTime, formatDraftFullDateTime } from '../../hooks/useDeckEditor';
+import { SetCardEditorItem } from './SetCardEditorItem';
+import { SetEditorOutline } from './SetEditorOutline';
+import { useSetEditor, formatDraftTime, formatDraftFullDateTime } from '../../hooks/useSetEditor';
 import {
   Plus,
   Save,
@@ -21,16 +21,16 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-interface DeckEditorProps {
-  deckId?: string;
+interface SetEditorProps {
+  setId?: string;
   initialFolderId?: string;
   focusCardId?: string;
   onClose: () => void;
-  onSaved: (savedDeckId: string) => void;
+  onSaved: (savedSetId: string) => void;
 }
 
-export const DeckEditor: React.FC<DeckEditorProps> = ({
-  deckId,
+export const SetEditor: React.FC<SetEditorProps> = ({
+  setId,
   initialFolderId,
   focusCardId,
   onClose,
@@ -68,7 +68,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     handleDiscardDraft,
     clearDraft,
     saveDraftNow,
-  } = useDeckEditor({ deckId, initialFolderId, focusCardId, onSaved });
+  } = useSetEditor({ setId, initialFolderId, focusCardId, onSaved });
 
   // 좌측 카드 목차에서 선택된 인덱스 및 활성 카드 상태
   const [activeCardId, setActiveCardId] = useState<string | undefined>(focusCardId);
@@ -80,7 +80,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
     return undefined;
   });
   const [highlightCardId, setHighlightCardId] = useState<string | undefined>(focusCardId);
-  const [metadataOpen, setMetadataOpen] = useState(Boolean(deckId));
+  const [metadataOpen, setMetadataOpen] = useState(Boolean(setId));
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const handleRequestClose = useCallback(() => {
@@ -165,7 +165,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         onBack={handleRequestClose}
         iconOnlyBack
         backTitle="취소하고 뒤로 가기"
-        title={deckId ? '학습 세트 편집' : '새 학습 세트'}
+        title={setId ? '학습 세트 편집' : '새 학습 세트'}
         description={
           lastSavedAt
             ? `기기에 임시 저장됨 · ${formatDraftTime(lastSavedAt)}`
@@ -204,7 +204,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
         <div className="lg:flex lg:gap-8 lg:items-start">
           {/* 좌측 카드 목차 사이드바 (데스크탑 고정 사이드바) */}
           <div className="hidden lg:block shrink-0 sticky top-44 self-start z-20">
-            <DeckEditorOutline
+            <SetEditorOutline
               cards={cardItems}
               activeIndex={activeOutlineIndex}
               activeCardId={activeCardId}
@@ -228,11 +228,11 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
               </div>
             )}
 
-            {/* 덱 메타데이터 설정 (제목, 설명, 폴더) */}
+            {/* 세트 메타데이터 설정 (제목, 설명, 폴더) */}
             <div className="mb-6">
               <p className="section-label mb-2">MAKE IT YOURS</p>
               <h2 className="text-2xl font-bold tracking-tight">
-                {deckId ? '기억을 더 선명하게' : '무엇을 기억하고 싶나요?'}
+                {setId ? '기억을 더 선명하게' : '무엇을 기억하고 싶나요?'}
               </h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 질문에는 떠올리고 싶은 내용을, 답변에는 나만의 설명을 적어주세요.
@@ -240,14 +240,14 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
             </div>
             <Card className="p-5 sm:p-7 space-y-4">
               <div>
-                <Label htmlFor="deck-title" required>
+                <Label htmlFor="set-title" required>
                   학습 세트 제목
                 </Label>
                 <Input
-                  id="deck-title"
+                  id="set-title"
                   aria-required="true"
                   aria-invalid={Boolean(errors.title)}
-                  aria-describedby={errors.title ? 'deck-title-error' : undefined}
+                  aria-describedby={errors.title ? 'set-title-error' : undefined}
                   value={title}
                   onChange={(e) => {
                     setTitle(e.target.value);
@@ -255,11 +255,11 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                   }}
                   placeholder="예: 이번 주에 기억할 영어 표현"
                   error={errors.title}
-                  autoFocus={!focusCardId && !deckId}
+                  autoFocus={!focusCardId && !setId}
                 />
                 {errors.title && (
                   <p
-                    id="deck-title-error"
+                    id="set-title-error"
                     role="alert"
                     className="mt-1 text-xs text-destructive font-medium"
                   >
@@ -282,22 +282,22 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
               {metadataOpen && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="deck-description">설명 (선택)</Label>
+                    <Label htmlFor="set-description">설명 (선택)</Label>
                     <Input
-                      id="deck-description"
+                      id="set-description"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="덱에 대한 간단한 설명을 입력하세요"
+                      placeholder="세트에 대한 간단한 설명을 입력하세요"
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="deck-folder" className="flex items-center gap-1.5">
+                    <Label htmlFor="set-folder" className="flex items-center gap-1.5">
                       <FolderIcon className="w-3.5 h-3.5 text-muted-foreground" />
                       소속 폴더 (선택)
                     </Label>
                     <select
-                      id="deck-folder"
+                      id="set-folder"
                       value={selectedFolderId || ''}
                       onChange={(e) => setSelectedFolderId(e.target.value ? e.target.value : null)}
                       className="w-full h-11 rounded-xl border border-input bg-card px-3 py-2 text-base sm:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground"
@@ -369,7 +369,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                   role="status"
                   className="p-3 mb-4 rounded-lg bg-amber-50 text-amber-900 text-sm"
                 >
-                  다른 곳에서 덱이 변경되었습니다. 작성 중인 내용은 유지됩니다. 저장하면 현재 편집
+                  다른 곳에서 세트가 변경되었습니다. 작성 중인 내용은 유지됩니다. 저장하면 현재 편집
                   내용이 반영됩니다.
                   <Button
                     type="button"
@@ -395,7 +395,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
               >
                 <AnimatePresence initial={false}>
                   {cardItems.map((card, index) => (
-                    <DeckCardEditorItem
+                    <SetCardEditorItem
                       key={card.id || `temp-${index}`}
                       index={index}
                       card={card}
@@ -443,7 +443,7 @@ export const DeckEditor: React.FC<DeckEditorProps> = ({
                 leftIcon={<Save className="w-4 h-4" />}
                 className="font-semibold shadow-xs"
               >
-                <span>{deckId ? '변경사항 저장' : '세트 저장'}</span>
+                <span>{setId ? '변경사항 저장' : '세트 저장'}</span>
               </Button>
             </div>
 

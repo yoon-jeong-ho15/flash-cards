@@ -5,11 +5,11 @@ import { Card } from '@/components/ui/card';
 
 interface FolderCardProps {
   folder: Folder;
-  decksCount: number;
+  setsCount: number;
   onClick: () => void;
 }
 
-export const FolderCard: React.FC<FolderCardProps> = memo(({ folder, decksCount, onClick }) => {
+export const FolderCard: React.FC<FolderCardProps> = memo(({ folder, setsCount, onClick }) => {
   return (
     <Card className="group overflow-hidden hover:border-primary/40 hover:shadow-md transition-all">
       <button
@@ -41,7 +41,7 @@ export const FolderCard: React.FC<FolderCardProps> = memo(({ folder, decksCount,
         <div className="flex w-full items-center justify-between gap-4 border-t border-border pt-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5 font-medium text-foreground">
             <Layers className="w-3.5 h-3.5 text-primary" />
-            학습 세트 {decksCount}개
+            학습 세트 {setsCount}개
           </span>
           <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground group-hover:text-primary transition-colors font-medium">
             열기 <ChevronRight className="w-3.5 h-3.5" />

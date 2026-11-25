@@ -1,11 +1,11 @@
 import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
 import { useCollectionLayout } from '../../hooks/useCollectionLayout';
-import { useDeckSortPreference } from '../../hooks/useDeckSortPreference';
+import { useSetSortPreference } from '../../hooks/useSetSortPreference';
 import { indexCards, selectFolderCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { FolderModal } from './FolderModal';
-import { DeckCard } from '../deck/DeckCard';
+import { SetCard } from '../set/SetCard';
 import { EmptyState } from '../common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,62 +26,62 @@ import {
   ChevronDown,
   Shuffle,
 } from 'lucide-react';
-import type { DeckSortOption } from '../../types';
-import { sortDecks } from '../../utils/deckSort';
+import type { SetSortOption } from '../../types';
+import { sortSets } from '../../utils/setSort';
 
 interface FolderDetailViewProps {
   folderId: string;
-  onNavigateDeck: (deckId: string) => void;
-  onStartStudy: (deckId: string) => void;
+  onNavigateSet: (setId: string) => void;
+  onStartStudy: (setId: string) => void;
   onStartFolderStudy: (folderId: string) => void;
-  onCreateDeckInFolder: (folderId: string) => void;
+  onCreateSetInFolder: (folderId: string) => void;
   onBack: () => void;
 }
 
 export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
   folderId,
-  onNavigateDeck,
+  onNavigateSet,
   onStartStudy,
   onStartFolderStudy,
-  onCreateDeckInFolder,
+  onCreateSetInFolder,
   onBack,
 }) => {
   const { collectionClassName } = useCollectionLayout();
   const folders = useFlashcardStore((state) => state.folders);
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const cards = useFlashcardStore((state) => state.cards);
   const deleteFolder = useFlashcardStore((state) => state.deleteFolder);
   const [query, setQuery] = useState('');
-  const cardIndex = useMemo(() => indexCards(cards).byDeck, [cards]);
+  const cardIndex = useMemo(() => indexCards(cards).bySet, [cards]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const folder = useMemo(() => folders.find((f) => f.id === folderId), [folders, folderId]);
-  const folderDecks = useMemo(
-    () => decks.filter((d) => d.folderId === folderId),
-    [decks, folderId]
+  const folderSets = useMemo(
+    () => sets.filter((s) => s.folderId === folderId),
+    [sets, folderId]
   );
   const folderCardsCount = useMemo(
-    () => selectFolderCards({ decks, cards }, folderId).length,
-    [decks, cards, folderId]
+    () => selectFolderCards({ sets, cards }, folderId).length,
+    [sets, cards, folderId]
   );
 
-  const [sortBy, handleSortChange] = useDeckSortPreference('flashcard_folder_deck_sort');
+  const [sortBy, handleSortChange] = useSetSortPreference('flashcard_folder_set_sort');
 
-  const sortedDecks = useMemo(() => {
+  const sortedSets = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('ko-KR');
-    const list = folderDecks.filter(
-      (deck) =>
+    const list = folderSets.filter(
+      (cardSet) =>
         !q ||
-        `${deck.title} ${deck.description || ''}`.toLocaleLowerCase('ko-KR').includes(q) ||
-        (cardIndex.get(deck.id) || []).some((card) =>
+        `${cardSet.title} ${cardSet.description || ''}`.toLocaleLowerCase('ko-KR').includes(q) ||
+        (cardIndex.get(cardSet.id) || []).some((card) =>
           richTextToText(`${card.termRichText} ${card.definitionRichText}`)
             .toLocaleLowerCase('ko-KR')
             .includes(q)
         )
     );
-    return sortDecks(list, sortBy);
-  }, [folderDecks, sortBy, query, cardIndex]);
+    return sortSets(list, sortBy);
+  }, [folderSets, sortBy, query, cardIndex]);
 
   if (!folder) {
     return (
@@ -114,7 +114,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
         </Button>
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => onCreateDeckInFolder(folder.id)}
+            onClick={() => onCreateSetInFolder(folder.id)}
             size="sm"
             leftIcon={<Plus className="h-4 w-4" />}
           >
@@ -152,7 +152,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
               </p>
             )}
             <p className="mt-3 text-xs text-muted-foreground">
-              학습 세트 {folderDecks.length}개 · 전체 카드 {folderCardsCount}장
+              학습 세트 {folderSets.length}개 · 전체 카드 {folderCardsCount}장
             </p>
           </div>
         </div>
@@ -175,13 +175,13 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
         <h2 className="text-lg font-bold">
           폴더의 학습 세트{' '}
           <span className="ml-1 text-sm font-medium text-muted-foreground">
-            {sortedDecks.length}
+            {sortedSets.length}
           </span>
         </h2>
         <select
-          aria-label="카드 덱 정렬 방식"
+          aria-label="학습 세트 정렬 방식"
           value={sortBy}
-          onChange={(event) => handleSortChange(event.target.value as DeckSortOption)}
+          onChange={(event) => handleSortChange(event.target.value as SetSortOption)}
           className="filter-select"
         >
           <option value="date-desc">최근 수정순</option>
@@ -202,7 +202,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
         </div>
         <CollectionLayoutToggle />
       </div>
-      {!sortedDecks.length ? (
+      {!sortedSets.length ? (
         <EmptyState
           icon={<Layers className="h-8 w-8 text-primary" />}
           title={query ? '검색 결과가 없어요' : '폴더에 첫 세트를 추가해 보세요'}
@@ -212,7 +212,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
           action={
             <Button
               variant={query ? 'outline' : 'default'}
-              onClick={query ? () => setQuery('') : () => onCreateDeckInFolder(folder.id)}
+              onClick={query ? () => setQuery('') : () => onCreateSetInFolder(folder.id)}
             >
               {query ? '검색어 지우기' : '새 학습 세트 만들기'}
             </Button>
@@ -220,16 +220,16 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
         />
       ) : (
         <div className={collectionClassName}>
-          {sortedDecks.map((deck) => {
-            const own = cardIndex.get(deck.id) || [];
+          {sortedSets.map((cardSet) => {
+            const own = cardIndex.get(cardSet.id) || [];
             return (
-              <DeckCard
-                key={deck.id}
-                deck={deck}
+              <SetCard
+                key={cardSet.id}
+                set={cardSet}
                 cardsCount={own.length}
                 learnedCount={own.filter((card) => card.learned).length}
                 showFolderBadge={false}
-                onNavigateDeck={onNavigateDeck}
+                onNavigateSet={onNavigateSet}
                 onStartStudy={onStartStudy}
               />
             );

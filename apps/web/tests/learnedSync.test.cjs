@@ -3,11 +3,11 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { createHarness, seed } = require('./support.cjs');
 const { firestoreFixture, registerLearnedSyncTests, seedData } = require('../../../tests/learned-sync-fixture.cjs');
-const { registerDeckDeleteTests } = require('../../../tests/deck-delete-sync-regressions.cjs');
+const { registerSetDeleteTests } = require('../../../tests/set-delete-sync-regressions.cjs');
 const { registerAccountPullTests } = require('../../../tests/account-pull-regressions.cjs');
 
-function fixture({ legacy = false, cachedImage = false, existingDeck = false, legacyDeck = false } = {}) {
-  const data = seedData(existingDeck);
+function fixture({ legacy = false, cachedImage = false, existingSet = false, legacySet = false } = {}) {
+  const data = seedData(existingSet);
   const server = firestoreFixture(data);
   const snapshot = { ...seed.snapshot(), ...data };
   if (legacy) {
@@ -16,9 +16,9 @@ function fixture({ legacy = false, cachedImage = false, existingDeck = false, le
     snapshot.pendingVersions = { 'cards:c3': 1 };
     snapshot.mutationRevision = 1;
   }
-  if (legacyDeck) {
-    snapshot.pendingSync = { ...snapshot.pendingSync, deckIds: ['d2'] };
-    snapshot.pendingVersions = { 'decks:d2': 1 };
+  if (legacySet) {
+    snapshot.pendingSync = { ...snapshot.pendingSync, setIds: ['s2'] };
+    snapshot.pendingVersions = { 'sets:s2': 1 };
     snapshot.mutationRevision = 1;
   }
   if (cachedImage) snapshot.cards[0].frontImageUrl = 'data:image/webp;base64,YWJj';
@@ -45,27 +45,27 @@ function fixture({ legacy = false, cachedImage = false, existingDeck = false, le
   reload();
   return {
     server, reload,
-    createDeck: async () => {
-      const deckId = await h.store.getState().addDeck({ title: 'offline deck' }, [seed.card, seed.card]);
-      return { deckId, cardIds: h.store.getState().cards.filter(card => card.deckId === deckId).map(card => card.id) };
+    createSet: async () => {
+      const setId = await h.store.getState().addSet({ title: 'offline set' }, [seed.card, seed.card]);
+      return { setId, cardIds: h.store.getState().cards.filter(card => card.setId === setId).map(card => card.id) };
     },
-    renameDeck: (id, title) => h.store.getState().updateDeck(id, { title }),
-    deleteDeck: id => h.store.getState().deleteDeck(id),
+    renameSet: (id, title) => h.store.getState().updateSet(id, { title }),
+    deleteSet: id => h.store.getState().deleteSet(id),
     queued: token => {
       const { pendingSync } = JSON.parse(storage.get(key));
       const [kind, id] = token.split(':');
-      const [upserts, deletes] = kind === 'decks' ? ['deckIds', 'deletedDeckIds'] : ['cardIds', 'deletedCardIds'];
+      const [upserts, deletes] = kind === 'sets' ? ['setIds', 'deletedSetIds'] : ['cardIds', 'deletedCardIds'];
       const deleted = pendingSync[deletes].includes(id);
       if (deleted || pendingSync[upserts].includes(id)) return { state: pendingSync.writeStates?.[token], deleted };
     },
     rate: (id, learned) => h.store.getState().setCardLearned(id, learned),
     edit: (id, termRichText) => h.store.getState().updateCard(id, { termRichText }),
-    editInDeck: (id, termRichText) => {
+    editInSet: (id, termRichText) => {
       const state = h.store.getState();
-      return state.saveDeckWithCards('d1', { title: 'deck' },
+      return state.saveSetWithCards('s1', { title: 'set' },
         state.cards.map(card => card.id === id ? { ...card, termRichText } : card));
     },
-    create: (termRichText) => h.store.getState().addCard({ deckId: 'd1', termRichText, definitionRichText: '', learned: false }),
+    create: (termRichText) => h.store.getState().addCard({ setId: 's1', termRichText, definitionRichText: '', learned: false }),
     connect: () => {
       h.navigator.onLine = true;
       return h.store.getState().initCloudSync();
@@ -85,7 +85,7 @@ function fixture({ legacy = false, cachedImage = false, existingDeck = false, le
 
 registerLearnedSyncTests(fixture);
 registerAccountPullTests(fixture);
-registerDeckDeleteTests(fixture);
+registerSetDeleteTests(fixture);
 
 test('web progress-only sync refreshes stale cached data images without uploading the old card', async () => {
   const h = fixture({ cachedImage: true });
@@ -102,7 +102,7 @@ test('web progress-only sync refreshes stale cached data images without uploadin
 test('pending count includes each write or delete once across queue versions', () => {
   const h = createHarness();
   const { countPending } = h.load(path.join(h.root, 'store/syncQueue.ts'));
-  const legacy = { ...seed.snapshot().pendingSync, cardIds: ['c1'], deletedDeckIds: ['d2'] };
+  const legacy = { ...seed.snapshot().pendingSync, cardIds: ['c1'], deletedSetIds: ['s2'] };
   assert.equal(countPending(legacy), 2);
   assert.equal(countPending({ ...legacy, learnedOnlyCardIds: ['c1'], writeStates: { 'cards:c1': 'existing' } }), 2);
 });

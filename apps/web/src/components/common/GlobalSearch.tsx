@@ -4,19 +4,19 @@ import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { Modal } from './Modal';
 import { Input } from '@/components/ui/input';
 import { richTextToText } from '../../utils/search';
-import { deckAccent } from '@/lib/learning';
+import { setAccent } from '@/lib/learning';
 import { cn } from '@/lib/utils';
 import { CollectionLayoutToggle } from './CollectionLayoutToggle';
 import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 
 interface GlobalSearchProps {
   onClose: () => void;
-  onNavigateDeck: (id: string) => void;
+  onNavigateSet: (id: string) => void;
   onNavigateFolder: (id: string) => void;
 }
 export const GlobalSearch: React.FC<GlobalSearchProps> = ({
   onClose,
-  onNavigateDeck,
+  onNavigateSet,
   onNavigateFolder,
 }) => {
   const { layout } = useCollectionLayout();
@@ -24,7 +24,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
   const deferred = useDeferredValue(query);
   const [selected, setSelected] = useState(0);
   const id = useId();
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const folders = useFlashcardStore((state) => state.folders);
   const cards = useFlashcardStore((state) => state.cards);
   const results = useMemo(() => {
@@ -33,15 +33,15 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
     if (q)
       cards.forEach((card) => {
         const text = richTextToText(`${card.termRichText} ${card.definitionRichText}`);
-        if (!snippets.has(card.deckId) && text.toLocaleLowerCase('ko-KR').includes(q))
-          snippets.set(card.deckId, text);
+        if (!snippets.has(card.setId) && text.toLocaleLowerCase('ko-KR').includes(q))
+          snippets.set(card.setId, text);
       });
-    const matchingDecks = decks
+    const matchingSets = sets
       .filter(
-        (deck) =>
+        (cardSet) =>
           !q ||
-          `${deck.title} ${deck.description || ''}`.toLocaleLowerCase('ko-KR').includes(q) ||
-          snippets.has(deck.id)
+          `${cardSet.title} ${cardSet.description || ''}`.toLocaleLowerCase('ko-KR').includes(q) ||
+          snippets.has(cardSet.id)
       )
       .sort((a, b) => b.updatedAt - a.updatedAt);
     const matchingFolders = q
@@ -50,15 +50,15 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
         )
       : [];
     return {
-      total: matchingDecks.length + matchingFolders.length,
+      total: matchingSets.length + matchingFolders.length,
       items: [
-        ...matchingDecks.slice(0, 10).map((deck) => ({
-          id: deck.id,
-          type: 'deck' as const,
-          title: deck.title,
+        ...matchingSets.slice(0, 10).map((cardSet) => ({
+          id: cardSet.id,
+          type: 'set' as const,
+          title: cardSet.title,
           description:
-            snippets.get(deck.id)?.slice(0, 120) ||
-            `${folders.find((folder) => folder.id === deck.folderId)?.title || '미분류'} · 학습 세트`,
+            snippets.get(cardSet.id)?.slice(0, 120) ||
+            `${folders.find((folder) => folder.id === cardSet.folderId)?.title || '미분류'} · 학습 세트`,
         })),
         ...matchingFolders.slice(0, 5).map((folder) => ({
           id: folder.id,
@@ -68,7 +68,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
         })),
       ],
     };
-  }, [deferred, decks, folders, cards]);
+  }, [deferred, sets, folders, cards]);
   useEffect(() => setSelected(0), [deferred]);
   const active = Math.min(selected, Math.max(0, results.items.length - 1));
   useEffect(() => {
@@ -78,7 +78,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
     const item = results.items[index];
     if (!item) return;
     onClose();
-    if (item.type === 'deck') onNavigateDeck(item.id);
+    if (item.type === 'set') onNavigateSet(item.id);
     else onNavigateFolder(item.id);
   };
   return (
@@ -160,7 +160,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({
           const accent =
             item.type === 'folder'
               ? { background: '#fff0e7', color: '#ba7549' }
-              : deckAccent(item.title);
+              : setAccent(item.title);
           return (
             <button
               key={`${item.type}:${item.id}`}

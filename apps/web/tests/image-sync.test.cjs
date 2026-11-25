@@ -122,7 +122,7 @@ test('cloud rejects unprepared data images and oversize UTF-8 documents before s
 });
 test('cloud retains 400 operation batches after image preparation', async () => {
   const h = cloudHarness(); const state = seed.snapshot();
-  state.cards = Array.from({ length: 801 }, (_, i) => ({ ...seed.card, id: `c${i}`, deckId: 'd1', backImageUrl: url, imageUrl: url }));
+  state.cards = Array.from({ length: 801 }, (_, i) => ({ ...seed.card, id: `c${i}`, setId: 's1', backImageUrl: url, imageUrl: url }));
   state.pendingSync = { ...state.pendingSync, cardIds: state.cards.map(card => card.id) };
   await h.service.commitChanges(state, 'a', () => true);
   assert.deepEqual(h.commits.map(chunk => chunk.length), [400, 400, 1]);

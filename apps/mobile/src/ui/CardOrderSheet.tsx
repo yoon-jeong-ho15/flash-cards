@@ -7,9 +7,9 @@ import { Text } from './Typography';
 import { Icon } from './Icon';
 import { Button, Sheet, attempt } from './kit';
 
-export function CardOrderSheet({ cards, deckTitle, onClose, onSave }: {
+export function CardOrderSheet({ cards, setTitle, onClose, onSave }: {
   cards: Card[];
-  deckTitle: string;
+  setTitle: string;
   onClose: () => void;
   onSave: (ids: string[]) => Promise<unknown>;
 }) {
@@ -120,7 +120,7 @@ export function CardOrderSheet({ cards, deckTitle, onClose, onSave }: {
       }
     >
       <View style={styles.summary}>
-        <Text numberOfLines={1} style={styles.deckTitle}>{deckTitle}</Text>
+        <Text numberOfLines={1} style={styles.setTitle}>{setTitle}</Text>
         <Text style={styles.count}>전체 {order.length}장</Text>
       </View>
       <ScrollView
@@ -186,7 +186,7 @@ const createStyles = (colors: Palette) => StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingTop: 20, paddingBottom: 16,
   },
-  deckTitle: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.ink },
+  setTitle: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '600', color: colors.ink },
   count: { fontSize: 12, lineHeight: 18, color: colors.muted, flexShrink: 0 },
   scroll: { flex: 1 },
   list: { width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 16, paddingBottom: 16 },

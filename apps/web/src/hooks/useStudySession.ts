@@ -1,12 +1,12 @@
-import { selectDeckCards, selectFolderCards } from '../store/cardSelectors';
+import { selectSetCards, selectFolderCards } from '../store/cardSelectors';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Card, Deck, Folder } from '../types';
+import { Card, CardSet, Folder } from '../types';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { sortCardsByOrder } from '../services/flashcardService';
 import { useStudyShortcuts } from './useStudyShortcuts';
 
 interface UseStudySessionOptions {
-  deckId?: string;
+  setId?: string;
   folderId?: string;
   onlyDifficult?: boolean;
   shuffle?: boolean;
@@ -35,9 +35,9 @@ export interface StudyHistoryEntry {
 }
 
 export interface StudySessionState {
-  deck: Deck | undefined;
+  set: CardSet | undefined;
   folder: Folder | undefined;
-  deckCards: Card[];
+  setCards: Card[];
   sessionCards: Card[];
   currentIndex: number;
   currentCard: Card | null;
@@ -81,26 +81,26 @@ export interface StudySessionState {
 }
 
 export const useStudySession = ({
-  deckId,
+  setId,
   folderId,
   onlyDifficult = false,
   shuffle = folderId !== undefined,
   onExit,
 }: UseStudySessionOptions): StudySessionState => {
-  const deck = useFlashcardStore((state) => state.decks.find((item) => item.id === deckId));
+  const cardSet = useFlashcardStore((state) => state.sets.find((item) => item.id === setId));
   const folder = useFlashcardStore((state) => state.folders.find((item) => item.id === folderId));
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const cards = useFlashcardStore((state) => state.cards);
   const selectSourceCards = useCallback(
-    (state: { cards: Card[]; decks: Deck[] }) =>
+    (state: { cards: Card[]; sets: CardSet[] }) =>
       folderId !== undefined
         ? selectFolderCards(state, folderId)
-        : selectDeckCards(state, deckId ?? ''),
-    [deckId, folderId]
+        : selectSetCards(state, setId ?? ''),
+    [setId, folderId]
   );
-  const deckCards = useMemo(
-    () => selectSourceCards({ cards, decks }),
-    [cards, decks, selectSourceCards]
+  const setCards = useMemo(
+    () => selectSourceCards({ cards, sets }),
+    [cards, sets, selectSourceCards]
   );
   const setCardLearned = useFlashcardStore((state) => state.setCardLearned);
   const updateCard = useFlashcardStore((state) => state.updateCard);
@@ -108,9 +108,9 @@ export const useStudySession = ({
 
   const [sessionCardIds, setSessionCardIds] = useState<string[]>([]);
   const sessionCards = useMemo(() => {
-    const byId = new Map(deckCards.map((card) => [card.id, card]));
+    const byId = new Map(setCards.map((card) => [card.id, card]));
     return sessionCardIds.map((id) => byId.get(id)).filter((card): card is Card => Boolean(card));
-  }, [sessionCardIds, deckCards]);
+  }, [sessionCardIds, setCards]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
@@ -141,7 +141,7 @@ export const useStudySession = ({
     };
   }, []);
 
-  // 폴더 학습은 '알아요' 카드를 포함하고, 기존 덱 학습은 미완료 카드부터 시작합니다.
+  // 폴더 학습은 '알아요' 카드를 포함하고, 기존 세트 학습은 미완료 카드부터 시작합니다.
   const initSession = useCallback(
     (filterUnlearnedOnly = folderId === undefined, shouldShuffle = shuffle, resetRound = false) => {
       const rawStoreCards = selectSourceCards(useFlashcardStore.getState());
@@ -171,16 +171,16 @@ export const useStudySession = ({
     [folderId, selectSourceCards, shuffle]
   );
 
-  // 세션 진입 시 (또는 덱/모드 변경 시) 1회만 초기화하여 학습 중 store 변경으로 인한 리셋 방지
+  // 세션 진입 시 (또는 세트/모드 변경 시) 1회만 초기화하여 학습 중 store 변경으로 인한 리셋 방지
   const lastInitParamsRef = useRef<string>('');
 
   useEffect(() => {
-    const currentParamKey = JSON.stringify([deckId, folderId, shuffle]);
-    if (deckCards.length > 0 && lastInitParamsRef.current !== currentParamKey) {
+    const currentParamKey = JSON.stringify([setId, folderId, shuffle]);
+    if (setCards.length > 0 && lastInitParamsRef.current !== currentParamKey) {
       lastInitParamsRef.current = currentParamKey;
-      initSession(folderId === undefined && deckCards.some((card) => !card.learned), shuffle, true);
+      initSession(folderId === undefined && setCards.some((card) => !card.learned), shuffle, true);
     }
-  }, [deckId, folderId, shuffle, deckCards.length, initSession]);
+  }, [setId, folderId, shuffle, setCards.length, initSession]);
 
   useEffect(() => {
     setCurrentIndex((index) => Math.min(index, Math.max(0, sessionCards.length - 1)));
@@ -349,14 +349,14 @@ export const useStudySession = ({
   const isLastCard = sessionCards.length > 0 && currentIndex >= sessionCards.length - 1;
 
   const remainingUnlearnedCount = useMemo(
-    () => deckCards.filter((c) => !c.learned).length,
-    [deckCards]
+    () => setCards.filter((c) => !c.learned).length,
+    [setCards]
   );
 
   return {
-    deck,
+    set: cardSet,
     folder,
-    deckCards,
+    setCards,
     sessionCards,
     currentIndex,
     currentCard,

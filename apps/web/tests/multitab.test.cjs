@@ -15,8 +15,8 @@ test('stale tabs apply concurrent folder and card operations to the latest durab
   const { a, b, saved, storage } = tabs({}, seed.snapshot());
   const [fa, fb] = await Promise.all([a.store.getState().addFolder('a'), b.store.getState().addFolder('b')]);
   await Promise.all([
-    a.store.getState().addCard({ ...seed.card, deckId: 'd1' }),
-    b.store.getState().addCard({ ...seed.card, deckId: 'd1' }),
+    a.store.getState().addCard({ ...seed.card, setId: 's1' }),
+    b.store.getState().addCard({ ...seed.card, setId: 's1' }),
   ]);
   assert.equal(saved().folders.length, 2);
   assert.equal(saved().cards.length, 4);
@@ -63,7 +63,7 @@ test('a cloud pull in one tab cannot overwrite another tab edit or deletion', as
   const { a, b, saved } = tabs({ fetchAllData: async () => {
     if (++reads === 1) { entered.resolve(); return gate.promise; }
     return server;
-  }, commitChanges: async snapshot => { server = { folders: snapshot.folders, decks: snapshot.decks, cards: snapshot.cards }; } }, seed.snapshot());
+  }, commitChanges: async snapshot => { server = { folders: snapshot.folders, sets: snapshot.sets, cards: snapshot.cards }; } }, seed.snapshot());
   a.navigator.onLine = true;
   const sync = a.store.getState().initCloudSync(); await entered.promise;
   await b.store.getState().updateCard('c1', { termRichText: 'newer' });
@@ -135,8 +135,8 @@ test('concurrent full editor saves merge independent cards and keep additions fr
   const second = b.store.getState().cards.map(c => ({ ...c }));
   first[0].termRichText = 'edit c1'; second[1].definitionRichText = 'edit c2';
   await Promise.all([
-    a.store.getState().saveDeckWithCards('d1', { title: 'deck' }, [...first, { ...seed.card, termRichText: 'added a' }]),
-    b.store.getState().saveDeckWithCards('d1', { title: 'deck' }, [...second, { ...seed.card, termRichText: 'added b' }]),
+    a.store.getState().saveSetWithCards('s1', { title: 'set' }, [...first, { ...seed.card, termRichText: 'added a' }]),
+    b.store.getState().saveSetWithCards('s1', { title: 'set' }, [...second, { ...seed.card, termRichText: 'added b' }]),
   ]);
   assert.equal(saved().cards.length, 4);
   assert.equal(saved().cards.find(c => c.id === 'c1').termRichText, 'edit c1');
@@ -146,35 +146,35 @@ test('concurrent full editor saves merge independent cards and keep additions fr
 
 test('editor base survives an external store refresh and does not overwrite untouched fields', async () => {
   const { a, b, saved } = tabs({}, seed.snapshot());
-  const base = { deck: b.store.getState().decks[0], cards: b.store.getState().cards };
+  const base = { set: b.store.getState().sets[0], cards: b.store.getState().cards };
   const form = base.cards.map(c => ({ ...c })); form[0].termRichText = 'my term';
   await a.store.getState().updateCard('c1', { definitionRichText: 'external definition' });
-  await a.store.getState().updateDeck('d1', { description: 'external description' });
+  await a.store.getState().updateSet('s1', { description: 'external description' });
   await b.store.getState().refreshAccount();
-  await b.store.getState().saveDeckWithCards('d1', { title: 'deck', description: '' }, form, base);
+  await b.store.getState().saveSetWithCards('s1', { title: 'set', description: '' }, form, base);
   assert.equal(saved().cards[0].termRichText, 'my term');
   assert.equal(saved().cards[0].definitionRichText, 'external definition');
-  assert.equal(saved().decks[0].description, 'external description');
+  assert.equal(saved().sets[0].description, 'external description');
 });
 
 test('deleting a card is not undone by a stale full editor save of another card', async () => {
   const { a, b, saved } = tabs({}, seed.snapshot());
   const form = b.store.getState().cards.map(c => ({ ...c })); form[0].termRichText = 'edit c1';
   await a.store.getState().deleteCard('c2');
-  await b.store.getState().saveDeckWithCards('d1', { title: 'deck' }, form);
+  await b.store.getState().saveSetWithCards('s1', { title: 'set' }, form);
   assert.equal(saved().cards.length, 1); assert.equal(saved().cards[0].termRichText, 'edit c1');
   assert.ok(saved().pendingSync.deletedCardIds.includes('c2'));
 });
 
-test('an editor cannot resurrect a deleted deck or silently drop edits to a deleted card', async () => {
+test('an editor cannot resurrect a deleted set or silently drop edits to a deleted card', async () => {
   const { a, b, saved } = tabs({}, seed.snapshot());
   const form = b.store.getState().cards.map(c => ({ ...c })); form[0].termRichText = 'my edited card';
   await a.store.getState().deleteCard('c1');
-  await assert.rejects(b.store.getState().saveDeckWithCards('d1', { title: 'deck' }, form), /삭제/);
+  await assert.rejects(b.store.getState().saveSetWithCards('s1', { title: 'set' }, form), /삭제/);
   assert.equal(saved().cards.length, 1); assert.equal(b.store.getState().cards.length, 2);
-  await a.store.getState().deleteDeck('d1');
-  await assert.rejects(b.store.getState().saveDeckWithCards('d1', { title: 'deck' }, form), /삭제/);
-  assert.equal(saved().decks.length, 0);
+  await a.store.getState().deleteSet('s1');
+  await assert.rejects(b.store.getState().saveSetWithCards('s1', { title: 'set' }, form), /삭제/);
+  assert.equal(saved().sets.length, 0);
 });
 
 test('a corrupt account is displayed as an error and never overwritten by a blank view', async () => {

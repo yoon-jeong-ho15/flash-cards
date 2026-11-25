@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const collections = ['flashcard_folders', 'flashcard_decks', 'flashcard_cards'];
+const collections = ['flashcard_folders', 'flashcard_sets', 'flashcard_cards'];
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -44,7 +44,7 @@ function registerAccountPullTests(fixture) {
     const started = deferred();
     const failingRead = deferred();
     h.server.beforeRead = async (name) => {
-      if (name === 'flashcard_decks') {
+      if (name === 'flashcard_sets') {
         started.resolve();
         await failingRead.promise;
       }
@@ -53,7 +53,7 @@ function registerAccountPullTests(fixture) {
     assert.equal(await Promise.race([started.promise.then(() => 'started'), sync.then(() => 'finished')]), 'started');
     await h.edit('c1', '<p>edit during pull</p>');
     const afterEdit = h.durable();
-    failingRead.reject(Error('decks read failed'));
+    failingRead.reject(Error('sets read failed'));
     await sync;
 
     assert.deepEqual(h.server.serverReads, [...collections, ...collections]);
@@ -62,7 +62,7 @@ function registerAccountPullTests(fixture) {
     assert.equal(h.cards().find(card => card.id === 'c1').termRichText, '<p>edit during pull</p>');
     assert.equal(h.pending('c1'), true);
     assert.equal(h.status(), 'error');
-    assert.match(h.error(), /decks read failed/);
+    assert.match(h.error(), /sets read failed/);
     assert.equal(h.lastSyncedAt(), 1000);
   });
 
@@ -98,13 +98,13 @@ function registerAccountPullTests(fixture) {
     t.mock.method(Date, 'now', () => now);
     const h = await fixture();
     assert.equal(h.durable().folders.length, 1);
-    assert.equal(h.durable().decks.length, 1);
+    assert.equal(h.durable().sets.length, 1);
     assert.equal(h.durable().cards.length, 3);
     h.server.clearCollections();
     await h.connect();
 
-    const { folders, decks, cards } = h.durable();
-    assert.deepEqual({ folders, decks, cards }, { folders: [], decks: [], cards: [] });
+    const { folders, sets, cards } = h.durable();
+    assert.deepEqual({ folders, sets, cards }, { folders: [], sets: [], cards: [] });
     assert.equal(h.cards().length, 0);
     assert.deepEqual(h.server.cacheReads, []);
     assert.deepEqual(h.server.serverReads, collections);

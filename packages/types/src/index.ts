@@ -9,7 +9,7 @@ export interface UserProfile {
 // 카드 모델
 export interface Card {
   id: string;
-  deckId: string;
+  setId: string;
   userId?: string;
   order?: number;             // 정렬 순서 (0부터 시작하는 인덱스)
   termRichText: string;       // 앞면 (Tiptap HTML 또는 텍스트)
@@ -22,8 +22,8 @@ export interface Card {
   contentVersion?: string;
 }
 
-// 카드 덱 모델
-export interface Deck {
+// 학습 세트 모델
+export interface CardSet {
   id: string;
   folderId?: string | null;   // 속한 폴더 ID (없으면 루트)
   userId?: string;
@@ -33,7 +33,7 @@ export interface Deck {
   updatedAt: number;
 }
 
-// 폴더 모델 (덱의 모음)
+// 폴더 모델 (세트의 모음)
 export interface Folder {
   id: string;
   userId?: string;
@@ -46,18 +46,18 @@ export interface Folder {
 export type ViewMode =
   | { type: 'dashboard' }
   | { type: 'all-folders' }
-  | { type: 'all-decks' }
+  | { type: 'all-sets' }
   | { type: 'folder'; folderId: string }
-  | { type: 'deck'; deckId: string }
-  | { type: 'edit-deck'; deckId?: string; folderId?: string; focusCardId?: string } // deckId가 없으면 신규 생성
-  | { type: 'study'; deckId: string; onlyDifficult?: boolean; shuffle?: boolean };
+  | { type: 'set'; setId: string }
+  | { type: 'edit-set'; setId?: string; folderId?: string; focusCardId?: string } // setId가 없으면 신규 생성
+  | { type: 'study'; setId: string; onlyDifficult?: boolean; shuffle?: boolean };
 
-// 덱 정렬 옵션
-export type DeckSortOption = 'name-asc' | 'name-desc' | 'date-desc' | 'date-asc';
+// 세트 정렬 옵션
+export type SetSortOption = 'name-asc' | 'name-desc' | 'date-desc' | 'date-asc';
 
 // 학습 통계 결과 모델
 export interface StudyResultStats {
-  deckTitle: string;
+  setTitle: string;
   totalCards: number;
   roundCount: number;
   difficultCardsCount: number;

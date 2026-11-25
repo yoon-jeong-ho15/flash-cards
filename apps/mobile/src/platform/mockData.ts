@@ -1,8 +1,8 @@
 import type { FlashcardStore } from '../core/store';
 
-interface MockFolder { title: string; description: string; decks: Array<{ title: string; cards: Array<[string, string]> }> }
+interface MockFolder { title: string; description: string; sets: Array<{ title: string; cards: Array<[string, string]> }> }
 export const mockFolders: MockFolder[] = [
-  { title: '영어 회화', description: '여행과 일상에서 바로 쓰는 표현', decks: [
+  { title: '영어 회화', description: '여행과 일상에서 바로 쓰는 표현', sets: [
     { title: '여행 영어', cards: [
       ['Where is the nearest station?', '가장 가까운 역이 어디인가요?'], ['Could I see the menu, please?', '메뉴를 볼 수 있을까요?'],
       ['I would like to check in.', '체크인하고 싶어요.'], ['How much is this?', '이것은 얼마인가요?'], ['Can I pay by card?', '카드로 결제할 수 있나요?'],
@@ -22,7 +22,7 @@ export const mockFolders: MockFolder[] = [
       ['Let me check my schedule.', '일정을 확인해 보겠습니다.'], ['Please keep me updated.', '진행 상황을 계속 알려 주세요.'],
     ] },
   ] },
-  { title: '프로그래밍', description: '웹 개발의 기본 개념 정리', decks: [
+  { title: '프로그래밍', description: '웹 개발의 기본 개념 정리', sets: [
     { title: 'JavaScript 기초', cards: [
       ['const는 무엇을 선언하나요?', '재할당할 수 없는 변수를 선언합니다. 객체 내부 값의 변경까지 막지는 않습니다.'],
       ['let의 유효 범위는?', '블록 범위입니다.'], ['===와 ==의 차이는?', '===는 타입 변환 없이 비교하고, ==는 타입 변환을 할 수 있습니다.'],
@@ -39,7 +39,7 @@ export const mockFolders: MockFolder[] = [
       ['백엔드의 역할은?', '서버에서 데이터 처리와 인증 등의 기능을 담당합니다.'], ['버전 관리란?', '파일의 변경 이력을 기록하고 관리하는 작업입니다.'],
     ] },
   ] },
-  { title: '한국사', description: '시대별 주요 인물과 사건', decks: [
+  { title: '한국사', description: '시대별 주요 인물과 사건', sets: [
     { title: '삼국 시대', cards: [
       ['고구려를 세운 인물은?', '주몽입니다.'], ['백제를 세운 인물은?', '온조입니다.'], ['신라를 세운 인물은?', '박혁거세입니다.'],
       ['백제의 전성기를 이끈 4세기 왕은?', '근초고왕입니다.'], ['고구려의 영토를 크게 넓힌 왕은?', '광개토대왕입니다.'],
@@ -59,7 +59,7 @@ export const mockFolders: MockFolder[] = [
       ['대동법을 처음 시행한 왕은?', '광해군입니다.'],
     ] },
   ] },
-  { title: '세계 지리', description: '나라와 수도, 자연환경 알아보기', decks: [
+  { title: '세계 지리', description: '나라와 수도, 자연환경 알아보기', sets: [
     { title: '나라와 수도', cards: [
       ['프랑스의 수도는?', '파리입니다.'], ['독일의 수도는?', '베를린입니다.'], ['이탈리아의 수도는?', '로마입니다.'], ['스페인의 수도는?', '마드리드입니다.'],
       ['캐나다의 수도는?', '오타와입니다.'], ['호주의 수도는?', '캔버라입니다.'], ['브라질의 수도는?', '브라질리아입니다.'],
@@ -72,7 +72,7 @@ export const mockFolders: MockFolder[] = [
       ['아마존강이 흐르는 대륙은?', '남아메리카입니다.'], ['지중해 북쪽에 있는 대륙은?', '유럽입니다.'], ['남극점의 위도는?', '남위 90도입니다.'],
     ] },
   ] },
-  { title: '기초 과학', description: '물리와 화학, 생물의 기본 개념', decks: [
+  { title: '기초 과학', description: '물리와 화학, 생물의 기본 개념', sets: [
     { title: '물리 기초', cards: [
       ['힘의 SI 단위는?', '뉴턴(N)입니다.'], ['에너지의 SI 단위는?', '줄(J)입니다.'], ['전류의 SI 단위는?', '암페어(A)입니다.'],
       ['전압의 SI 단위는?', '볼트(V)입니다.'], ['저항의 SI 단위는?', '옴(Ω)입니다.'], ['속력은 어떻게 구하나요?', '이동 거리를 걸린 시간으로 나눕니다.'],
@@ -94,7 +94,7 @@ export const mockFolders: MockFolder[] = [
       ['먹이 사슬이란?', '생물 사이의 먹고 먹히는 관계를 연결한 것입니다.'], ['분해자의 역할은?', '죽은 생물과 배설물 등의 유기물을 분해합니다.'],
     ] },
   ] },
-  { title: '문화와 상식', description: '예술과 생활 속 다양한 지식', decks: [
+  { title: '문화와 상식', description: '예술과 생활 속 다양한 지식', sets: [
     { title: '음악 용어', cards: [
       ['피아노(p)라는 셈여림 표시는?', '여리게 연주하라는 뜻입니다.'], ['포르테(f)라는 셈여림 표시는?', '세게 연주하라는 뜻입니다.'],
       ['크레셴도란?', '점점 세게 연주하는 것입니다.'], ['데크레셴도란?', '점점 여리게 연주하는 것입니다.'],
@@ -111,7 +111,7 @@ export const mockFolders: MockFolder[] = [
   ] },
 ];
 
-export const mockRootDeck = {
+export const mockRootSet = {
   title: '가볍게 푸는 상식',
   description: '폴더에 속하지 않은 테스트용 학습 세트 · 카드 10장',
   cards: [
@@ -134,20 +134,20 @@ export async function seedMockData(store: FlashcardStore, uid: string) {
       if (!active()) return;
       const folderId = store.getState().folders.find(f => f.title === folder.title)?.id
         || await store.saveFolder(undefined, folder.title, folder.description);
-      for (const [index, deck] of folder.decks.entries()) {
+      for (const [index, cardSet] of folder.sets.entries()) {
         if (!active()) return;
-        if (store.getState().decks.some(d => d.folderId === folderId && d.title === deck.title)) continue;
-        await store.saveDeck(undefined, { title: deck.title, folderId, description: `${folder.title} · 테스트용 예시 카드 10장` },
-          deck.cards.map(([front, back], cardIndex) => ({ termRichText: `<p>${front}</p>`, definitionRichText: `<p>${back}</p>`, learned: cardIndex < [0, 4, 10][index] })));
+        if (store.getState().sets.some(s => s.folderId === folderId && s.title === cardSet.title)) continue;
+        await store.saveSet(undefined, { title: cardSet.title, folderId, description: `${folder.title} · 테스트용 예시 카드 10장` },
+          cardSet.cards.map(([front, back], cardIndex) => ({ termRichText: `<p>${front}</p>`, definitionRichText: `<p>${back}</p>`, learned: cardIndex < [0, 4, 10][index] })));
       }
     }
     if (!active()) return;
     await store.setPreferences({ mockDataVersion: 1 });
   }
   if (!active()) return;
-  if (!store.getState().decks.some(d => !d.folderId && d.title === mockRootDeck.title)) {
-    await store.saveDeck(undefined, { title: mockRootDeck.title, description: mockRootDeck.description, folderId: null },
-      mockRootDeck.cards.map(([front, back]) => ({ termRichText: `<p>${front}</p>`, definitionRichText: `<p>${back}</p>` })));
+  if (!store.getState().sets.some(s => !s.folderId && s.title === mockRootSet.title)) {
+    await store.saveSet(undefined, { title: mockRootSet.title, description: mockRootSet.description, folderId: null },
+      mockRootSet.cards.map(([front, back]) => ({ termRichText: `<p>${front}</p>`, definitionRichText: `<p>${back}</p>` })));
   }
   if (active()) await store.setPreferences({ mockDataVersion: 2 });
 }

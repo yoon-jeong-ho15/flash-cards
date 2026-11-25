@@ -1,35 +1,35 @@
 import React from 'react';
 import { FlatList, Pressable, View } from 'react-native';
-import { sortDecks } from '../core/content';
+import { sortSets } from '../core/content';
 import { store, useStore } from '../platform/runtime';
 import { CollectionIcon, CollectionSurface } from './CollectionSurface';
-import { DeckTile } from './DeckTile';
+import { SetTile } from './SetTile';
 import { Icon } from './Icon';
 import { Button, Empty, Select, attempt } from './kit';
-import { deckSortOptions } from './libraryShared';
+import { setSortOptions } from './libraryShared';
 import type { Navigation } from './navigation';
 import { useUI } from './theme';
 import { Text } from './Typography';
 import { useCollectionGrid } from './useCollectionGrid';
 
-/** Displays folders and unfiled decks in the library tab. */
+/** Displays folders and unfiled sets in the library tab. */
 export function FolderLibrary({
   nav,
   onNewFolder,
 }: {
   nav: Navigation;
   onNewFolder: () => void;
-  onDecks?: () => void;
+  onSets?: () => void;
 }) {
   const { colors, s } = useUI();
-  const { folders, decks, preferences } = useStore();
+  const { folders, sets, preferences } = useStore();
   const collectionGrid = useCollectionGrid('list');
   const folderSortOption = preferences.folderSort || 'date-desc';
-  const sortedFolders = sortDecks(folders, folderSortOption);
+  const sortedFolders = sortSets(folders, folderSortOption);
   const existingFolderIds = new Set(folders.map((folder) => folder.id));
-  const unfiledDecks = sortDecks(
-    decks.filter((deck) => !deck.folderId || !existingFolderIds.has(deck.folderId)),
-    preferences.deckSort || 'date-desc'
+  const unfiledSets = sortSets(
+    sets.filter((cardSet) => !cardSet.folderId || !existingFolderIds.has(cardSet.folderId)),
+    preferences.setSort || 'date-desc'
   );
 
   return (
@@ -51,7 +51,7 @@ export function FolderLibrary({
             <Select
               label="폴더 정렬"
               value={folderSortOption}
-              options={deckSortOptions}
+              options={setSortOptions}
               onChange={(value) => {
                 void attempt(() => store.setPreferences({ folderSort: value }));
               }}
@@ -75,7 +75,7 @@ export function FolderLibrary({
         </View>
       }
       ListEmptyComponent={
-        !unfiledDecks.length && !sortedFolders.length ? (
+        !unfiledSets.length && !sortedFolders.length ? (
           <Empty title="아직 학습 자료가 없어요" />
         ) : undefined
       }
@@ -88,12 +88,12 @@ export function FolderLibrary({
             ]}
           >
             <Text numberOfLines={1} style={[s.h2, { flex: 1 }]}>
-              미분류 세트 {unfiledDecks.length}개
+              미분류 세트 {unfiledSets.length}개
             </Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="새 미분류 세트 만들기"
-              onPress={() => nav.go({ type: 'edit-deck' })}
+              onPress={() => nav.go({ type: 'edit-set' })}
               style={{
                 minHeight: 44,
                 flexDirection: 'row',
@@ -106,9 +106,9 @@ export function FolderLibrary({
             </Pressable>
           </View>
           <View style={collectionGrid.wrapStyle}>
-            {unfiledDecks.map((deck) => (
-              <View key={deck.id} style={collectionGrid.itemStyle}>
-                <DeckTile deck={deck} nav={nav} />
+            {unfiledSets.map((cardSet) => (
+              <View key={cardSet.id} style={collectionGrid.itemStyle}>
+                <SetTile set={cardSet} nav={nav} />
               </View>
             ))}
           </View>
@@ -142,7 +142,7 @@ export function FolderLibrary({
                     <Text style={s.h2}>{folder.title}</Text>
                     <Text style={s.muted}>
                       학습 세트{' '}
-                      {decks.filter((deck) => deck.folderId === folder.id).length}개
+                      {sets.filter((cardSet) => cardSet.folderId === folder.id).length}개
                     </Text>
                   </View>
                 </View>

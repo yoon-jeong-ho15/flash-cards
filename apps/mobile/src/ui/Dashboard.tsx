@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { sortDecks } from '../core/content';
+import { sortSets } from '../core/content';
 import { store, useStore } from '../platform/runtime';
 import { CollectionLayoutToggle } from './CollectionLayoutToggle';
 import { CollectionIcon, CollectionSurface } from './CollectionSurface';
-import { DeckTile } from './DeckTile';
+import { SetTile } from './SetTile';
 import { Icon } from './Icon';
 import { Button, attempt } from './kit';
 import { libraryStyles } from './libraryShared';
@@ -47,7 +47,7 @@ function DashboardSection({
   );
 }
 
-/** Displays the home overview with search shortcut, study stats, recent decks, and folders. */
+/** Displays the home overview with search shortcut, study stats, recent sets, and folders. */
 export function Dashboard({
   nav,
   onNewFolder,
@@ -57,16 +57,16 @@ export function Dashboard({
 }) {
   const { colors, s } = useUI();
   const styles = useThemedStyles(createStyles);
-  const { cards, decks, folders, user } = useStore();
-  const [isCreatingSampleDeck, setIsCreatingSampleDeck] = useState(false);
-  const recentDecks = sortDecks(decks, 'date-desc');
+  const { cards, sets, folders, user } = useStore();
+  const [isCreatingSampleSet, setIsCreatingSampleSet] = useState(false);
+  const recentSets = sortSets(sets, 'date-desc');
   const collectionGrid = useCollectionGrid();
   const learnedCardCount = cards.filter((card) => card.learned).length;
 
-  const handleCreateSampleDeck = () => {
-    setIsCreatingSampleDeck(true);
+  const handleCreateSampleSet = () => {
+    setIsCreatingSampleSet(true);
     void attempt(async () => {
-      const createdDeckId = await store.saveDeck(
+      const createdSetId = await store.saveSet(
         undefined,
         {
           title: '하루 6개, 여행 영어',
@@ -84,8 +84,8 @@ export function Dashboard({
           definitionRichText: `<p>${back}</p>`,
         }))
       );
-      nav.go({ type: 'deck', deckId: createdDeckId });
-    }).finally(() => setIsCreatingSampleDeck(false));
+      nav.go({ type: 'set', setId: createdSetId });
+    }).finally(() => setIsCreatingSampleSet(false));
   };
 
   return (
@@ -119,7 +119,7 @@ export function Dashboard({
       <View style={styles.statsCard}>
         {(
           [
-            [decks.length, '학습 세트', colors.primary],
+            [sets.length, '학습 세트', colors.primary],
             [cards.length, '전체 카드', colors.info],
             [learnedCardCount, '기억한 카드', colors.success],
           ] as const
@@ -142,21 +142,21 @@ export function Dashboard({
         <DashboardSection
           title="최근 학습 세트"
           accessory={<CollectionLayoutToggle />}
-          onPress={() => nav.go({ type: 'all-decks' })}
+          onPress={() => nav.go({ type: 'all-sets' })}
         />
         <View style={collectionGrid.wrapStyle}>
-          {recentDecks.slice(0, 3).map((deck) => (
-            <View key={deck.id} style={collectionGrid.itemStyle}>
-              <DeckTile deck={deck} nav={nav} />
+          {recentSets.slice(0, 3).map((cardSet) => (
+            <View key={cardSet.id} style={collectionGrid.itemStyle}>
+              <SetTile set={cardSet} nav={nav} />
             </View>
           ))}
         </View>
-        {!recentDecks.length && (
+        {!recentSets.length && (
           <View style={[s.box, { gap: 12 }]}>
             <View style={s.row}>
               <View
                 style={[
-                  styles.sampleDeckIcon,
+                  styles.sampleSetIcon,
                   { backgroundColor: colors.infoBg },
                 ]}
               >
@@ -170,8 +170,8 @@ export function Dashboard({
             <Button
               title="샘플 세트로 시작하기"
               tone="secondary"
-              busy={isCreatingSampleDeck}
-              onPress={handleCreateSampleDeck}
+              busy={isCreatingSampleSet}
+              onPress={handleCreateSampleSet}
             />
           </View>
         )}
@@ -210,7 +210,7 @@ export function Dashboard({
                         </Text>
                         <Text style={s.muted}>
                           세트{' '}
-                          {decks.filter((deck) => deck.folderId === folder.id).length}
+                          {sets.filter((cardSet) => cardSet.folderId === folder.id).length}
                           개
                         </Text>
                       </View>
@@ -267,7 +267,7 @@ const createStyles = (colors: Palette) =>
       gap: 2,
       paddingHorizontal: 5,
     },
-    sampleDeckIcon: {
+    sampleSetIcon: {
       width: 36,
       height: 36,
       borderRadius: radius.control,

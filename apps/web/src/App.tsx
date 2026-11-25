@@ -14,14 +14,14 @@ import { AccountView } from './components/account/AccountView';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { FolderDetailView } from './components/folder/FolderDetailView';
 import { FolderModal } from './components/folder/FolderModal';
-import { DeckDetailView } from './components/deck/DeckDetailView';
+import { SetDetailView } from './components/set/SetDetailView';
 import { AllFoldersView } from './components/folder/AllFoldersView';
-import { AllDecksView } from './components/deck/AllDecksView';
+import { AllSetsView } from './components/set/AllSetsView';
 import { MotionConfig } from 'motion/react';
 
-const DeckEditor = lazy(() =>
-  import('./components/deck/DeckEditor').then((module) => ({
-    default: module.DeckEditor,
+const SetEditor = lazy(() =>
+  import('./components/set/SetEditor').then((module) => ({
+    default: module.SetEditor,
   }))
 );
 const StudyView = lazy(() =>
@@ -46,9 +46,9 @@ export const App: React.FC = () => {
   const currentView = routeView ?? { type: 'dashboard' as const };
   const status = useFlashcardStore(state => routeStatus(routeView, state));
   const loginWithGoogle = useFlashcardStore(state => state.loginWithGoogle);
-  const [lastStudiedDeckId, setLastStudiedDeckId] = useState<string | null>(() => {
+  const [lastStudiedSetId, setLastStudiedSetId] = useState<string | null>(() => {
     try {
-      return localStorage.getItem('flashcard_last_studied_deck_id');
+      return localStorage.getItem('flashcard_last_studied_set_id') ?? localStorage.getItem('flashcard_last_studied_deck_id');
     } catch {
       return null;
     }
@@ -100,7 +100,7 @@ export const App: React.FC = () => {
   // 뷰 변경 시 스크롤 최상단 초기화 (모바일 및 SPA 스크롤 위치 유지 방지)
   useEffect(() => {
     // 특정 카드에 포커스하여 편집기로 진입하는 경우가 아니라면 항상 최상단으로 스크롤
-    if (currentView.type === 'edit-deck' && currentView.focusCardId) {
+    if (currentView.type === 'edit-set' && currentView.focusCardId) {
       return;
     }
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -116,25 +116,25 @@ export const App: React.FC = () => {
   const navigateHome = () => navigate(viewUrl({ type: 'dashboard' }));
   const navigateAccount = () => navigate(viewUrl({ type: 'account' }));
   const navigateAllFolders = () => navigate(viewUrl({ type: 'all-folders' }));
-  const navigateAllDecks = () => navigate(viewUrl({ type: 'all-decks' }));
+  const navigateAllSets = () => navigate(viewUrl({ type: 'all-sets' }));
   const navigateFolder = (folderId: string) => navigate(viewUrl({ type: 'folder', folderId }));
-  const navigateDeck = (deckId: string) => navigate(viewUrl({ type: 'deck', deckId }));
-  const navigateEditDeck = (deckId?: string, folderId?: string, focusCardId?: string) =>
-    navigate(viewUrl({ type: 'edit-deck', deckId, folderId, focusCardId }));
-  const navigateStudy = (deckId: string, onlyDifficult = false, shuffle = false) => {
-    navigate(viewUrl({ type: 'study', deckId, onlyDifficult, shuffle }));
+  const navigateSet = (setId: string) => navigate(viewUrl({ type: 'set', setId }));
+  const navigateEditSet = (setId?: string, folderId?: string, focusCardId?: string) =>
+    navigate(viewUrl({ type: 'edit-set', setId, folderId, focusCardId }));
+  const navigateStudy = (setId: string, onlyDifficult = false, shuffle = false) => {
+    navigate(viewUrl({ type: 'study', setId, onlyDifficult, shuffle }));
   };
 
-  const studiedDeckId = status === 'ready' && currentView.type === 'study' ? currentView.deckId : null;
+  const studiedSetId = status === 'ready' && currentView.type === 'study' ? currentView.setId : null;
   useEffect(() => {
-    if (!studiedDeckId) return;
-    setLastStudiedDeckId(studiedDeckId);
+    if (!studiedSetId) return;
+    setLastStudiedSetId(studiedSetId);
     try {
-      localStorage.setItem('flashcard_last_studied_deck_id', studiedDeckId);
+      localStorage.setItem('flashcard_last_studied_set_id', studiedSetId);
     } catch {
       // Study remains available when storage is full or disabled.
     }
-  }, [studiedDeckId]);
+  }, [studiedSetId]);
 
   const openNewFolderModal = () => setFolderModalState({ isOpen: true });
   const closeFolderModal = () => setFolderModalState({ isOpen: false });
@@ -143,7 +143,7 @@ export const App: React.FC = () => {
   const showBottomNavigation = readyView &&
     readyView.type !== 'study' &&
     readyView.type !== 'folder-study' &&
-    readyView.type !== 'edit-deck';
+    readyView.type !== 'edit-set';
 
   const routeFeedback = status !== 'ready' && (
     <div className="page-container py-16">
@@ -197,10 +197,10 @@ export const App: React.FC = () => {
               setSearchOpen(true);
             }
           }}
-          onChooseStudyDeck={navigateAllDecks}
+          onChooseStudySet={navigateAllSets}
           onNavigateFolder={navigateFolder}
-          onNavigateDeck={navigateDeck}
-          onCreateDeck={() => navigateEditDeck()}
+          onNavigateSet={navigateSet}
+          onCreateSet={() => navigateEditSet()}
           onCreateFolder={openNewFolderModal}
         />
 
@@ -241,32 +241,32 @@ export const App: React.FC = () => {
 
               {readyView?.type === 'dashboard' && (
                 <DashboardView
-                  lastStudiedDeckId={lastStudiedDeckId}
-                  onNavigateDeck={navigateDeck}
-                  onNavigateAllDecks={navigateAllDecks}
+                  lastStudiedSetId={lastStudiedSetId}
+                  onNavigateSet={navigateSet}
+                  onNavigateAllSets={navigateAllSets}
                   onNavigateFolder={navigateFolder}
                   onNavigateAllFolders={navigateAllFolders}
-                  onStartStudy={(deckId) => navigateStudy(deckId)}
-                  onCreateDeck={() => navigateEditDeck()}
+                  onStartStudy={(setId) => navigateStudy(setId)}
+                  onCreateSet={() => navigateEditSet()}
                   onCreateFolder={openNewFolderModal}
                 />
               )}
 
               {readyView?.type === 'all-folders' && (
                 <AllFoldersView
-                  onNavigateAllDecks={navigateAllDecks}
+                  onNavigateAllSets={navigateAllSets}
                   onNavigateFolder={navigateFolder}
                   onCreateFolder={openNewFolderModal}
                   onBack={navigateHome}
                 />
               )}
 
-              {readyView?.type === 'all-decks' && (
-                <AllDecksView
+              {readyView?.type === 'all-sets' && (
+                <AllSetsView
                   onNavigateAllFolders={navigateAllFolders}
-                  onNavigateDeck={navigateDeck}
-                  onStartStudy={(deckId) => navigateStudy(deckId)}
-                  onCreateDeck={() => navigateEditDeck()}
+                  onNavigateSet={navigateSet}
+                  onStartStudy={(setId) => navigateStudy(setId)}
+                  onCreateSet={() => navigateEditSet()}
                   onBack={navigateHome}
                 />
               )}
@@ -274,9 +274,9 @@ export const App: React.FC = () => {
               {readyView?.type === 'folder' && (
                 <FolderDetailView
                   folderId={readyView.folderId}
-                  onNavigateDeck={navigateDeck}
-                  onStartStudy={(deckId) => navigateStudy(deckId)}
-                  onCreateDeckInFolder={(folderId) => navigateEditDeck(undefined, folderId)}
+                  onNavigateSet={navigateSet}
+                  onStartStudy={(setId) => navigateStudy(setId)}
+                  onCreateSetInFolder={(folderId) => navigateEditSet(undefined, folderId)}
                   onStartFolderStudy={(folderId) =>
                     navigate(viewUrl({ type: 'folder-study', folderId }))
                   }
@@ -284,45 +284,45 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {readyView?.type === 'deck' && (
-                <DeckDetailView
-                  deckId={readyView.deckId}
-                  onStartStudy={(deckId, shuffle) => navigateStudy(deckId, false, shuffle)}
-                  onEditDeck={(deckId, focusCardId) =>
-                    navigateEditDeck(deckId, undefined, focusCardId)
+              {readyView?.type === 'set' && (
+                <SetDetailView
+                  setId={readyView.setId}
+                  onStartStudy={(setId, shuffle) => navigateStudy(setId, false, shuffle)}
+                  onEditSet={(setId, focusCardId) =>
+                    navigateEditSet(setId, undefined, focusCardId)
                   }
                   onNavigateFolder={navigateFolder}
                   onBack={navigateHome}
                 />
               )}
 
-              {readyView?.type === 'edit-deck' && (
-                <DeckEditor
-                  key={`${user?.uid || 'guest'}:${readyView.deckId || 'new'}:${readyView.folderId || 'root'}`}
-                  deckId={readyView.deckId}
+              {readyView?.type === 'edit-set' && (
+                <SetEditor
+                  key={`${user?.uid || 'guest'}:${readyView.setId || 'new'}:${readyView.folderId || 'root'}`}
+                  setId={readyView.setId}
                   initialFolderId={readyView.folderId}
                   focusCardId={readyView.focusCardId}
                   onClose={() => {
-                    if (readyView.deckId) {
-                      navigateDeck(readyView.deckId);
+                    if (readyView.setId) {
+                      navigateSet(readyView.setId);
                     } else if (readyView.folderId) {
                       navigateFolder(readyView.folderId);
                     } else {
                       navigateHome();
                     }
                   }}
-                  onSaved={(savedDeckId) => navigateDeck(savedDeckId)}
+                  onSaved={(savedSetId) => navigateSet(savedSetId)}
                 />
               )}
 
               {readyView?.type === 'study' && (
                 <StudyView
                   key={`${location.pathname}:${location.search}`}
-                  deckId={readyView.deckId}
+                  setId={readyView.setId}
                   onlyDifficult={readyView.onlyDifficult}
                   shuffle={readyView.shuffle}
-                  onExit={() => navigateDeck(readyView.deckId)}
-                  onEditDeck={(deckId) => navigateEditDeck(deckId)}
+                  onExit={() => navigateSet(readyView.setId)}
+                  onEditSet={(setId) => navigateEditSet(setId)}
                 />
               )}
 
@@ -332,7 +332,7 @@ export const App: React.FC = () => {
                   folderId={readyView.folderId}
                   shuffle
                   onExit={() => navigateFolder(readyView.folderId)}
-                  onEditDeck={(deckId) => navigateEditDeck(deckId)}
+                  onEditSet={(setId) => navigateEditSet(setId)}
                 />
               )}
             </Suspense>
@@ -342,16 +342,16 @@ export const App: React.FC = () => {
             <BottomNavigation
               currentView={currentView}
               onHome={navigateHome}
-              onDecks={navigateAllDecks}
+              onSets={navigateAllSets}
               onFolders={navigateAllFolders}
-              onCreate={() => navigateEditDeck()}
+              onCreate={() => navigateEditSet()}
             />
           )}
 
           {searchOpen && (
             <GlobalSearch
               onClose={() => setSearchOpen(false)}
-              onNavigateDeck={navigateDeck}
+              onNavigateSet={navigateSet}
               onNavigateFolder={navigateFolder}
             />
           )}

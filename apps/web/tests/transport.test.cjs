@@ -6,8 +6,8 @@ const {createHarness,seed}=require('./support.cjs');
 test('cloud reads never delete or migrate documents, and writes check account ownership',async()=>{
   const operations=[];let commits=0;
   const auth={currentUser:{uid:'a'}};
-  const snapshots={flashcard_folders:[],flashcard_decks:seed.data().decks,
-    flashcard_cards:[...seed.data().cards,{...seed.card,id:'orphan',deckId:'missing'}]};
+  const snapshots={flashcard_folders:[],flashcard_sets:seed.data().sets,
+    flashcard_cards:[...seed.data().cards,{...seed.card,id:'orphan',setId:'missing'}]};
   const firestore={
     collection:(_db,name)=>name,query:name=>name,where:()=>{},doc:(_db,name,id)=>({name,id}),
     getDocsFromServer:async name=>({docs:snapshots[name].map(item=>({id:item.id,data:()=>item}))}),
@@ -24,7 +24,7 @@ test('cloud reads never delete or migrate documents, and writes check account ow
   const data=await flashcardService.fetchAllData('a');
   assert.equal(data.cards.length,2);
   assert.equal(commits,0);
-  const snapshot=seed.snapshot();snapshot.pendingSync={...snapshot.pendingSync,deckIds:['d1'],cardIds:['c1'],deletedCardIds:['c2']};
+  const snapshot=seed.snapshot();snapshot.pendingSync={...snapshot.pendingSync,setIds:['s1'],cardIds:['c1'],deletedCardIds:['c2']};
   await flashcardService.commitChanges(snapshot,'a',()=>true);
   assert.equal(commits,1);
   assert.equal(operations.filter(op=>op.type==='set').length,2);

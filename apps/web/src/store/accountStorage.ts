@@ -9,7 +9,7 @@ export interface AccountSnapshot extends AccountData {
   cardConflicts: Record<string, Card>;
 }
 export const accountStorageKey = (uid?: string) => `flashcards_account_v1:${uid ? `user:${uid}` : 'guest'}`;
-export const emptyAccount = (): AccountSnapshot => ({ folders: [], decks: [], cards: [],
+export const emptyAccount = (): AccountSnapshot => ({ folders: [], sets: [], cards: [],
   pendingSync: { ...EMPTY_PENDING_SYNC }, pendingVersions: {}, mutationRevision: 0, cardConflicts: {} });
 
 const readCache = new Map<string, { raw: string; snapshot: AccountSnapshot }>();
@@ -29,14 +29,21 @@ export function readAccount(uid?: string): AccountSnapshot {
   // Keep the original key as a recovery copy. Never assign another account's cache to this user.
   const legacyRaw = localStorage.getItem('quizlet_flashcards_v1');
   if (!legacyRaw) return emptyAccount();
-  const legacy = JSON.parse(legacyRaw).state as Partial<FlashcardStoreState>;
-  const owners = new Set([...(legacy.folders || []), ...(legacy.decks || []), ...(legacy.cards || [])]
+  const legacy = JSON.parse(legacyRaw).state as Partial<FlashcardStoreState & { decks?: FlashcardStoreState['sets']; pendingSync?: { deckIds?: string[]; deletedDeckIds?: string[] } }>;
+  const legacySets = legacy.sets || legacy.decks || [];
+  const owners = new Set([...(legacy.folders || []), ...legacySets, ...(legacy.cards || [])]
     .map(item => item.userId).filter(Boolean));
   const owner = legacy.user?.uid || (owners.size === 1 ? [...owners][0] : undefined);
   if (owner !== uid || (!owner && owners.size > 0)) return emptyAccount();
   const snapshot: AccountSnapshot = { ...emptyAccount(),
-    folders: legacy.folders || [], decks: legacy.decks || [], cards: legacy.cards || [],
-    pendingSync: { ...EMPTY_PENDING_SYNC, ...legacy.pendingSync }, mutationRevision: 1 };
+    folders: legacy.folders || [], sets: legacySets, cards: legacy.cards || [],
+    pendingSync: {
+      ...EMPTY_PENDING_SYNC,
+      ...legacy.pendingSync,
+      setIds: legacy.pendingSync?.setIds || legacy.pendingSync?.deckIds || [],
+      deletedSetIds: legacy.pendingSync?.deletedSetIds || legacy.pendingSync?.deletedDeckIds || [],
+    },
+    mutationRevision: 1 };
   for (const [collection, ...keys] of collections) {
     for (const key of keys) {
       for (const id of snapshot.pendingSync[key]) snapshot.pendingVersions[`${collection}:${id}`] = 1;
@@ -60,7 +67,7 @@ function writeAccount(state: AccountSnapshot, uid?: string): void {
     pendingVersions: state.pendingVersions, mutationRevision: state.mutationRevision, cardConflicts: state.cardConflicts });
   // One atomic localStorage write. Acknowledgements reuse collection JSON rather than
   // walking every card (and embedded image) again just to update the outbox.
-  const serialized = `{"folders":${serializeCollection(state.folders)},"decks":${serializeCollection(state.decks)},"cards":${serializeCollection(state.cards)},${metadata.slice(1)}`;
+  const serialized = `{"folders":${serializeCollection(state.folders)},"sets":${serializeCollection(state.sets)},"cards":${serializeCollection(state.cards)},${metadata.slice(1)}`;
   localStorage.setItem(accountStorageKey(uid), serialized);
   readCache.set(accountStorageKey(uid), { raw: serialized, snapshot: state });
 }

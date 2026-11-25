@@ -9,7 +9,7 @@ const { createHarness, deferred } = require('../apps/web/tests/support.cjs');
 
 const { deleteField, disableNetwork, doc, enableNetwork, getDocFromServer, setDoc, updateDoc } = firestore;
 const uid = 'a';
-const card = { id: 'c1', userId: uid, deckId: 'd1', order: 0, termRichText: '원본',
+const card = { id: 'c1', userId: uid, setId: 's1', order: 0, termRichText: '원본',
   definitionRichText: '뒷면', learned: false };
 const cardRef = db => doc(db, 'flashcard_cards', card.id);
 const accountKey = 'flashcards_account_v1:user:a';
@@ -28,7 +28,7 @@ beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
-    await setDoc(doc(db, 'flashcard_decks', card.deckId), { id: card.deckId, userId: uid, title: '덱' });
+    await setDoc(doc(db, 'flashcard_sets', card.setId), { id: card.setId, userId: uid, title: '세트' });
     await setDoc(cardRef(db), card);
   });
 });

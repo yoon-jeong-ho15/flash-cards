@@ -4,17 +4,17 @@ const path = require('node:path');
 const { createHarness, seed } = require('./support.cjs');
 const { hookRenderer } = require('./hookRenderer.cjs');
 
-test('card indexes are cached and preserve unaffected deck selections', async () => {
-  const h=createHarness(); const {indexCards,selectDeckCards}=h.load(path.join(h.root,'store/cardSelectors.ts'));
-  const a={...seed.card,id:'a',deckId:'d1',order:1};
-  const b={...seed.card,id:'b',deckId:'d2',order:0};
+test('card indexes are cached and preserve unaffected set selections', async () => {
+  const h=createHarness(); const {indexCards,selectSetCards}=h.load(path.join(h.root,'store/cardSelectors.ts'));
+  const a={...seed.card,id:'a',setId:'s1',order:1};
+  const b={...seed.card,id:'b',setId:'s2',order:0};
   const cards=[a,b]; const first=indexCards(cards);
   assert.equal(indexCards(cards),first);
-  const selection=selectDeckCards({cards},'d1');
+  const selection=selectSetCards({cards},'s1');
   const changed=[a,{...b,learned:false}];
-  assert.equal(selectDeckCards({cards:changed},'d1'),selection);
+  assert.equal(selectSetCards({cards:changed},'s1'),selection);
   assert.notEqual(indexCards(changed).byId.get('b'),b);
-  assert.equal(selectDeckCards({cards},'missing'),selectDeckCards({cards:changed},'missing'));
+  assert.equal(selectSetCards({cards},'missing'),selectSetCards({cards:changed},'missing'));
 });
 
 test('data and outbox persist in the same atomic write', async () => {
@@ -22,11 +22,11 @@ test('data and outbox persist in the same atomic write', async () => {
   let writes = 0;
   const original = h.localStorage.setItem;
   h.localStorage.setItem = (...args) => { writes++; original(...args); };
-  const id = await h.store.getState().addDeck({ title: 'atomic' }, [seed.card]);
+  const id = await h.store.getState().addSet({ title: 'atomic' }, [seed.card]);
   assert.equal(writes, 1);
   const persisted = JSON.parse(h.storage.get('flashcards_account_v1:guest'));
-  assert.equal(persisted.decks[0].id, id);
-  assert.deepEqual(persisted.pendingSync.deckIds, [id]);
+  assert.equal(persisted.sets[0].id, id);
+  assert.deepEqual(persisted.pendingSync.setIds, [id]);
   assert.deepEqual(persisted.pendingSync.cardIds, [persisted.cards[0].id]);
 });
 
@@ -49,7 +49,7 @@ test('study sessions resolve current card content without copying or resetting o
   const loader=createHarness({},h.storage,{react:renderer.react,
     [path.join(h.root,'store/useFlashcardStore.ts')]:{useFlashcardStore:mockStore}});
   const {useStudySession}=loader.load(path.join(h.root,'hooks/useStudySession.ts'));
-  const render=()=>renderer.render(()=>useStudySession({deckId:'d1',onExit:()=>{}}));
+  const render=()=>renderer.render(()=>useStudySession({setId:'s1',onExit:()=>{}}));
   try {
     let session=render();assert.equal(session.currentCard.id,'c1');
     session.handleNext();session=render();assert.equal(session.currentCard.id,'c2');
@@ -64,20 +64,20 @@ test('study sessions resolve current card content without copying or resetting o
 test('account switching does not write snapshots and logout works when storage is full', async () => {
   const h=createHarness();h.navigator.onLine=false;
   h.store.getState().setUser({uid:'a'});
-  await h.store.getState().addDeck({title:'private'});
+  await h.store.getState().addSet({title:'private'});
   h.localStorage.setItem=()=>{throw Error('quota')};
   h.store.getState().setUser(null);
   assert.equal(h.store.getState().user,null);
-  assert.equal(h.store.getState().decks.length,0);
+  assert.equal(h.store.getState().sets.length,0);
   h.store.getState().setUser({uid:'a'});
-  assert.equal(h.store.getState().decks[0].title,'private');
+  assert.equal(h.store.getState().sets[0].title,'private');
 });
 
 test('acknowledgements reuse collection serialization while still rereading durable storage', async () => {
   const h = createHarness();
   const { transactAccount } = h.load(path.join(h.root, 'store/accountStorage.ts'));
   let serializations = 0; let reads = 0;
-  const card = { ...seed.card, id: 'c1', deckId: 'd1', toJSON() { serializations++; return { id: this.id, deckId: this.deckId }; } };
+  const card = { ...seed.card, id: 'c1', setId: 's1', toJSON() { serializations++; return { id: this.id, setId: this.setId }; } };
   const original = h.localStorage.getItem;
   h.localStorage.getItem = key => { reads++; return original(key); };
   await transactAccount(undefined, latest => ({ ...latest, cards: [card] }), () => {});

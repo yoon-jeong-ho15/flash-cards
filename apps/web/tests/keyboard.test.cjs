@@ -33,7 +33,7 @@ test('study shortcuts preserve native button activation, select inputs, and hand
   const onExit = () => {
     exits++;
   };
-  const render = () => renderer.render(() => useStudySession({ deckId: 'd1', onExit }));
+  const render = () => renderer.render(() => useStudySession({ setId: 's1', onExit }));
   const dispatch = (key, tagName = 'DIV', extra = {}) =>
     keydown({
       key,

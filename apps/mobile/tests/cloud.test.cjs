@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const esbuild = require('esbuild');
 const { firestoreFixture, registerLearnedSyncTests, seedData } = require('../../../tests/learned-sync-fixture.cjs');
-const { registerDeckDeleteTests } = require('../../../tests/deck-delete-sync-regressions.cjs');
+const { registerSetDeleteTests } = require('../../../tests/set-delete-sync-regressions.cjs');
 const { registerAccountPullTests } = require('../../../tests/account-pull-regressions.cjs');
 const { harness, user, accountKey, emptySnapshot } = require('./helpers.cjs');
 
@@ -33,17 +33,17 @@ async function fixture(firestoreOverride) {
 }
 test('native cloud transport uses web collections, splits batches at 400, clears removed optional fields and checks the active account', async () => {
   const { cloud, context } = await fixture();
-  const decks = Array.from({ length: 401 }, (_, i) => ({ id: `d${i}`, title: '덱', createdAt: 1, updatedAt: 1 }));
-  const outbox = Object.fromEntries(decks.map(d => [`decks:${d.id}`, { kind: 'decks', id: d.id, revision: 1, deleted: false }]));
-  await cloud.push('a', { folders: [], decks, cards: [], revision: 1, preferences: {}, outbox }, () => true);
+  const sets = Array.from({ length: 401 }, (_, i) => ({ id: `s${i}`, title: '세트', createdAt: 1, updatedAt: 1 }));
+  const outbox = Object.fromEntries(sets.map(d => [`sets:${d.id}`, { kind: 'sets', id: d.id, revision: 1, deleted: false }]));
+  await cloud.push('a', { folders: [], sets, cards: [], revision: 1, preferences: {}, outbox }, () => true);
   assert.deepEqual(context.batches.map(batch => batch.length), [400,1]);
-  assert.equal(context.batches[0][0].doc.name, 'flashcard_decks'); assert.equal(context.batches[0][0].data.userId, 'a'); assert.equal(context.batches[0][0].data.description, null);
-  context.uid = 'b'; await assert.rejects(cloud.push('a', { decks, outbox }, () => true), /계정이 변경/); assert.equal(context.batches.length, 2);
+  assert.equal(context.batches[0][0].doc.name, 'flashcard_sets'); assert.equal(context.batches[0][0].data.userId, 'a'); assert.equal(context.batches[0][0].data.description, null);
+  context.uid = 'b'; await assert.rejects(cloud.push('a', { sets, outbox }, () => true), /계정이 변경/); assert.equal(context.batches.length, 2);
 });
 test('offline images in fields and rich HTML become Storage URLs once, without mutating the local snapshot', async () => {
   const { cloud, context } = await fixture(); const data = 'data:image/jpeg;base64,YWJj';
-  const card = { id: 'c', deckId: 'd', termRichText: `<p>질문<img src="${data}"></p>`, definitionRichText: '<p>답</p>', frontImageUrl: data, backImageUrl: data, imageUrl: data, learned: false };
-  await cloud.push('a', { folders: [], decks: [], cards: [card], outbox: { 'cards:c': { kind: 'cards', id: 'c', revision: 1, deleted: false } } }, () => true);
+  const card = { id: 'c', setId: 's', termRichText: `<p>질문<img src="${data}"></p>`, definitionRichText: '<p>답</p>', frontImageUrl: data, backImageUrl: data, imageUrl: data, learned: false };
+  await cloud.push('a', { folders: [], sets: [], cards: [card], outbox: { 'cards:c': { kind: 'cards', id: 'c', revision: 1, deleted: false } } }, () => true);
   assert.equal(context.uploads.length, 1); assert.equal(Buffer.from(context.uploads[0].bytes).toString(), 'abc');
   const uploaded = context.batches[0][0].data;
   assert.match(uploaded.frontImageUrl, /^https:/); assert.equal(uploaded.frontImageUrl, uploaded.backImageUrl); assert.ok(uploaded.termRichText.includes(uploaded.frontImageUrl));
@@ -51,7 +51,7 @@ test('offline images in fields and rich HTML become Storage URLs once, without m
 });
 test('cloud reads filter by account, normalize legacy images and orphan cards, and perform no writes or migrations', async () => {
   const { cloud, context } = await fixture();
-  context.records = { flashcard_folders: [['f', { title: '폴더' }]], flashcard_decks: [['d', { title: '덱', folderId: 'f' }]], flashcard_cards: [['c', { deckId: 'd', imageUrl: 'https://example.com/old.jpg', learned: true }], ['orphan', { deckId: 'missing' }]] };
+  context.records = { flashcard_folders: [['f', { title: '폴더' }]], flashcard_sets: [['s', { title: '세트', folderId: 'f' }]], flashcard_cards: [['c', { setId: 's', imageUrl: 'https://example.com/old.jpg', learned: true }], ['orphan', { setId: 'missing' }]] };
   const data = await cloud.pull('a');
   assert.equal(data.cards.length, 1); assert.equal(data.cards[0].backImageUrl, 'https://example.com/old.jpg'); assert.equal(data.cards[0].learned, true);
   assert.equal(context.queries.length, 3); assert.ok(context.queries.every(query => query.condition.field === 'userId' && query.condition.value === 'a'));
@@ -99,10 +99,10 @@ test('store and real cloud transport retain canonical URLs across learned/text e
   const { harness, user, item, accountKey } = require('./helpers.cjs');
   const { cloud, context } = await fixture();
   const h = harness({ push: cloud.push });
-  h.cloud.pull = async () => { const { folders, decks, cards } = h.store.getState(); return { folders, decks, cards }; };
+  h.cloud.pull = async () => { const { folders, sets, cards } = h.store.getState(); return { folders, sets, cards }; };
   await h.store.switchUser(user('a'));
   const original = 'data:image/jpeg;base64,YWJj';
-  await h.store.saveDeck(undefined, { title: '덱' }, [{ ...item(), frontImageUrl: original, backImageUrl: original, imageUrl: original, definitionRichText: `<img src="${original}">` }]);
+  await h.store.saveSet(undefined, { title: '세트' }, [{ ...item(), frontImageUrl: original, backImageUrl: original, imageUrl: original, definitionRichText: `<img src="${original}">` }]);
   h.cloud.available = true; await h.store.sync(false);
   const card = h.store.getState().cards[0]; assert.match(card.frontImageUrl, /^https:/);
   await h.store.setLearned(card.id, true); await h.store.sync(false);
@@ -131,7 +131,7 @@ test('uploaded object is reused after local conversion persistence fails and the
   const { harness, item, user } = require('./helpers.cjs');
   const { cloud, context } = await fixture();
   const h = harness({ push: cloud.push }); await h.store.switchUser(user('a'));
-  await h.store.saveDeck(undefined, { title: '덱' }, [{ ...item(), frontImageUrl: 'data:image/png;base64,YWJj' }]);
+  await h.store.saveSet(undefined, { title: '세트' }, [{ ...item(), frontImageUrl: 'data:image/png;base64,YWJj' }]);
   const write = h.storage.setItem;
   h.storage.setItem = async (key, value) => {
     if (context.uploads.length) throw Error('disk full');
@@ -140,14 +140,14 @@ test('uploaded object is reused after local conversion persistence fails and the
   h.cloud.available = true; await h.store.sync(false);
   assert.equal(h.store.getState().status, 'error'); assert.equal(context.uploads.length, 1);
   const restarted = harness({ push: cloud.push }, h.map);
-  restarted.cloud.pull = async () => { const { folders, decks, cards } = restarted.store.getState(); return { folders, decks, cards }; };
+  restarted.cloud.pull = async () => { const { folders, sets, cards } = restarted.store.getState(); return { folders, sets, cards }; };
   await restarted.store.switchUser(user('a')); restarted.cloud.available = true; await restarted.store.sync(false);
   assert.equal(context.uploads.length, 1); assert.match(restarted.store.getState().cards[0].frontImageUrl, /^https:/);
   assert.equal(Object.keys(restarted.store.getState().outbox).length, 0);
 });
 
-async function syncFixture({ legacy = false, existingDeck = false, legacyDeck = false } = {}) {
-  const data = seedData(existingDeck);
+async function syncFixture({ legacy = false, existingSet = false, legacySet = false } = {}) {
+  const data = seedData(existingSet);
   const server = firestoreFixture(data);
   const snapshot = { ...emptySnapshot(), ...data };
   if (legacy) {
@@ -155,8 +155,8 @@ async function syncFixture({ legacy = false, existingDeck = false, legacyDeck = 
     snapshot.outbox = { 'cards:c3': { kind: 'cards', id: 'c3', revision: 1, deleted: false } };
     snapshot.revision = 1;
   }
-  if (legacyDeck) {
-    snapshot.outbox = { 'decks:d2': { kind: 'decks', id: 'd2', revision: 1, deleted: false } };
+  if (legacySet) {
+    snapshot.outbox = { 'sets:s2': { kind: 'sets', id: 's2', revision: 1, deleted: false } };
     snapshot.revision = 1;
   }
   const map = new Map([[accountKey('a'), JSON.stringify(snapshot)]]);
@@ -169,25 +169,25 @@ async function syncFixture({ legacy = false, existingDeck = false, legacyDeck = 
   await reload();
   return {
     server, reload,
-    createDeck: async () => {
+    createSet: async () => {
       const cards = [1, 2].map(index => ({ termRichText: '<p>Card ' + index + '</p>', definitionRichText: '' }));
-      const deckId = await h.store.saveDeck(undefined, { title: 'offline deck' }, cards);
-      return { deckId, cardIds: h.store.getState().cards.filter(card => card.deckId === deckId).map(card => card.id) };
+      const setId = await h.store.saveSet(undefined, { title: 'offline set' }, cards);
+      return { setId, cardIds: h.store.getState().cards.filter(card => card.setId === setId).map(card => card.id) };
     },
-    renameDeck: (id, title) => h.store.saveDeck(id, { title },
-      h.store.getState().cards.filter(card => card.deckId === id)),
-    deleteDeck: id => h.store.deleteDeck(id),
+    renameSet: (id, title) => h.store.saveSet(id, { title },
+      h.store.getState().cards.filter(card => card.setId === id)),
+    deleteSet: id => h.store.deleteSet(id),
     queued: token => {
       const operation = JSON.parse(map.get(accountKey('a'))).outbox[token];
       if (operation) return { state: operation.writeState, deleted: operation.deleted };
     },
     rate: (id, learned) => h.store.setLearned(id, learned),
     edit: (id, termRichText) => h.store.updateCard(id, { termRichText }),
-    editInDeck: (id, termRichText) => h.store.saveDeck('d1', { title: 'deck' },
+    editInSet: (id, termRichText) => h.store.saveSet('s1', { title: 'set' },
       h.store.getState().cards.map(card => card.id === id ? { ...card, termRichText } : card)),
     create: async (termRichText) => {
-      const deckId = await h.store.saveDeck(undefined, { title: 'new deck' }, [{ termRichText, definitionRichText: '' }]);
-      return h.store.getState().cards.find(card => card.deckId === deckId).id;
+      const setId = await h.store.saveSet(undefined, { title: 'new set' }, [{ termRichText, definitionRichText: '' }]);
+      return h.store.getState().cards.find(card => card.setId === setId).id;
     },
     connect: () => {
       h.cloud.available = true;
@@ -204,7 +204,7 @@ async function syncFixture({ legacy = false, existingDeck = false, legacyDeck = 
 }
 registerLearnedSyncTests(syncFixture);
 registerAccountPullTests(syncFixture);
-registerDeckDeleteTests(syncFixture);
+registerSetDeleteTests(syncFixture);
 
 test('mobile retires a stale body and uses the winning version only for a new edit', async () => {
   const h = await syncFixture();
@@ -248,13 +248,13 @@ async function multiAccountFixture(beforeBatch = async () => {}) {
     writes: [],
     collections: {
       flashcard_folders: new Map([['f1', { id: 'f1', userId: 'a', title: 'folder', createdAt: 1 }]]),
-      flashcard_decks: new Map([
-        ['d1', { id: 'd1', userId: 'a', folderId: 'f1', title: 'deck A', createdAt: 1, updatedAt: 1 }],
-        ['bd1', { id: 'bd1', userId: 'b', folderId: null, title: 'deck B', createdAt: 1, updatedAt: 1 }],
+      flashcard_sets: new Map([
+        ['s1', { id: 's1', userId: 'a', folderId: 'f1', title: 'set A', createdAt: 1, updatedAt: 1 }],
+        ['bs1', { id: 'bs1', userId: 'b', folderId: null, title: 'set B', createdAt: 1, updatedAt: 1 }],
       ]),
       flashcard_cards: new Map([
-        ['c1', { id: 'c1', userId: 'a', deckId: 'd1', order: 0, termRichText: 'original A', definitionRichText: 'answer A', learned: false, contentVersion: 'v0' }],
-        ['bc1', { id: 'bc1', userId: 'b', deckId: 'bd1', order: 0, termRichText: 'original B', definitionRichText: 'answer B', learned: false, contentVersion: 'bv0' }],
+        ['c1', { id: 'c1', userId: 'a', setId: 's1', order: 0, termRichText: 'original A', definitionRichText: 'answer A', learned: false, contentVersion: 'v0' }],
+        ['bc1', { id: 'bc1', userId: 'b', setId: 'bs1', order: 0, termRichText: 'original B', definitionRichText: 'answer B', learned: false, contentVersion: 'bv0' }],
       ]),
     },
   };
@@ -317,12 +317,12 @@ async function multiAccountFixture(beforeBatch = async () => {}) {
     [accountKey('a'), JSON.stringify({
       ...emptySnapshot(),
       folders: [context.collections.flashcard_folders.get('f1')],
-      decks: [context.collections.flashcard_decks.get('d1')],
+      sets: [context.collections.flashcard_sets.get('s1')],
       cards: [context.collections.flashcard_cards.get('c1')],
     })],
     [accountKey('b'), JSON.stringify({
       ...emptySnapshot(),
-      decks: [context.collections.flashcard_decks.get('bd1')],
+      sets: [context.collections.flashcard_sets.get('bs1')],
       cards: [{ ...context.collections.flashcard_cards.get('bc1'), termRichText: 'pending B' }],
       revision: 1,
       outbox: { 'cards:bc1': { kind: 'cards', id: 'bc1', revision: 1, deleted: false, writeState: 'existing' } },
@@ -357,7 +357,7 @@ test('mobile write acknowledgement after logout and switching to B clears A queu
   h.cloud.available = false;
   await h.store.switchUser(user('b'));
   const bStateBefore = {
-    decks: h.store.getState().decks,
+    sets: h.store.getState().sets,
     cards: h.store.getState().cards,
     outbox: h.store.getState().outbox,
     status: h.store.getState().status,
@@ -370,7 +370,7 @@ test('mobile write acknowledgement after logout and switching to B clears A queu
 
   assert.equal(h.store.getState().user.uid, 'b');
   assert.deepEqual({
-    decks: h.store.getState().decks,
+    sets: h.store.getState().sets,
     cards: h.store.getState().cards,
     outbox: h.store.getState().outbox,
     status: h.store.getState().status,

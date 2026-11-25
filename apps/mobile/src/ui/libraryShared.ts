@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
-import type { DeckSortOption } from '../core/types';
+import type { SetSortOption } from '../core/types';
 
-export const deckSortOptions: Array<[DeckSortOption, string]> = [
+export const setSortOptions: Array<[SetSortOption, string]> = [
   ['date-desc', '최근 수정순'],
   ['date-asc', '오래된 순'],
   ['name-asc', '이름 오름차순'],

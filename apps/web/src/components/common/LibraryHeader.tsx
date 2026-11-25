@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 
 export function LibraryHeader({
   active,
-  onDecks,
+  onSets,
   onFolders,
   onCreate,
 }: {
-  active: 'decks' | 'folders';
-  onDecks?: () => void;
+  active: 'sets' | 'folders';
+  onSets?: () => void;
   onFolders?: () => void;
   onCreate: () => void;
 }) {
@@ -24,14 +24,14 @@ export function LibraryHeader({
           </p>
         </div>
         <Button onClick={onCreate} leftIcon={<Plus className="h-4 w-4" />}>
-          {active === 'decks' ? '새 학습 세트' : '새 폴더'}
+          {active === 'sets' ? '새 학습 세트' : '새 폴더'}
         </Button>
       </div>
       <nav aria-label="라이브러리 보기" className="library-nav">
         <button
           type="button"
-          aria-current={active === 'decks' ? 'page' : undefined}
-          onClick={onDecks}
+          aria-current={active === 'sets' ? 'page' : undefined}
+          onClick={onSets}
         >
           <Layers className="h-4 w-4" />
           학습 세트

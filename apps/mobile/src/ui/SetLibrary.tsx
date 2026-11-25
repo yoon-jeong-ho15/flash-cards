@@ -1,21 +1,21 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { cardMatches, matches, sortDecks } from '../core/content';
+import { cardMatches, matches, sortSets } from '../core/content';
 import { store, useStore } from '../platform/runtime';
-import { DeckTile } from './DeckTile';
+import { SetTile } from './SetTile';
 import { FolderForm } from './FolderForm';
 import { Icon } from './Icon';
 import { Button, Empty, Field, Select, Sheet, attempt, confirm } from './kit';
-import { deckSortOptions, libraryStyles } from './libraryShared';
+import { setSortOptions, libraryStyles } from './libraryShared';
 import type { Navigation } from './navigation';
 import { radius, useThemedStyles, useUI, type Palette } from './theme';
 import { Text } from './Typography';
 import { useCollectionGrid } from './useCollectionGrid';
 
-type DeckStatusFilter = 'all' | 'root' | 'unlearned' | 'completed';
+type SetStatusFilter = 'all' | 'root' | 'unlearned' | 'completed';
 
-/** Displays all decks or the decks inside a specific folder with search, status filters, and sort options. */
-export function DeckLibrary({
+/** Displays all sets or the sets inside a specific folder with search, status filters, and sort options. */
+export function SetLibrary({
   nav,
   folderId,
 }: {
@@ -25,15 +25,15 @@ export function DeckLibrary({
 }) {
   const { colors, s } = useUI();
   const styles = useThemedStyles(createStyles);
-  const { cards, decks, folders, preferences, status } = useStore();
+  const { cards, sets, folders, preferences, status } = useStore();
   const collectionGrid = useCollectionGrid('list');
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
-  const [statusFilter, setStatusFilter] = useState<DeckStatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<SetStatusFilter>('all');
   const [isEditFolderOpen, setIsEditFolderOpen] = useState(false);
   const [isFolderActionsOpen, setIsFolderActionsOpen] = useState(false);
   const currentFolder = folders.find((folder) => folder.id === folderId);
-  const statusFilterOptions: Array<[DeckStatusFilter, string]> = folderId
+  const statusFilterOptions: Array<[SetStatusFilter, string]> = folderId
     ? [
         ['all', '전체'],
         ['unlearned', '학습 중'],
@@ -46,32 +46,32 @@ export function DeckLibrary({
         ['completed', '완료'],
       ];
   const sortOption =
-    (folderId ? preferences.folderDeckSort : preferences.deckSort) || 'date-desc';
+    (folderId ? preferences.folderSetSort : preferences.setSort) || 'date-desc';
 
-  const filteredDecks = useMemo(
+  const filteredSets = useMemo(
     () =>
-      sortDecks(
-        decks.filter((deck) => {
-          if (folderId && deck.folderId !== folderId) return false;
-          if (!folderId && statusFilter === 'root' && deck.folderId) return false;
-          const deckCards = cards.filter((card) => card.deckId === deck.id);
-          if (statusFilter === 'unlearned' && !deckCards.some((card) => !card.learned)) {
+      sortSets(
+        sets.filter((cardSet) => {
+          if (folderId && cardSet.folderId !== folderId) return false;
+          if (!folderId && statusFilter === 'root' && cardSet.folderId) return false;
+          const setCards = cards.filter((card) => card.setId === cardSet.id);
+          if (statusFilter === 'unlearned' && !setCards.some((card) => !card.learned)) {
             return false;
           }
           if (
             statusFilter === 'completed' &&
-            !(deckCards.length && deckCards.every((card) => card.learned))
+            !(setCards.length && setCards.every((card) => card.learned))
           ) {
             return false;
           }
           return (
-            matches(`${deck.title} ${deck.description || ''}`, deferredQuery) ||
-            deckCards.some((card) => cardMatches(card, deferredQuery))
+            matches(`${cardSet.title} ${cardSet.description || ''}`, deferredQuery) ||
+            setCards.some((card) => cardMatches(card, deferredQuery))
           );
         }),
         sortOption
       ),
-    [decks, cards, folderId, statusFilter, deferredQuery, sortOption]
+    [sets, cards, folderId, statusFilter, deferredQuery, sortOption]
   );
 
   if (folderId && !currentFolder) {
@@ -94,8 +94,8 @@ export function DeckLibrary({
         columnWrapperStyle={
           collectionGrid.columns > 1 ? collectionGrid.rowStyle : undefined
         }
-        data={filteredDecks}
-        keyExtractor={(deck) => deck.id}
+        data={filteredSets}
+        keyExtractor={(cardSet) => cardSet.id}
         contentContainerStyle={[s.page, { gap: 0 }]}
         ListHeaderComponentStyle={{ marginBottom: 12 }}
         showsVerticalScrollIndicator={false}
@@ -183,13 +183,13 @@ export function DeckLibrary({
                 <Select
                   label="정렬"
                   value={sortOption}
-                  options={deckSortOptions}
+                  options={setSortOptions}
                   onChange={(value) => {
                     void attempt(() =>
                       store.setPreferences(
                         folderId
-                          ? { folderDeckSort: value }
-                          : { deckSort: value }
+                          ? { folderSetSort: value }
+                          : { setSort: value }
                       )
                     );
                   }}
@@ -207,11 +207,11 @@ export function DeckLibrary({
               ]}
             >
               <Text numberOfLines={1} style={[s.label, { flex: 1, minWidth: 0 }]}>
-                학습 세트 {filteredDecks.length}개
+                학습 세트 {filteredSets.length}개
               </Text>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => nav.go({ type: 'edit-deck', folderId })}
+                onPress={() => nav.go({ type: 'edit-set', folderId })}
                 style={[libraryStyles.textAction, { flexShrink: 0 }]}
               >
                 <Icon name="plus" size={16} />
@@ -243,14 +243,14 @@ export function DeckLibrary({
             ) : (
               <Button
                 title="학습 세트 만들기"
-                onPress={() => nav.go({ type: 'edit-deck', folderId })}
+                onPress={() => nav.go({ type: 'edit-set', folderId })}
               />
             )}
           </View>
         }
-        renderItem={({ item: deck }) => (
+        renderItem={({ item: cardSet }) => (
           <View style={collectionGrid.itemStyle}>
-            <DeckTile deck={deck} nav={nav} />
+            <SetTile set={cardSet} nav={nav} />
           </View>
         )}
       />
@@ -270,7 +270,7 @@ export function DeckLibrary({
             onPress={() =>
               confirm(
                 '폴더를 삭제할까요?',
-                '안에 있는 덱은 미분류로 이동하며 카드는 유지됩니다.',
+                '안에 있는 세트는 미분류로 이동하며 카드는 유지됩니다.',
                 async () => {
                   await store.deleteFolder(currentFolder.id);
                   setIsFolderActionsOpen(false);

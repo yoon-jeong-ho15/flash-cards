@@ -16,7 +16,7 @@ export interface CardFormItem {
   learned?: boolean;
 }
 
-interface DeckCardEditorItemProps {
+interface SetCardEditorItemProps {
   index: number;
   card: CardFormItem;
   totalCards: number;
@@ -32,7 +32,7 @@ interface DeckCardEditorItemProps {
   onGrabCardHandle?: (index: number, cardId?: string) => void;
 }
 
-export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(
+export const SetCardEditorItem: React.FC<SetCardEditorItemProps> = memo(
   ({
     index,
     card,
@@ -225,4 +225,4 @@ export const DeckCardEditorItem: React.FC<DeckCardEditorItemProps> = memo(
   }
 );
 
-DeckCardEditorItem.displayName = 'DeckCardEditorItem';
+SetCardEditorItem.displayName = 'SetCardEditorItem';
