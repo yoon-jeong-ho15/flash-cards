@@ -1,12 +1,11 @@
 import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { useLocation, useNavigate, Link } from 'react-router';
 import { resolveView, viewUrl, routeStatus } from './routing';
 import { EmptyState } from './components/common/EmptyState';
 import { Button } from './components/ui/button';
 import { useFlashcardStore } from './store/useFlashcardStore';
-import { accountStorageKey } from './store/accountStorage';
+import { useAccountSyncLifecycle } from './hooks/useAccountSyncLifecycle';
 import { BottomNavigation } from './components/common/BottomNavigation';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
@@ -32,76 +31,14 @@ const StudyView = lazy(() =>
 );
 
 export const App: React.FC = () => {
+  useAccountSyncLifecycle();
+
   const initCloudSync = useFlashcardStore((state) => state.initCloudSync);
-  const setSyncStatus = useFlashcardStore((state) => state.setSyncStatus);
-  const setUser = useFlashcardStore((state) => state.setUser);
   const user = useFlashcardStore((state) => state.user);
 
   const syncError = useFlashcardStore(state => state.syncError);
   const syncStatus = useFlashcardStore(state => state.syncStatus);
   const storageError = useFlashcardStore(state => state.storageError);
-  useEffect(() => {
-    const refresh = () => void useFlashcardStore.getState().refreshAccount();
-    const onStorage = (event: StorageEvent) => {
-      if (event.storageArea === localStorage && (event.key === null ||
-        event.key === accountStorageKey(useFlashcardStore.getState().user?.uid))) refresh();
-    };
-    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('pageshow', refresh);
-    document.addEventListener('visibilitychange', onVisible);
-    refresh();
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('pageshow', refresh);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, []);
-
-  // Firebase Auth 인증 상태 감지 및 자동 동기화
-  useEffect(() => {
-    if (!auth) {
-      setUser(null);
-      return;
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-        });
-        initCloudSync();
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [setUser, initCloudSync]);
-
-  useEffect(() => {
-    // 브라우저 네트워크 온라인 복구 시 자동 동기화 트리거
-    const handleOnline = () => {
-      if (user) {
-        initCloudSync();
-      }
-    };
-
-    const handleOffline = () => {
-      setSyncStatus('offline');
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [initCloudSync, setSyncStatus, user]);
 
   const location = useLocation();
   const navigate = useNavigate();
