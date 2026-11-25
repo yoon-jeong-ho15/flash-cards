@@ -51,7 +51,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
     deckCards,
     sessionCards,
     currentIndex,
-    totalInitialCount,
+    sessionCardCount,
     currentCard,
     masteredCount,
     isFlipped,
@@ -137,8 +137,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
       <StudyComplete
         deck={source}
         sourceType={sourceType}
-        totalCards={totalInitialCount}
-        difficultCardsCount={Math.max(0, totalInitialCount - masteredCount)}
+        totalCards={sessionCardCount}
+        difficultCardsCount={Math.max(0, sessionCardCount - masteredCount)}
         roundCount={round}
         onRestartAll={handleRestartAll}
         onRestartDifficultOnly={handleRestartUnlearned}
@@ -177,12 +177,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
           aria-live="polite"
           className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-bold tabular-nums text-primary"
         >
-          {currentIndex + 1} / {totalInitialCount}
+          {currentIndex + 1} / {sessionCardCount}
         </span>
       </header>
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col py-6 sm:py-8">
         <div className="mb-6">
-          <ProgressBar value={totalInitialCount ? (currentIndex / totalInitialCount) * 100 : 0} />
+          <ProgressBar value={sessionCardCount ? (currentIndex / sessionCardCount) * 100 : 0} />
           <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
             <span>
               {isFlipped ? '얼마나 기억했는지 표시해 보세요' : '답을 보기 전에 먼저 떠올려 보세요'}

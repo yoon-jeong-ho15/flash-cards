@@ -76,8 +76,10 @@ export const formatDraftFullDateTime = (timestamp?: number | null): string => {
   return `${year}년 ${month}월 ${day}일 ${hours}:${minutes}`;
 };
 
+const createTempCardId = () => `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
 const createEmptyCardItem = (): CardFormItem => ({
-  id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  id: createTempCardId(),
   termRichText: '',
   definitionRichText: '',
 });
@@ -348,31 +350,37 @@ export const useDeckEditor = ({
     [handleInsertCard]
   );
 
+  const cardItemsRef = useRef(cardItems);
+  useEffect(() => {
+    cardItemsRef.current = cardItems;
+  }, [cardItems]);
+
   // 카드 삭제
   const handleRemoveCard = useCallback((index: number) => {
-    setCardItems((prev) => {
-      if (prev.length <= 1) {
-        alert('덱에는 최소 1개의 카드가 필요합니다.');
-        return prev;
-      }
-      return prev.filter((_, i) => i !== index);
-    });
+    if (cardItemsRef.current.length <= 1) {
+      alert('덱에는 최소 1개의 카드가 필요합니다.');
+      return;
+    }
+    setCardItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
   }, []);
 
   // 카드 복제
   const handleDuplicateCard = useCallback((index: number) => {
+    const target = cardItemsRef.current[index];
+    if (!target) return;
+    const newId = createTempCardId();
+    setNewlyAddedCardId(newId);
     setCardItems((prev) => {
-      const target = prev[index];
-      if (!target) return prev;
+      const currentTarget = prev[index];
+      if (!currentTarget) return prev;
       const newCard: CardFormItem = {
-        id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        termRichText: target.termRichText,
-        definitionRichText: target.definitionRichText,
-        frontImageUrl: target.frontImageUrl,
-        backImageUrl: target.backImageUrl,
-        imageUrl: target.imageUrl,
+        id: newId,
+        termRichText: currentTarget.termRichText,
+        definitionRichText: currentTarget.definitionRichText,
+        frontImageUrl: currentTarget.frontImageUrl,
+        backImageUrl: currentTarget.backImageUrl,
+        imageUrl: currentTarget.imageUrl,
       };
-      setNewlyAddedCardId(newCard.id || null);
       const updated = [...prev];
       updated.splice(index + 1, 0, newCard);
       return updated;

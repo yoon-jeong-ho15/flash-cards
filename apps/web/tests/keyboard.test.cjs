@@ -83,6 +83,30 @@ test('study shortcuts preserve native button activation, select inputs, and hand
     await tick();
     assert.equal(render().isFinishModalOpen, false);
     assert.equal(h.store.getState().cards[1].learned, false);
+
+    // Unused aliases are removed and modal Escape priority stays intact.
+    const session = render();
+    assert.equal('handleUnknown' in session, false);
+    assert.equal('handleKnow' in session, false);
+
+    dispatch('e');
+    assert.equal(render().isEditModalOpen, true);
+    render().openDeleteModal();
+    render();
+    dispatch('Escape');
+    assert.equal(render().isDeleteModalOpen, false);
+    assert.equal(render().isEditModalOpen, true);
+
+    render().openFinishModal();
+    render();
+    dispatch('Escape');
+    assert.equal(render().isFinishModalOpen, false);
+    assert.equal(render().isEditModalOpen, true);
+
+    dispatch('Escape');
+    assert.equal(render().isEditModalOpen, false);
+    dispatch('Escape');
+    assert.equal(exits, 1);
   } finally {
     renderer.cleanup();
   }

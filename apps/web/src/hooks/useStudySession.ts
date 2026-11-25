@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Card, Deck, Folder } from '../types';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { sortCardsByOrder } from '../services/flashcardService';
+import { useStudyShortcuts } from './useStudyShortcuts';
 
 interface UseStudySessionOptions {
   deckId?: string;
@@ -40,7 +41,7 @@ export interface StudySessionState {
   sessionCards: Card[];
   currentIndex: number;
   currentCard: Card | null;
-  totalInitialCount: number;
+  sessionCardCount: number;
   masteredCount: number;
   isCurrentCardLearned: boolean;
   isFlipped: boolean;
@@ -62,8 +63,6 @@ export interface StudySessionState {
   handleNext: () => void;
   handleToggleKnow: () => void;
   handleRate: (known: boolean) => void;
-  handleUnknown: () => void;
-  handleKnow: () => void;
   initSession: (
     filterUnlearnedOnly?: boolean,
     shouldShuffle?: boolean,
@@ -327,96 +326,25 @@ export const useStudySession = ({
     closeEditModal();
   }, [currentCard, deleteCard, sessionCards.length, closeDeleteModal, closeEditModal]);
 
-  // 호환용 별칭
-  const handleUnknown = handleNext;
-  const handleKnow = handleToggleKnow;
-
-  // 키보드 단축키 이벤트 핸들러
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing) return;
-      // 모달이 열려있는 동안에는 모달 외 단축키 동작 차단 (Esc는 해당 모달 닫기)
-      if (isFinishModalOpen) {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          setIsFinishModalOpen(false);
-        }
-        return;
-      }
-
-      if (isDeleteModalOpen) {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          setIsDeleteModalOpen(false);
-        }
-        return;
-      }
-
-      if (isEditModalOpen) {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          setIsEditModalOpen(false);
-        }
-        return;
-      }
-
-      if ((e.target as HTMLElement)?.closest('[role="dialog"]')) return;
-
-      // input이나 textarea 포커스 중에는 단축키 무시
-      if (
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName) ||
-        (e.target as HTMLElement)?.isContentEditable
-      ) {
-        return;
-      }
-
-      // Let focused controls keep their native Enter/Space activation.
-      if (
-        (e.key === 'Enter' || e.key === ' ') &&
-        (e.target as HTMLElement)?.closest('button, a, [role="button"]')
-      )
-        return;
-
-      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        handleFlip();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handlePrevious();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        handleNext();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        handleToggleKnow();
-      } else if (e.key === 'e' || e.key === 'E') {
-        e.preventDefault();
-        if (currentCard) {
-          setIsEditModalOpen(true);
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        onExit();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
+  useStudyShortcuts({
     isFinishModalOpen,
     isDeleteModalOpen,
     isEditModalOpen,
-    currentCard,
-    handleFlip,
-    handlePrevious,
-    handleNext,
-    handleToggleKnow,
+    canEdit: Boolean(currentCard),
+    onCloseFinishModal: closeFinishModal,
+    onCloseDeleteModal: closeDeleteModal,
+    onCloseEditModal: closeEditModal,
+    onOpenEditModal: openEditModal,
+    onFlip: handleFlip,
+    onPrevious: handlePrevious,
+    onNext: handleNext,
+    onToggleKnow: handleToggleKnow,
     onExit,
-  ]);
+  });
 
   const isCurrentCardLearned = Boolean(currentCard?.learned);
   const masteredCount = sessionCards.filter((c) => c.learned).length;
-  const totalInitialCount = sessionCards.length;
+  const sessionCardCount = sessionCards.length;
   const canGoPrevious = currentIndex > 0;
   const isLastCard = sessionCards.length > 0 && currentIndex >= sessionCards.length - 1;
 
@@ -432,7 +360,7 @@ export const useStudySession = ({
     sessionCards,
     currentIndex,
     currentCard,
-    totalInitialCount,
+    sessionCardCount,
     masteredCount,
     isCurrentCardLearned,
     isFlipped,
@@ -454,8 +382,6 @@ export const useStudySession = ({
     handleNext,
     handleToggleKnow,
     handleRate,
-    handleUnknown,
-    handleKnow,
     initSession,
     handleRestartUnlearned,
     handleRestartAll,

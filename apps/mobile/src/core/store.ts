@@ -1,4 +1,4 @@
-import type { RecordSyncWrites } from '@flashcards/types';
+import { decideMissingCardSync, shouldPromoteCardToLearnedOnly, type RecordSyncWrites } from '@flashcards/types';
 import { accountKey, emptySnapshot, type Card, type CardInput, type Data, type DeckInput, type Draft, type Kind,
   type Operation, type Preferences, type Snapshot, type State, type Storage, type Transport, type UserProfile } from './types';
 import { mergeCardImage, mapSources } from './imageSync';
@@ -291,7 +291,12 @@ export class FlashcardStore {
                   }
                 }
                 if (outcome === 'missing' && !operation.deleted && !current.deleted && operation.kind === 'cards') {
-                  if (current.revision === operation.revision || current.learnedOnly) {
+                  if (
+                    decideMissingCardSync({
+                      sameRevision: current.revision === operation.revision,
+                      currentLearnedOnly: Boolean(current.learnedOnly),
+                    }) === 'remove'
+                  ) {
                     cards = cards.filter(card => card.id !== operation.id);
                   } else {
                     const id = `card-${this.uuid()}`;
@@ -300,17 +305,26 @@ export class FlashcardStore {
                   }
                   delete outbox[key];
                 } else if (current.revision === operation.revision) delete outbox[key];
-                else {
-                  const sentContentRevision = operation.contentRevision ?? operation.revision;
-                  const currentContentRevision = current.contentRevision ?? current.revision;
-                  if (outcome === 'written' && operation.kind === 'cards' && !operation.deleted && !operation.learnedOnly &&
-                      !current.deleted && !current.learnedOnly && currentContentRevision === sentContentRevision) {
-                    const { contentRevision: _cleared, ...rest } = current;
-                    outbox[key] = { ...rest, learnedOnly: true,
-                      ...(current.writeState === 'attempted' ? { writeState: 'existing' as const } : {}) };
-                  } else if (current.writeState === 'attempted' && !operation.deleted) {
-                    outbox[key] = { ...current, writeState: 'existing' };
-                  }
+                else if (
+                  outcome === 'written' &&
+                  operation.kind === 'cards' &&
+                  !operation.deleted &&
+                  !current.deleted &&
+                  shouldPromoteCardToLearnedOnly({
+                    sameRevision: false,
+                    sentLearnedOnly: Boolean(operation.learnedOnly),
+                    currentLearnedOnly: Boolean(current.learnedOnly),
+                    sentRevision: operation.revision,
+                    sentContentRevision: operation.contentRevision,
+                    currentRevision: current.revision,
+                    currentContentRevision: current.contentRevision,
+                  })
+                ) {
+                  const { contentRevision: _cleared, ...rest } = current;
+                  outbox[key] = { ...rest, learnedOnly: true,
+                    ...(current.writeState === 'attempted' ? { writeState: 'existing' as const } : {}) };
+                } else if (current.writeState === 'attempted' && !operation.deleted) {
+                  outbox[key] = { ...current, writeState: 'existing' };
                 }
               }
               await this.persist({ ...next, cards, outbox, cardConflicts }, uid);

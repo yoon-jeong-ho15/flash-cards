@@ -70,3 +70,44 @@ export type SyncWriteResult =
   | { key: string; outcome: 'missing' | 'not-sent' }
   | { key: string; outcome: 'conflict'; serverCard: Card };
 export type RecordSyncWrites = (results: SyncWriteResult[]) => Promise<void>;
+
+export interface MissingCardSyncInput {
+  sameRevision: boolean;
+  currentLearnedOnly: boolean;
+}
+
+export type MissingCardSyncDecision = 'remove' | 'preserve-copy';
+
+/** Decides whether a remotely missing card should be removed locally or preserved as a new unsent copy. */
+export function decideMissingCardSync({
+  sameRevision,
+  currentLearnedOnly,
+}: MissingCardSyncInput): MissingCardSyncDecision {
+  return sameRevision || currentLearnedOnly ? 'remove' : 'preserve-copy';
+}
+
+export interface CardLearnedFollowUpInput {
+  sameRevision: boolean;
+  sentLearnedOnly: boolean;
+  currentLearnedOnly: boolean;
+  sentRevision?: number;
+  sentContentRevision?: number;
+  currentRevision?: number;
+  currentContentRevision?: number;
+}
+
+/** Decides whether a card edited during a confirmed body write only needs a learned-state follow-up. */
+export function shouldPromoteCardToLearnedOnly({
+  sameRevision,
+  sentLearnedOnly,
+  currentLearnedOnly,
+  sentRevision,
+  sentContentRevision,
+  currentRevision,
+  currentContentRevision,
+}: CardLearnedFollowUpInput): boolean {
+  if (sameRevision || sentLearnedOnly || currentLearnedOnly) return false;
+  const sentContent = sentContentRevision ?? sentRevision;
+  const currentContent = currentContentRevision ?? currentRevision;
+  return sentContent !== undefined && currentContent === sentContent;
+}

@@ -1,5 +1,5 @@
 import { AccountData, PendingSync, EMPTY_PENDING_SYNC } from './types';
-import type { SyncWriteResult } from '@flashcards/types';
+import { decideMissingCardSync, shouldPromoteCardToLearnedOnly, type SyncWriteResult } from '@flashcards/types';
 import type { AccountSnapshot } from './accountStorage';
 import type { Card } from '../types';
 
@@ -193,7 +193,12 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
           }
         }
         if (field === 'cardIds' && outcome === 'missing' && pending.cardIds.includes(id)) {
-          if (sameVersion || learnedOnly.has(id)) {
+          if (
+            decideMissingCardSync({
+              sameRevision: sameVersion,
+              currentLearnedOnly: learnedOnly.has(id),
+            }) === 'remove'
+          ) {
             cards = cards.filter(card => card.id !== id);
             pending.cardIds = pending.cardIds.filter(value => value !== id);
           } else {
@@ -214,15 +219,22 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
           refreshImages.add(id);
         } else if (field === upserts && outcome === 'written' && pending[deletes].includes(id)) {
           writeStates[key] = 'existing';
-        } else if (field === 'cardIds' && outcome === 'written' && !sameVersion &&
-            !sent.pendingSync.learnedOnlyCardIds?.includes(id) && !learnedOnly.has(id) &&
-            pending.cardIds.includes(id)) {
-          const sentContentVersion = sent.pendingSync.cardContentVersions?.[id] ?? sent.pendingVersions[key];
-          const latestContentVersion = cardContentVersions[id] ?? versions[key];
-          if (sentContentVersion !== undefined && latestContentVersion === sentContentVersion) {
-            learnedOnly.add(id);
-            delete cardContentVersions[id];
-          }
+        } else if (
+          field === 'cardIds' &&
+          outcome === 'written' &&
+          pending.cardIds.includes(id) &&
+          shouldPromoteCardToLearnedOnly({
+            sameRevision: sameVersion,
+            sentLearnedOnly: Boolean(sent.pendingSync.learnedOnlyCardIds?.includes(id)),
+            currentLearnedOnly: learnedOnly.has(id),
+            sentRevision: sent.pendingVersions[key],
+            sentContentRevision: sent.pendingSync.cardContentVersions?.[id],
+            currentRevision: versions[key],
+            currentContentRevision: cardContentVersions[id],
+          })
+        ) {
+          learnedOnly.add(id);
+          delete cardContentVersions[id];
         }
         ids.push(id);
       }

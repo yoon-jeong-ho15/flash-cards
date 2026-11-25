@@ -55,7 +55,7 @@ test('folder study shuffles every card across its decks exactly once, including 
     assert.equal(session.folder.id, 'f1');
     assert.equal(session.isShuffle, true);
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c3', 'c1']);
-    assert.equal(session.totalInitialCount, 3);
+    assert.equal(session.sessionCardCount, 3);
     assert.equal(session.masteredCount, 1);
     assert.equal(session.remainingUnlearnedCount, 2);
     assert.equal(h.store.getState().cards[0].learned, true);
@@ -88,6 +88,7 @@ test('folder progress and edits update the original deck without resetting the s
     await session.handleDeleteCurrentCard();
     session = h.render();
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c1']);
+    assert.equal(session.sessionCardCount, 2);
     assert.equal(session.currentCard.id, 'c1');
     assert.equal(
       h.store.getState().cards.some((card) => card.id === 'c3'),

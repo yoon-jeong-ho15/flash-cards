@@ -192,3 +192,62 @@ test('an asynchronous save failure keeps the editor input and draft for retry', 
     assert.equal(h.storage.get('flashcards_draft_v2:user:a:d1'), 'null');
   } finally { h.renderer.cleanup(); }
 });
+
+test('removing the last card alerts once and duplicating a card matches newlyAddedCardId under double-invoked updaters', () => {
+  const h = createHarness();
+  h.navigator.onLine = false;
+  h.storage.set('flashcards_account_v1:user:a', JSON.stringify(seed.snapshot()));
+  h.store.getState().setUser({ uid: 'a' });
+  const renderer = hookRenderer();
+  let updaterRuns = 0;
+  const strictReact = {
+    ...renderer.react,
+    useState(initial) {
+      const [value, setValue] = renderer.react.useState(initial);
+      return [
+        value,
+        (update) => {
+          if (typeof update === 'function') {
+            updaterRuns++;
+            update(value);
+          }
+          setValue(update);
+        },
+      ];
+    },
+  };
+  const mockStore = Object.assign(
+    (selector) => (selector ? selector(h.store.getState()) : h.store.getState()),
+    { getState: h.store.getState }
+  );
+  const loader = createHarness({}, h.storage, {
+    react: strictReact,
+    [path.join(h.root, 'store/useFlashcardStore.ts')]: { useFlashcardStore: mockStore },
+  });
+  let alerts = 0;
+  loader.context.alert = () => { alerts++; };
+  const { useDeckEditor } = loader.load(path.join(h.root, 'hooks/useDeckEditor.ts'));
+  const render = () => renderer.render(() => useDeckEditor({ deckId: 'd1', onSaved: () => {} }));
+  try {
+    let editor = render();
+    assert.equal(editor.cardItems.length, 2);
+    editor.handleRemoveCard(0);
+    editor = render();
+    assert.equal(editor.cardItems.length, 1);
+
+    editor.handleRemoveCard(0);
+    editor = render();
+    assert.equal(alerts, 1);
+    assert.equal(editor.cardItems.length, 1);
+
+    const runsBeforeDuplicate = updaterRuns;
+    editor.handleDuplicateCard(0);
+    editor = render();
+    assert.ok(updaterRuns > runsBeforeDuplicate);
+    assert.equal(editor.cardItems.length, 2);
+    assert.equal(editor.cardItems[1].id, editor.newlyAddedCardId);
+    assert.notEqual(editor.cardItems[1].id, editor.cardItems[0].id);
+  } finally {
+    renderer.cleanup();
+  }
+});
