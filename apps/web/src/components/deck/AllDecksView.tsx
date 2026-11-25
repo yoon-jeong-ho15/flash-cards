@@ -1,5 +1,6 @@
 import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
 import { useCollectionLayout } from '../../hooks/useCollectionLayout';
+import { useDeckSortPreference } from '../../hooks/useDeckSortPreference';
 import { indexCards } from '../../store/cardSelectors';
 import React, { useState, useMemo, useDeferredValue } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
@@ -43,26 +44,7 @@ export const AllDecksView: React.FC<AllDecksViewProps> = ({
     setStudyFilter('all');
   };
 
-  const [sortBy, setSortBy] = useState<DeckSortOption>(() => {
-    try {
-      const saved = localStorage.getItem('flashcard_all_decks_sort') as DeckSortOption;
-      if (saved && ['name-asc', 'name-desc', 'date-desc', 'date-asc'].includes(saved)) {
-        return saved;
-      }
-    } catch {
-      // ignore storage error
-    }
-    return 'date-desc';
-  });
-
-  const handleSortChange = (newSort: DeckSortOption) => {
-    setSortBy(newSort);
-    try {
-      localStorage.setItem('flashcard_all_decks_sort', newSort);
-    } catch {
-      // ignore storage error
-    }
-  };
+  const [sortBy, handleSortChange] = useDeckSortPreference('flashcard_all_decks_sort');
 
   // 검색 및 탭 필터링
   const filteredDecks = useMemo(() => {

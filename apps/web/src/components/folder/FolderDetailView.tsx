@@ -1,5 +1,6 @@
 import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
 import { useCollectionLayout } from '../../hooks/useCollectionLayout';
+import { useDeckSortPreference } from '../../hooks/useDeckSortPreference';
 import { indexCards, selectFolderCards } from '../../store/cardSelectors';
 import React, { useState, useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
@@ -65,26 +66,7 @@ export const FolderDetailView: React.FC<FolderDetailViewProps> = ({
     [decks, cards, folderId]
   );
 
-  const [sortBy, setSortBy] = useState<DeckSortOption>(() => {
-    try {
-      const saved = localStorage.getItem('flashcard_folder_deck_sort') as DeckSortOption;
-      if (saved && ['name-asc', 'name-desc', 'date-desc', 'date-asc'].includes(saved)) {
-        return saved;
-      }
-    } catch {
-      // ignore storage error
-    }
-    return 'date-desc';
-  });
-
-  const handleSortChange = (newSort: DeckSortOption) => {
-    setSortBy(newSort);
-    try {
-      localStorage.setItem('flashcard_folder_deck_sort', newSort);
-    } catch {
-      // ignore storage error
-    }
-  };
+  const [sortBy, handleSortChange] = useDeckSortPreference('flashcard_folder_deck_sort');
 
   const sortedDecks = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('ko-KR');
