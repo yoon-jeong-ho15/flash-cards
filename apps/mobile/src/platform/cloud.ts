@@ -1,3 +1,4 @@
+import type { RecordSyncWrites, SyncWriteResult } from '@flashcards/types';
 import { digest, CryptoDigestAlgorithm } from 'expo-crypto';
 import { cardDataImages, replaceCardImage } from '../core/imageSync';
 import { collection, deleteDoc, doc, documentId, getDocsFromServer, query, updateDoc, where, writeBatch } from 'firebase/firestore';
@@ -79,11 +80,12 @@ async function uploadEmbeddedImages(card: Card, uid: string, active: () => boole
 }
 export const cloud: Transport = {
   available: configured,
-  async push(uid, snapshot, active, onImage) {
+  waitForWrites: () => bounded(outstandingWrite),
+  async push(uid, snapshot, active, onImage, record) {
     if (!db) throw new Error('Firebase 설정을 확인해 주세요.');
     const canWrite = () => active() && auth?.currentUser?.uid === uid;
     const cache = new Map<string, string>(Object.entries(snapshot.imageCache || {}).map(([url, data]) => [data, url]));
-    const individualWrites: Array<() => Promise<void>> = [];
+    const individualWrites: Array<() => Promise<SyncWriteResult>> = [];
     const missingDeletes: string[] = [];
     const operations = Object.values(snapshot.outbox).filter(operation => {
       const { kind, id } = operation;
@@ -93,6 +95,7 @@ export const cloud: Transport = {
           const deleted = await writeExisting(names[kind], id, uid, canWrite,
             () => deleteDoc(doc(db!, names[kind], id)));
           if (!deleted) missingDeletes.push(`${kind}:${id}`);
+          return { key: `${kind}:${id}`, outcome: deleted ? 'written' : 'missing' };
         });
         return false;
       }
@@ -100,31 +103,55 @@ export const cloud: Transport = {
       const card = snapshot.cards.find(card => card.id === id);
       if (!card) throw new Error('동기화할 자료를 찾을 수 없습니다.');
       individualWrites.push(async () => {
-        await writeExisting(names.cards, id, uid, canWrite,
+        const exists = await writeExisting(names.cards, id, uid, canWrite,
           () => updateDoc(doc(db!, names.cards, id), { learned: Boolean(card.learned) }));
+        return { key: `cards:${id}`, outcome: exists ? 'written' : 'missing' };
       });
       return false;
     });
     // Keep the same 400-operation limit as the web app. Replays are idempotent.
-    for (let i = 0; i < operations.length; i += 400) {
-      const batch = writeBatch(db);
-      for (const operation of operations.slice(i, i + 400)) {
-        if (!canWrite()) throw new Error('계정이 변경되었습니다.');
-        const target = doc(db, names[operation.kind], operation.id);
-        const item = snapshot[operation.kind].find(item => item.id === operation.id);
-        if (!item) throw new Error('동기화할 자료를 찾을 수 없습니다.');
-        const normalized = operation.kind === 'cards' ? await uploadEmbeddedImages(item as Card, uid, active, cache, onImage) : item;
-        const data: Record<string, unknown> = { ...normalized, userId: uid };
-        for (const key of operation.kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) data[key] ??= null;
-        for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
-        batch.set(target, data, { merge: true });
+    const notSent = new Set(operations.map(operation => `${operation.kind}:${operation.id}`));
+    try {
+      for (let i = 0; i < operations.length; i += 400) {
+        const batch = writeBatch(db);
+        const chunk = operations.slice(i, i + 400);
+        for (const operation of chunk) {
+          if (!canWrite()) throw new Error('계정이 변경되었습니다.');
+          const target = doc(db, names[operation.kind], operation.id);
+          const item = snapshot[operation.kind].find(item => item.id === operation.id);
+          if (!item) throw new Error('동기화할 자료를 찾을 수 없습니다.');
+          const normalized = operation.kind === 'cards' ? await uploadEmbeddedImages(item as Card, uid, active, cache, onImage) : item;
+          const data: Record<string, unknown> = { ...normalized, userId: uid };
+          for (const key of operation.kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) data[key] ??= null;
+          for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
+          batch.set(target, data, { merge: true });
+        }
+        const keys = chunk.map(operation => `${operation.kind}:${operation.id}`);
+        await commitWrite(async () => {
+          for (const key of keys) notSent.delete(key);
+          try {
+            await batch.commit();
+          } catch (error) {
+            const code = (error as { code?: string }).code;
+            if (code === 'permission-denied' || code === 'invalid-argument' || code === 'failed-precondition') {
+              await record?.(keys.map(key => ({ key, outcome: 'not-sent' })));
+            }
+            throw error;
+          }
+          await record?.(keys.map(key => ({ key, outcome: 'written' })));
+        }, canWrite);
       }
-      await commitWrite(() => batch.commit(), canWrite);
+    } catch (error) {
+      if (notSent.size) await record?.(Array.from(notSent, key => ({ key, outcome: 'not-sent' })));
+      throw error;
     }
     for (let i = 0; i < individualWrites.length; i += 25) {
       const chunk = individualWrites.slice(i, i + 25);
       await commitWrite(async () => {
-        const results = await Promise.allSettled(chunk.map(write => write()));
+        const results = await Promise.allSettled(chunk.map(async write => {
+          const result = await write();
+          await record?.([result]);
+        }));
         const failure = results.find(result => result.status === 'rejected');
         if (failure) throw failure.reason;
       }, canWrite);

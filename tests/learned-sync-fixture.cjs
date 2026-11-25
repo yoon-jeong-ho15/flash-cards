@@ -92,6 +92,89 @@ function firestoreFixture(data) {
 }
 
 function registerLearnedSyncTests(fixture) {
+  test('partial failure and restart retry only unacknowledged writes', async () => {
+    const h = await fixture();
+    await h.edit('c1', 'first edit');
+    await h.rate('c2', true);
+    await h.rate('c3', true);
+    h.server.denied.add('c3');
+    await h.connect();
+    assert.equal(h.status(), 'error');
+    assert.equal(h.pending('c1'), false);
+    assert.equal(h.pending('c2'), false);
+    assert.equal(h.pending('c3'), true);
+    h.server.cards.get('c1').termRichText = 'later edit on another device';
+    h.server.cards.get('c2').learned = false;
+    h.server.denied.clear();
+    await h.reload();
+    await h.connect();
+    assert.equal(h.status(), 'synced');
+    assert.equal(h.server.cards.get('c1').termRichText, 'later edit on another device');
+    assert.equal(h.server.cards.get('c2').learned, false);
+    assert.equal(h.server.cards.get('c3').learned, true);
+  });
+
+  test('retry reads the queue after late acknowledgements and preserves settled siblings', async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = await fixture();
+    let entered, release;
+    const started = new Promise(resolve => { entered = resolve; });
+    const waiting = new Promise(resolve => { release = resolve; });
+    h.server.beforeUpdate = async id => {
+      if (id === 'c2') { entered(); await waiting; }
+    };
+    await h.rate('c1', true);
+    await h.rate('c2', true);
+    const first = h.connect();
+    await Promise.race([started, first]);
+    await new Promise(resolve => setImmediate(resolve));
+    try {
+      assert.equal(h.pending('c1'), false);
+      t.mock.timers.tick(20_000);
+      await first;
+      assert.equal(h.status(), 'error');
+      const retry = h.connect();
+      await new Promise(resolve => setImmediate(resolve));
+      release();
+      await retry;
+      assert.equal(h.status(), 'synced');
+      assert.deepEqual(h.server.writes.map(write => write.id), ['c1', 'c2']);
+    } finally { release(); }
+  });
+
+  test('a push-only rating removes a remotely deleted card from durable storage', async () => {
+    const h = await fixture();
+    await h.connect();
+    h.server.cards.delete('c1');
+    await h.rate('c1', true);
+    await h.flush();
+    assert.equal(h.cards().some(card => card.id === 'c1'), false);
+    assert.equal(h.pending('c1'), false);
+    await h.reload();
+    assert.equal(h.cards().some(card => card.id === 'c1'), false);
+  });
+
+  test('a concurrent text edit to a remotely deleted card survives under a fresh ID', async () => {
+    const h = await fixture();
+    let release, entered;
+    const waiting = new Promise(resolve => { release = resolve; });
+    const started = new Promise(resolve => { entered = resolve; });
+    h.server.cards.delete('c1');
+    h.server.beforeUpdate = async () => { entered(); await waiting; };
+    await h.rate('c1', true);
+    const syncing = h.connect();
+    try {
+      await Promise.race([started, syncing]);
+      await h.edit('c1', 'keep this concurrent edit');
+    } finally { release(); }
+    await syncing;
+    assert.equal(h.server.cards.has('c1'), false);
+    assert.equal(h.cards().some(card => card.id === 'c1'), false);
+    const copies = [...h.server.cards.values()].filter(card => card.termRichText === 'keep this concurrent edit');
+    assert.equal(copies.length, 1);
+    assert.equal(copies[0].deckId, 'd1');
+  });
+
   test('offline ratings preserve another device’s card edits and never recreate deleted cards', async () => {
     const h = await fixture();
     const corrected = { termRichText: '<p>corrected elsewhere</p>', definitionRichText: '<p>new answer</p>',

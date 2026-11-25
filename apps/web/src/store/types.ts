@@ -1,6 +1,6 @@
 import { Card, Deck, Folder, UserProfile } from '../types';
 
-export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
+export type SyncStatus = 'pending' | 'synced' | 'syncing' | 'offline' | 'error';
 export type WriteState = 'unsent' | 'attempted' | 'existing';
 
 export interface PendingSync {
@@ -10,6 +10,8 @@ export interface PendingSync {
   /** Subset of cardIds. Older snapshots omit this and retain full writes. */
   learnedOnlyCardIds?: string[];
   /** Keyed by collection:id. An absent entry in a legacy queue is unknown. */
+  /** Progress was committed; refresh cached inline images before migrating them. */
+  refreshImageCardIds?: string[];
   writeStates?: Record<string, WriteState>;
   deletedFolderIds: string[];
   deletedDeckIds: string[];

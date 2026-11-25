@@ -1,3 +1,4 @@
+import type { RecordSyncWrites } from '@flashcards/types';
 import type { Card, Deck, Folder, UserProfile, DeckSortOption } from '@flashcards/types';
 export type { Card, Deck, Folder, UserProfile, DeckSortOption };
 
@@ -27,7 +28,7 @@ export interface Snapshot extends Data {
   outbox: Record<string, Operation>;
   preferences: Preferences;
 }
-export type SyncStatus = 'offline' | 'syncing' | 'synced' | 'error';
+export type SyncStatus = 'pending' | 'offline' | 'syncing' | 'synced' | 'error';
 export interface State extends Snapshot {
   user: UserProfile | null;
   ready: boolean;
@@ -45,7 +46,8 @@ export interface Storage {
 export interface ImageUpload { cardId: string; original: string; url: string }
 export interface Transport {
   available: boolean;
-  push(uid: string, snapshot: Snapshot, active: () => boolean, onImage?: (image: ImageUpload) => Promise<void>): Promise<void | string[]>;
+  waitForWrites?(): Promise<void>;
+  push(uid: string, snapshot: Snapshot, active: () => boolean, onImage?: (image: ImageUpload) => Promise<void>, record?: RecordSyncWrites): Promise<void | string[]>;
   pull(uid: string): Promise<Data>;
 }
 export type CardInput = Omit<Card, 'id' | 'deckId' | 'userId' | 'order' | 'learned'> & { id?: string; learned?: boolean };

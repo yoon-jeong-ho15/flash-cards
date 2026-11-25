@@ -1,3 +1,4 @@
+import { countPending } from '../../store/syncQueue';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowDownToLine, ArrowRight, RefreshCw, UserRound } from 'lucide-react';
@@ -9,6 +10,7 @@ import { Button, buttonVariants } from '../ui/button';
 import { Card } from '../ui/card';
 
 const syncLabels = {
+  pending: '삭제 확인 대기 중',
   synced: '동기화 완료',
   syncing: '자료를 동기화하고 있어요',
   offline: '동기화 연결 대기 중',
@@ -32,7 +34,7 @@ export function AccountView() {
   const [exportStatus, setExportStatus] = useState<'idle' | 'started' | 'error'>('idle');
   const learned = useMemo(() => cards.filter((card) => card.learned).length, [cards]);
   const progress = cards.length ? Math.round((learned / cards.length) * 100) : 0;
-  const pendingCount = Object.values(pendingSync).reduce((sum, ids) => sum + ids.length, 0);
+  const pendingCount = countPending(pendingSync);
 
   const handleAccountAction = async () => {
     setIsPending(true);

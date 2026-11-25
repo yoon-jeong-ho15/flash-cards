@@ -1,10 +1,11 @@
+import type { RecordSyncWrites } from '@flashcards/types';
 import { uploadDataImage } from '../../services/storageService';
 import { cardDataImages, replaceCardImage } from '../../services/imageSync';
 import { StateCreator } from 'zustand';
 import { FlashcardStoreState, SyncSlice, EMPTY_PENDING_SYNC } from '../types';
 import { flashcardService, sortCardsByOrder } from '../../services/flashcardService';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { acknowledge, collections, enqueueChanges, hasPending, markCreationsAttempted, omitDeferredDeletes } from '../syncQueue';
+import { applyWriteResults, collections, enqueueChanges, hasPending, markCreationsAttempted, omitDeferredDeletes } from '../syncQueue';
 import { AccountSnapshot, readAccount, transactAccount, withAccountLock } from '../accountStorage';
 
 const deleteRetryInterval = 5_000;
@@ -57,6 +58,8 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
         // Hold the sync lock across network requests, but allow local durable edits
         // under the separate data lock. Closing a tab releases both browser locks.
         await withAccountLock(uid, 'sync', async () => {
+          // Read the queue only after late acknowledgements have reached storage.
+          await flashcardService.waitForWrites?.();
           while (active() && online()) {
             const snapshot = await withAccountLock(uid, 'data', () => {
               const latest = readAccount(uid);
@@ -67,9 +70,12 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
             // Also migrate unqueued legacy images, but never promote a progress-only
             // write into a full card write based on its cached images.
             const learnedOnly = new Set(snapshot.pendingSync.learnedOnlyCardIds);
+            const awaitingImageRefresh = new Set(snapshot.pendingSync.refreshImageCardIds);
+            if (awaitingImageRefresh.size) pullRequested = true;
             const refreshCards = new Set<string>();
             const images = new Set<string>();
             for (const card of snapshot.cards) {
+              if (awaitingImageRefresh.has(card.id)) continue;
               const sources = cardDataImages(card);
               if (learnedOnly.has(card.id)) {
                 if (sources.length) refreshCards.add(card.id);
@@ -86,7 +92,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                 if (!active()) return;
                 const url = await uploadDataImage(original, uid!, active);
                 await transactAccount(uid, latest => {
-                  const progress = new Set(latest.pendingSync.learnedOnlyCardIds);
+                  const progress = new Set([...(latest.pendingSync.learnedOnlyCardIds ?? []), ...(latest.pendingSync.refreshImageCardIds ?? [])]);
                   const cards = latest.cards.map(card => progress.has(card.id) ? card : replaceCardImage(card, original, url));
                   if (cards.every((card, i) => card === latest.cards[i])) return null;
                   const after = { ...latest, cards };
@@ -111,28 +117,23 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                 pendingSync = markCreationsAttempted(pendingSync);
               }
               const sent = { ...snapshot, pendingSync };
-              const missing = await flashcardService.commitChanges(sent, uid!, active);
+              let recorded = false;
+              const record: RecordSyncWrites = async results => {
+                if (!active()) return;
+                recorded = true;
+                await transactAccount(uid, latest =>
+                  applyWriteResults(latest, snapshot, results, refreshCards, deferredDeletes), publish, active);
+              };
+              const missing = await flashcardService.commitChanges(sent, uid!, active, record);
               if (!active()) return;
-              for (const token of missing ?? []) {
-                if (pendingSync.writeStates?.[token] !== 'existing') deferredDeletes.set(token, snapshot.pendingVersions[token]);
+              if (!recorded) {
+                const absent = new Set(missing ?? []);
+                await record(collections.flatMap(([kind, upserts, deletes]) =>
+                  [...pendingSync[upserts], ...pendingSync[deletes]].map(id => {
+                    const key = `${kind}:${id}`;
+                    return { key, outcome: absent.has(key) ? 'missing' as const : 'written' as const };
+                  })));
               }
-              const confirmed = omitDeferredDeletes(pendingSync, snapshot.pendingVersions, deferredDeletes);
-              // Refresh stale images before acknowledgement, otherwise the next
-              // pass would treat them as unqueued legacy images and push the old card.
-              const cloud = refreshCards.size ? await flashcardService.fetchAllData(uid!) : null;
-              if (!active()) return;
-              const remoteCards = cloud && new Map(cloud.cards.map(card => [card.id, card]));
-              await transactAccount(uid, latest => {
-                const cards = remoteCards ? latest.cards.flatMap(card => {
-                  const token = `cards:${card.id}`;
-                  if (!refreshCards.has(card.id) || latest.pendingVersions[token] !== snapshot.pendingVersions[token]) return [card];
-                  const remote = remoteCards.get(card.id);
-                  return remote ? [remote] : [];
-                }) : latest.cards;
-                return { ...latest, cards,
-                  ...acknowledge(latest.pendingSync, latest.pendingVersions, confirmed, snapshot.pendingVersions),
-                };
-              }, publish, active);
               didSync = true;
               continue;
             }
@@ -154,7 +155,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                 pullRequested = true;
                 return null;
               }
-              return { ...latest, ...cloud, cards: sortCardsByOrder(cloud.cards),
+              return { ...latest, ...cloud, pendingSync: { ...latest.pendingSync, refreshImageCardIds: [] }, cards: sortCardsByOrder(cloud.cards),
                 mutationRevision: latest.mutationRevision + 1 };
             }, saved => {
               publish(saved);
@@ -165,6 +166,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
         });
         if (active()) {
           if (!online()) set({ isInitialSyncComplete: true, syncStatus: 'offline' });
+          else if (deferredDeletes.size) set({ isInitialSyncComplete: true, syncStatus: 'pending' });
           else if (didSync) set({ isInitialSyncComplete: true, syncStatus: 'synced', lastSyncedAt: Date.now() });
           else set({ isInitialSyncComplete: true });
         }
@@ -184,8 +186,11 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
       } else if (online() && get().syncStatus !== 'error') {
         if (repeat) return run(false);
         if (deferredDeletes.size) {
-          deleteRetry = setTimeout(() => { if (active()) void run(false); }, deleteRetryDelay);
-          deleteRetryDelay = Math.min(deleteRetryDelay * 2, maxDeleteRetryInterval);
+          // After bounded retries, keep the delete durable for the next normal sync.
+          if (deleteRetryDelay <= maxDeleteRetryInterval) {
+            deleteRetry = setTimeout(() => { if (active()) void run(false); }, deleteRetryDelay);
+            deleteRetryDelay *= 2;
+          }
         } else deleteRetryDelay = deleteRetryInterval;
       }
     });

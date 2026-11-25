@@ -18,6 +18,7 @@ export function Account() {
   const learned = state.cards.filter((card) => card.learned).length;
   const labels = {
     syncing: "자료를 동기화하고 있어요",
+    pending: "삭제 확인 대기 중",
     synced: "모든 자료가 동기화되었어요",
     offline: state.user
       ? "기기에 안전하게 저장돼요"

@@ -1,3 +1,4 @@
+import type { RecordSyncWrites } from '@flashcards/types';
 import { accountKey, emptySnapshot, type Card, type CardInput, type Data, type DeckInput, type Draft, type Kind,
   type Operation, type Preferences, type Snapshot, type State, type Storage, type Transport, type UserProfile } from './types';
 import { mergeCardImage, mapSources } from './imageSync';
@@ -203,6 +204,8 @@ export class FlashcardStore {
       let didSync = false;
       let pulling = false;
       try {
+        // A previous timeout may still be recording its confirmed revisions.
+        await this.transport.waitForWrites?.();
         while (active() && this.canSync()) {
           const snapshot = snapshotOf(this.state);
           let sent = deferredDeletes.size ? { ...snapshot,
@@ -230,6 +233,45 @@ export class FlashcardStore {
               if (!prepared || !active()) continue;
               sent = prepared;
             }
+            let recorded = false;
+            const record: RecordSyncWrites = results => this.serial(async () => {
+              if (!active()) return;
+              recorded = true;
+              const next = snapshotOf(this.state);
+              const outbox = { ...next.outbox };
+              let cards = next.cards;
+              for (const { key, outcome } of results) {
+                const operation = sent.outbox[key];
+                const current = outbox[key];
+                if (!operation || !current) continue;
+                if (outcome === 'not-sent') {
+                  if (snapshot.outbox[key]?.writeState === 'unsent' && current.writeState === 'attempted') {
+                    if (current.deleted) delete outbox[key];
+                    else outbox[key] = { ...current, writeState: 'unsent' };
+                  }
+                  continue;
+                }
+                if (outcome === 'missing' && operation.deleted && operation.writeState !== 'existing') {
+                  deferredDeletes.set(key, operation.revision);
+                  continue;
+                }
+                if (outcome === 'missing' && operation.learnedOnly && !current.deleted) {
+                  if (current.revision === operation.revision || current.learnedOnly) {
+                    cards = cards.filter(card => card.id !== operation.id);
+                  } else {
+                    const id = `card-${this.uuid()}`;
+                    cards = cards.map(card => card.id === operation.id ? { ...card, id } : card);
+                    outbox[`cards:${id}`] = { ...current, id, writeState: 'unsent' };
+                  }
+                  delete outbox[key];
+                } else if (current.revision === operation.revision) delete outbox[key];
+                else if (current.writeState === 'attempted' && !operation.deleted) {
+                  outbox[key] = { ...current, writeState: 'existing' };
+                }
+              }
+              await this.persist({ ...next, cards, outbox }, uid);
+              if (active()) this.publish({ cards, outbox });
+            });
             const missing = await this.transport.push(uid, sent, active, image => this.serial(async () => {
               if (!active() || !this.state.ready) throw new Error('계정이 변경되었습니다.');
               const next = snapshotOf(this.state);
@@ -242,30 +284,12 @@ export class FlashcardStore {
               const imageCache = { ...next.imageCache, [image.url]: image.original };
               await this.persist({ ...next, cards, imageCache }, uid);
               if (active()) this.publish({ cards, imageCache });
-            }));
-            for (const key of missing ?? []) {
-              const operation = sent.outbox[key];
-              if (operation && operation.writeState !== 'existing') deferredDeletes.set(key, operation.revision);
+            }), record);
+            if (!recorded) {
+              const absent = new Set(missing ?? []);
+              await record(Object.keys(sent.outbox).map(key => ({ key, outcome: absent.has(key) ? 'missing' : 'written' })));
             }
-            await this.serial(async () => {
-              if (!active()) return;
-              const next = snapshotOf(this.state);
-              const outbox = { ...next.outbox };
-              for (const entry of Object.entries(sent.outbox)) {
-                const [key, operation] = entry;
-                const current = outbox[key];
-                if (!current || isDeferred(entry)) continue;
-                if (current.revision === operation.revision) delete outbox[key];
-                else if (!current.deleted && current.writeState === 'attempted' && !operation.deleted) {
-                  outbox[key] = { ...current, writeState: 'existing' };
-                }
-              }
-              await this.persist({ ...next, outbox }, uid);
-              if (active()) {
-                this.publish({ outbox });
-                didSync = true;
-              }
-            });
+            didSync = true;
             continue;
           }
           this.pullRequested = false;
@@ -294,6 +318,7 @@ export class FlashcardStore {
         }
         if (active()) {
           if (!this.canSync()) this.publish({ status: 'offline' });
+          else if (deferredDeletes.size) this.publish({ status: 'pending' });
           else if (didSync) this.publish({ status: 'synced', lastSyncedAt: Date.now() });
         }
       } catch (error) {
@@ -311,8 +336,11 @@ export class FlashcardStore {
         if (this.pullRequested || Object.entries(this.state.outbox).some(entry => !isDeferred(entry))) {
           void this.sync(false);
         } else if (deferredDeletes.size) {
-          this.deleteRetry = setTimeout(() => { if (active()) void this.sync(false); }, this.deleteRetryDelay);
-          this.deleteRetryDelay = Math.min(this.deleteRetryDelay * 2, maxDeleteRetryInterval);
+          // After bounded retries, keep the delete durable for the next normal sync.
+          if (this.deleteRetryDelay <= maxDeleteRetryInterval) {
+            this.deleteRetry = setTimeout(() => { if (active()) void this.sync(false); }, this.deleteRetryDelay);
+            this.deleteRetryDelay *= 2;
+          }
         } else this.deleteRetryDelay = deleteRetryInterval;
       }
     });

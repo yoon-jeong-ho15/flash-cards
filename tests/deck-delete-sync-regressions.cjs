@@ -91,7 +91,7 @@ function registerDeckDeleteTests(fixture) {
       await h.reload();
       await h.connect();
       assertOtherEdit(h);
-      assert.equal(h.status(), 'synced');
+      assert.equal(h.status(), 'pending');
       for (const token of tokens(draft)) assert.deepEqual(h.queued(token), { state: 'attempted', deleted: true });
     } finally {
       release.resolve();
@@ -105,6 +105,47 @@ function registerDeckDeleteTests(fixture) {
     assertDeleted(h, draft);
     assertOtherEdit(h);
     for (const token of tokens(draft)) assert.equal(h.queued(token), undefined);
+  });
+
+  test('a rejected first creation can be deleted without scheduling remote retries', async () => {
+    const h = await fixture();
+    const draft = await h.createDeck();
+    h.server.beforeBatch = async () => { throw Object.assign(Error('rejected'), { code: 'permission-denied' }); };
+    await h.connect();
+    assert.equal(h.status(), 'error');
+    await h.reload();
+    for (const token of tokens(draft)) assert.equal(h.queued(token)?.state, 'unsent');
+    await h.deleteDeck(draft.deckId);
+    h.server.beforeBatch = async () => {};
+    await h.connect();
+    assert.deepEqual(writesFor(h, draft), []);
+    for (const token of tokens(draft)) assert.equal(h.queued(token), undefined);
+    assert.equal(h.status(), 'synced');
+  });
+
+  test('an unresolved legacy delete stops polling but is reconciled on the next sync', async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const h = await fixture({ existingDeck: true, legacyDeck: true });
+    const original = h.server.decks.get('d2');
+    h.server.decks.delete('d2');
+    await h.deleteDeck('d2');
+    await h.connect();
+    assert.equal(h.status(), 'pending');
+    const tick = async () => {
+      t.mock.timers.tick(600_000);
+      await new Promise(resolve => setImmediate(resolve));
+    };
+    for (let i = 0; i < 10; i++) await tick();
+    const requests = h.server.writes.length;
+    await tick();
+    assert.equal(h.server.writes.length, requests);
+    assert.equal(h.queued('decks:d2')?.deleted, true);
+
+    h.server.decks.set('d2', original);
+    await h.connect();
+    assert.equal(h.queued('decks:d2'), undefined);
+    assert.equal(h.server.decks.has('d2'), false);
+    assert.equal(h.status(), 'synced');
   });
 
   for (const legacyDeck of [false, true]) {

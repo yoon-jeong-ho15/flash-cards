@@ -1,3 +1,4 @@
+import { countPending } from '../../store/syncQueue';
 import React, { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ViewMode } from '../../types';
@@ -87,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const folderIds = new Set(folders.map((folder) => folder.id));
     return sortedDecks.filter((deck) => !deck.folderId || !folderIds.has(deck.folderId));
   }, [folders, sortedDecks]);
-  const pendingCount = Object.values(pendingSync ?? {}).reduce((sum, ids) => sum + ids.length, 0);
+  const pendingCount = countPending(pendingSync);
   const navigate = (action: () => void) => {
     action();
     onCloseMobile();
@@ -381,6 +382,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ? '동기화 완료'
                   : syncStatus === 'syncing'
                     ? '동기화 중'
+                    : syncStatus === 'pending' ? '삭제 확인 대기 중'
                     : syncStatus === 'error'
                       ? '재시도'
                       : `오프라인${pendingCount ? ` (${pendingCount})` : ''}`}

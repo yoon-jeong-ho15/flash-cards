@@ -61,3 +61,10 @@ export interface StudyResultStats {
   difficultCardsCount: number;
   masteredCount: number;
 }
+
+/** Result of a single Firestore operation within a larger sync pass. */
+export interface SyncWriteResult {
+  key: string;
+  outcome: 'written' | 'missing' | 'not-sent';
+}
+export type RecordSyncWrites = (results: SyncWriteResult[]) => Promise<void>;

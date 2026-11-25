@@ -1,4 +1,6 @@
 import { AccountData, PendingSync, EMPTY_PENDING_SYNC } from './types';
+import type { SyncWriteResult } from '@flashcards/types';
+import type { AccountSnapshot } from './accountStorage';
 import type { Card } from '../types';
 
 export const collections = [
@@ -13,6 +15,7 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
   const nextVersions = { ...versions };
   const writeStates = { ...pending.writeStates };
   const learnedOnly = new Set(pending.learnedOnlyCardIds);
+  const refreshImages = new Set(pending.refreshImageCardIds);
   for (const [collection, upserts, deletes] of collections) {
     if (before[collection] === after[collection]) continue;
     const oldItems = new Map<string, unknown>(before[collection].map(item => [item.id, item]));
@@ -30,7 +33,10 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
         if (sameContent && oldCard.learned === card.learned && cardChange !== 'learned') continue;
         if (sameContent &&
             (!updated.has(item.id) || learnedOnly.has(item.id))) learnedOnly.add(item.id);
-        else learnedOnly.delete(item.id);
+        else {
+          learnedOnly.delete(item.id);
+          refreshImages.delete(item.id);
+        }
       }
       const token = `${collection}:${item.id}`;
       if (!updated.has(item.id)) {
@@ -42,7 +48,10 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
     }
     for (const id of oldItems.keys()) {
       if (newIds.has(id)) continue;
-      if (collection === 'cards') learnedOnly.delete(id);
+      if (collection === 'cards') {
+        learnedOnly.delete(id);
+        refreshImages.delete(id);
+      }
       const token = `${collection}:${id}`;
       const queued = updated.delete(id);
       if (writeStates[token] === 'unsent') {
@@ -61,6 +70,7 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
   }
   next.learnedOnlyCardIds = [...learnedOnly];
   next.writeStates = writeStates;
+  if (pending.refreshImageCardIds) next.refreshImageCardIds = [...refreshImages];
   return { pendingSync: next, pendingVersions: nextVersions };
 }
 
@@ -85,12 +95,15 @@ export function omitDeferredDeletes(pending: PendingSync, versions: Record<strin
   return next;
 }
 
+export const countPending = (pending: PendingSync) =>
+  collections.reduce((sum, [, upserts, deletes]) => sum + pending[upserts].length + pending[deletes].length, 0);
+
 export const hasPending = (pending: PendingSync) =>
   collections.some(([, upserts, deletes]) => pending[upserts].length > 0 || pending[deletes].length > 0);
 
 export function acknowledge(current: PendingSync, versions: Record<string, number>,
   sent: PendingSync, sentVersions: Record<string, number>) {
-  const pendingSync = { ...EMPTY_PENDING_SYNC };
+  const pendingSync = { ...current };
   const pendingVersions = { ...versions };
   const writeStates = { ...current.writeStates };
   for (const [collection, upserts, deletes] of collections) {
@@ -113,4 +126,64 @@ export function acknowledge(current: PendingSync, versions: Record<string, numbe
   pendingSync.learnedOnlyCardIds = pendingSync.cardIds.filter(id => learnedOnly.has(id));
   pendingSync.writeStates = writeStates;
   return { pendingSync, pendingVersions };
+}
+
+export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot, results: SyncWriteResult[],
+  refreshCards: Set<string>, deferred: Map<string, number | undefined>): AccountSnapshot {
+  const outcomes = new Map(results.map(result => [result.key, result.outcome]));
+  const writeStates = { ...latest.pendingSync.writeStates };
+  const versions = { ...latest.pendingVersions };
+  const pending = { ...latest.pendingSync, writeStates };
+  const refreshImages = new Set(pending.refreshImageCardIds);
+  const confirmed = { ...EMPTY_PENDING_SYNC };
+  let cards = latest.cards;
+  for (const [kind, upserts, deletes] of collections) {
+    for (const field of [upserts, deletes]) {
+      const ids: string[] = [];
+      for (const id of sent.pendingSync[field]) {
+        const key = `${kind}:${id}`;
+        const outcome = outcomes.get(key);
+        if (!outcome) continue;
+        const firstCreate = sent.pendingSync.writeStates?.[key] === 'unsent';
+        if (outcome === 'not-sent') {
+          if (!firstCreate || writeStates[key] !== 'attempted') continue;
+          if (pending[deletes].includes(id)) {
+            pending[deletes] = pending[deletes].filter(value => value !== id);
+            delete writeStates[key];
+            delete versions[key];
+          } else writeStates[key] = 'unsent';
+          continue;
+        }
+        if (outcome === 'missing' && field === deletes && sent.pendingSync.writeStates?.[key] !== 'existing') {
+          deferred.set(key, sent.pendingVersions[key]);
+          continue;
+        }
+        const sameVersion = versions[key] === sent.pendingVersions[key];
+        if (field === 'cardIds' && outcome === 'missing' && pending.cardIds.includes(id)) {
+          if (sameVersion || pending.learnedOnlyCardIds?.includes(id)) {
+            cards = cards.filter(card => card.id !== id);
+            pending.cardIds = pending.cardIds.filter(value => value !== id);
+          } else {
+            // Keep edits made during the request without recreating a remotely deleted ID.
+            const copyId = `card-${crypto.randomUUID()}`;
+            cards = cards.map(card => card.id === id ? { ...card, id: copyId } : card);
+            pending.cardIds = pending.cardIds.map(value => value === id ? copyId : value);
+            versions[`cards:${copyId}`] = versions[key];
+            writeStates[`cards:${copyId}`] = 'unsent';
+          }
+          refreshImages.delete(id);
+          delete versions[key];
+          delete writeStates[key];
+        } else if (field === 'cardIds' && sameVersion && refreshCards.has(id)) {
+          refreshImages.add(id);
+        } else if (field === upserts && outcome === 'written' && pending[deletes].includes(id)) {
+          writeStates[key] = 'existing';
+        }
+        ids.push(id);
+      }
+      confirmed[field] = ids;
+    }
+  }
+  if (refreshImages.size || pending.refreshImageCardIds) pending.refreshImageCardIds = [...refreshImages];
+  return { ...latest, cards, ...acknowledge(pending, versions, confirmed, sent.pendingVersions) };
 }

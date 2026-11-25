@@ -98,3 +98,11 @@ test('web progress-only sync refreshes stale cached data images without uploadin
   assert.equal(h.cards().find(card => card.id === 'c1').termRichText, '<p>server edit</p>');
   assert.deepEqual(h.server.writes.map(write => write.kind), ['update']);
 });
+
+test('pending count includes each write or delete once across queue versions', () => {
+  const h = createHarness();
+  const { countPending } = h.load(path.join(h.root, 'store/syncQueue.ts'));
+  const legacy = { ...seed.snapshot().pendingSync, cardIds: ['c1'], deletedDeckIds: ['d2'] };
+  assert.equal(countPending(legacy), 2);
+  assert.equal(countPending({ ...legacy, learnedOnlyCardIds: ['c1'], writeStates: { 'cards:c1': 'existing' } }), 2);
+});

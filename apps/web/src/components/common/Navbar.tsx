@@ -133,6 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? '동기화 완료'
                   : syncStatus === 'syncing'
                     ? '동기화 중'
+                    : syncStatus === 'pending' ? '삭제 확인 대기 중'
                     : syncStatus === 'error'
                       ? '동기화 재시도'
                       : '오프라인'}

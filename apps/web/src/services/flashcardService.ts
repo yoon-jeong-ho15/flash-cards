@@ -1,3 +1,4 @@
+import type { RecordSyncWrites, SyncWriteResult } from '@flashcards/types';
 import {
   collection,
   doc,
@@ -82,57 +83,84 @@ export function sortCardsByOrder(cards: Card[]): Card[] {
 }
 
 export const flashcardService = {
+  waitForWrites: () => bounded(outstandingCommit),
   async commitChanges(snapshot: AccountData & { pendingSync: PendingSync }, userId: string,
-    isActive: () => boolean): Promise<string[]> {
+    isActive: () => boolean, record?: RecordSyncWrites): Promise<string[]> {
     if (!db || !isFirebaseConfigured) throw new Error('Firebase is unavailable');
-    const operations: Array<(batch: WriteBatch) => void> = [];
+    const operations: Array<{ key: string; apply: (batch: WriteBatch) => void }> = [];
     const learnedOnlyIds = new Set(snapshot.pendingSync.learnedOnlyCardIds);
-    const individualWrites: Array<() => Promise<void>> = [];
+    const individualWrites: Array<() => Promise<SyncWriteResult>> = [];
     const missingDeletes: string[] = [];
     const active = () => isActive() && auth?.currentUser?.uid === userId;
     const names = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
-    for (const [kind, upserts, deletes] of collections) {
-      for (const id of snapshot.pendingSync[deletes]) {
-        // A missing delete must not reject a batch of unrelated upserts.
-        individualWrites.push(async () => {
-          const deleted = await writeExisting(names[kind], id, userId, active,
-            () => deleteDoc(doc(db!, names[kind], id)));
-          if (!deleted) missingDeletes.push(`${kind}:${id}`);
-        });
-      }
-      const ids = new Set(snapshot.pendingSync[upserts]);
-      for (const item of snapshot[kind]) {
-        if (!ids.has(item.id)) continue;
-        if (kind === 'cards' && learnedOnlyIds.has(item.id)) {
+    const notSent = new Set(collections.flatMap(([kind, upserts]) =>
+      snapshot.pendingSync[upserts].map(id => `${kind}:${id}`)));
+    try {
+      for (const [kind, upserts, deletes] of collections) {
+        for (const id of snapshot.pendingSync[deletes]) {
+          // A missing delete must not reject a batch of unrelated upserts.
           individualWrites.push(async () => {
-            await writeExisting(names.cards, item.id, userId, active,
-              () => updateDoc(doc(db!, names.cards, item.id), { learned: Boolean((item as Card).learned) }));
+            const deleted = await writeExisting(names[kind], id, userId, active,
+              () => deleteDoc(doc(db!, names[kind], id)));
+            if (!deleted) missingDeletes.push(`${kind}:${id}`);
+            return { key: `${kind}:${id}`, outcome: deleted ? 'written' : 'missing' };
           });
-          continue;
         }
-        if (kind === 'cards' && cardDataImages(item as Card).length) {
-          throw new Error('이미지 업로드가 완료되지 않았습니다. 연결을 확인한 후 다시 동기화해 주세요. 원본은 보관됩니다.');
+        const ids = new Set(snapshot.pendingSync[upserts]);
+        for (const item of snapshot[kind]) {
+          if (!ids.has(item.id)) continue;
+          if (kind === 'cards' && learnedOnlyIds.has(item.id)) {
+            individualWrites.push(async () => {
+              const exists = await writeExisting(names.cards, item.id, userId, active,
+                () => updateDoc(doc(db!, names.cards, item.id), { learned: Boolean((item as Card).learned) }));
+              return { key: `cards:${item.id}`, outcome: exists ? 'written' : 'missing' };
+            });
+            continue;
+          }
+          if (kind === 'cards' && cardDataImages(item as Card).length) {
+            throw new Error('이미지 업로드가 완료되지 않았습니다. 연결을 확인한 후 다시 동기화해 주세요. 원본은 보관됩니다.');
+          }
+          const data: Record<string, unknown> = { ...item, userId };
+          // Explicit nulls clear optional fields in merge writes.
+          for (const key of kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) {
+            data[key] ??= null;
+          }
+          for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
+          validateDocument(data);
+          operations.push({ key: `${kind}:${item.id}`, apply: batch => batch.set(doc(db!, names[kind], item.id), data, { merge: true }) });
         }
-        const data: Record<string, unknown> = { ...item, userId };
-        // Explicit nulls clear optional fields in merge writes.
-        for (const key of kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) {
-          data[key] ??= null;
-        }
-        for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
-        validateDocument(data);
-        operations.push(batch => batch.set(doc(db!, names[kind], item.id), data, { merge: true }));
       }
-    }
-    for (let i = 0; i < operations.length; i += 400) {
-      if (!active()) throw new Error('Authentication session changed');
-      const batch = writeBatch(db);
-      operations.slice(i, i + 400).forEach(operation => operation(batch));
-      await commitBatch(batch, active);
+      for (let i = 0; i < operations.length; i += 400) {
+        if (!active()) throw new Error('Authentication session changed');
+        const batch = writeBatch(db);
+        const chunk = operations.slice(i, i + 400);
+        chunk.forEach(operation => operation.apply(batch));
+        const keys = chunk.map(operation => operation.key);
+        await commitWrite(async () => {
+          for (const key of keys) notSent.delete(key);
+          try {
+            await batch.commit();
+          } catch (error) {
+            const code = (error as { code?: string }).code;
+            if (code === 'permission-denied' || code === 'invalid-argument' || code === 'failed-precondition') {
+              await record?.(keys.map(key => ({ key, outcome: 'not-sent' })));
+            }
+            throw error;
+          }
+          await record?.(keys.map(key => ({ key, outcome: 'written' })));
+        }, active);
+      }
+    } catch (error) {
+      if (notSent.size) await record?.(Array.from(notSent, key => ({ key, outcome: 'not-sent' })));
+      throw error;
     }
     for (let i = 0; i < individualWrites.length; i += 25) {
       const chunk = individualWrites.slice(i, i + 25);
       await commitWrite(async () => {
-        const results = await Promise.allSettled(chunk.map(write => write()));
+        const results = await Promise.allSettled(chunk.map(async write => {
+          const result = await write();
+          await record?.([result]);
+        }));
         const failure = results.find(result => result.status === 'rejected');
         if (failure) throw failure.reason;
       }, active);
