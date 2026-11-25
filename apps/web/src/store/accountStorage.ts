@@ -1,14 +1,16 @@
 import { AccountData, EMPTY_PENDING_SYNC, FlashcardStoreState, PendingSync } from './types';
 import { collections } from './syncQueue';
+import type { Card } from '../types';
 
 export interface AccountSnapshot extends AccountData {
   pendingSync: PendingSync;
   pendingVersions: Record<string, number>;
   mutationRevision: number;
+  cardConflicts: Record<string, Card>;
 }
 export const accountStorageKey = (uid?: string) => `flashcards_account_v1:${uid ? `user:${uid}` : 'guest'}`;
 export const emptyAccount = (): AccountSnapshot => ({ folders: [], decks: [], cards: [],
-  pendingSync: { ...EMPTY_PENDING_SYNC }, pendingVersions: {}, mutationRevision: 0 });
+  pendingSync: { ...EMPTY_PENDING_SYNC }, pendingVersions: {}, mutationRevision: 0, cardConflicts: {} });
 
 const readCache = new Map<string, { raw: string; snapshot: AccountSnapshot }>();
 export function readAccount(uid?: string): AccountSnapshot {
@@ -55,7 +57,7 @@ function serializeCollection(value: object): string {
 
 function writeAccount(state: AccountSnapshot, uid?: string): void {
   const metadata = JSON.stringify({ pendingSync: state.pendingSync,
-    pendingVersions: state.pendingVersions, mutationRevision: state.mutationRevision });
+    pendingVersions: state.pendingVersions, mutationRevision: state.mutationRevision, cardConflicts: state.cardConflicts });
   // One atomic localStorage write. Acknowledgements reuse collection JSON rather than
   // walking every card (and embedded image) again just to update the outbox.
   const serialized = `{"folders":${serializeCollection(state.folders)},"decks":${serializeCollection(state.decks)},"cards":${serializeCollection(state.cards)},${metadata.slice(1)}`;

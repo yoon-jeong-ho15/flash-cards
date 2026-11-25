@@ -5,11 +5,12 @@ import { mergeCardImage, mapSources } from './imageSync';
 import { hasContent } from './content';
 
 const kinds: Kind[] = ['folders', 'decks', 'cards'];
+const conflictMessage = '다른 탭 또는 기기에서 저장한 카드가 반영되었습니다. 충돌한 편집은 이 기기에 보관했습니다.';
 const deleteRetryInterval = 5_000;
 const maxDeleteRetryInterval = 300_000;
 const message = (error: unknown) => error instanceof Error ? error.message : '저장 중 오류가 발생했습니다.';
 const snapshotOf = (s: State): Snapshot => ({ folders: s.folders, decks: s.decks, cards: s.cards,
-  imageCache: s.imageCache, outbox: s.outbox, revision: s.revision, preferences: s.preferences });
+  imageCache: s.imageCache, cardConflicts: s.cardConflicts, outbox: s.outbox, revision: s.revision, preferences: s.preferences });
 
 /** Serialized durable mutations. No UI or network write is acknowledged before local persistence. */
 export class FlashcardStore {
@@ -49,7 +50,7 @@ export class FlashcardStore {
           throw new Error('기기에 저장된 데이터를 읽을 수 없습니다. 저장소를 확인한 뒤 다시 시도해 주세요.');
         }
         this.publish({ folders: saved.folders, decks: saved.decks, cards: saved.cards,
-          imageCache: saved.imageCache || {}, revision: saved.revision, outbox: saved.outbox, preferences: saved.preferences || {}, ready: true });
+          imageCache: saved.imageCache || {}, cardConflicts: saved.cardConflicts || {}, revision: saved.revision, outbox: saved.outbox, preferences: saved.preferences || {}, ready: true });
       } catch (error) { this.publish({ error: message(error) }); throw error; }
     }).then(() => { void this.sync(); });
   };
@@ -98,7 +99,7 @@ export class FlashcardStore {
         }
       }
       const next: Snapshot = { folders: data.folders, decks: data.decks, cards: data.cards,
-        imageCache: before.imageCache, revision, outbox, preferences: before.preferences };
+        imageCache: before.imageCache, cardConflicts: before.cardConflicts, revision, outbox, preferences: before.preferences };
       try { await this.persist(next, before.user?.uid); }
       catch (error) { this.publish({ error: '기기 저장에 실패했습니다. 저장 공간을 확인해 주세요.' }); throw error; }
       this.publish({ ...next, error: null });
@@ -147,6 +148,7 @@ export class FlashcardStore {
       if (used.has(cardId)) throw new Error('중복된 카드가 있습니다. 편집기를 다시 열어 주세요.');
       used.add(cardId);
       return { ...c, id: cardId, deckId, userId: s.user?.uid, order,
+        contentVersion: existing.get(cardId)?.contentVersion,
         learned: existing.get(cardId)?.learned ?? c.learned ?? false,
         backImageUrl: c.backImageUrl || c.imageUrl, imageUrl: c.backImageUrl || c.imageUrl };
     });
@@ -158,11 +160,14 @@ export class FlashcardStore {
     if (folderId && !s.folders.some(f => f.id === folderId)) throw new Error('폴더를 찾을 수 없습니다.');
     return { data: { ...s, decks: s.decks.map(d => d.id === id ? { ...d, folderId, updatedAt: Date.now() } : d) }, result: undefined };
   });
-  updateCard = (id: string, input: Partial<CardInput>) => this.mutate(s => {
+  updateCard = (id: string, input: Partial<CardInput>, base?: Pick<Card, 'contentVersion'>) => this.mutate(s => {
     const card = s.cards.find(c => c.id === id);
     if (!card) throw new Error('카드를 찾을 수 없습니다.');
+    if (base && base.contentVersion !== card.contentVersion) {
+      throw new Error('카드가 다른 곳에서 변경되었습니다. 최신 카드를 다시 열어 주세요.');
+    }
     const { id: _ignored, ...updates } = input;
-    const next = { ...card, ...updates };
+    const next = { ...card, ...updates, contentVersion: card.contentVersion };
     if (!hasContent(next)) throw new Error('앞면 또는 뒷면에 내용을 입력해 주세요.');
     return { data: { ...s, cards: s.cards.map(c => c.id === id ? next : c),
       decks: s.decks.map(d => d.id === card.deckId ? { ...d, updatedAt: Date.now() } : d) }, result: undefined };
@@ -202,6 +207,7 @@ export class FlashcardStore {
     const isDeferred = ([key, operation]: [string, Operation]) => deferredDeletes.get(key) === operation.revision;
     this.running = Promise.resolve().then(async () => {
       let didSync = false;
+      let hadConflict = false;
       let pulling = false;
       try {
         // A previous timeout may still be recording its confirmed revisions.
@@ -240,7 +246,9 @@ export class FlashcardStore {
               const next = snapshotOf(this.state);
               const outbox = { ...next.outbox };
               let cards = next.cards;
-              for (const { key, outcome } of results) {
+              let cardConflicts = next.cardConflicts;
+              for (const result of results) {
+                const { key, outcome } = result;
                 const operation = sent.outbox[key];
                 const current = outbox[key];
                 if (!operation || !current) continue;
@@ -255,12 +263,27 @@ export class FlashcardStore {
                   deferredDeletes.set(key, operation.revision);
                   continue;
                 }
-                if (outcome === 'missing' && operation.learnedOnly && !current.deleted) {
+                if (operation.kind === 'cards' && !operation.deleted && !current.deleted) {
+                  const card = cards.find(card => card.id === operation.id);
+                  const base = sent.cards.find(card => card.id === operation.id)?.contentVersion;
+                  if (card?.contentVersion !== base &&
+                      (outcome === 'conflict' || outcome === 'missing' ||
+                        (outcome === 'written' && result.contentVersion))) continue;
+                  if (outcome === 'conflict') {
+                    if (current.revision !== operation.revision || !card) continue;
+                    cardConflicts = { ...cardConflicts, [card.id]: card };
+                    cards = cards.map(item => item === card ? result.serverCard : item);
+                  }
+                  if (outcome === 'written' && result.contentVersion) {
+                    cards = cards.map(item => item === card ? { ...item, contentVersion: result.contentVersion } : item);
+                  }
+                }
+                if (outcome === 'missing' && !operation.deleted && !current.deleted && operation.kind === 'cards') {
                   if (current.revision === operation.revision || current.learnedOnly) {
                     cards = cards.filter(card => card.id !== operation.id);
                   } else {
                     const id = `card-${this.uuid()}`;
-                    cards = cards.map(card => card.id === operation.id ? { ...card, id } : card);
+                    cards = cards.map(card => card.id === operation.id ? { ...card, id, contentVersion: undefined } : card);
                     outbox[`cards:${id}`] = { ...current, id, writeState: 'unsent' };
                   }
                   delete outbox[key];
@@ -269,8 +292,10 @@ export class FlashcardStore {
                   outbox[key] = { ...current, writeState: 'existing' };
                 }
               }
-              await this.persist({ ...next, cards, outbox }, uid);
-              if (active()) this.publish({ cards, outbox });
+              await this.persist({ ...next, cards, outbox, cardConflicts }, uid);
+              hadConflict ||= cardConflicts !== next.cardConflicts;
+              if (active()) this.publish({ cards, outbox, cardConflicts,
+                ...(hadConflict && this.state.status === 'error' && { error: conflictMessage }) });
             });
             const missing = await this.transport.push(uid, sent, active, image => this.serial(async () => {
               if (!active() || !this.state.ready) throw new Error('계정이 변경되었습니다.');
@@ -318,6 +343,7 @@ export class FlashcardStore {
         }
         if (active()) {
           if (!this.canSync()) this.publish({ status: 'offline' });
+          else if (hadConflict) this.publish({ status: 'error', error: conflictMessage });
           else if (deferredDeletes.size) this.publish({ status: 'pending' });
           else if (didSync) this.publish({ status: 'synced', lastSyncedAt: Date.now() });
         }

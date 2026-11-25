@@ -22,6 +22,7 @@ import { StudyCard, type StudyCardHandle } from "./StudyCard";
 
 function EditCard({ card, onClose }: { card: Card; onClose: () => void }) {
   const [value, setValue] = useState<CardInput>(card);
+  const [base] = useState(() => ({ contentVersion: card.contentVersion }));
   const [busy, setBusy] = useState(false);
   const editor = useRef<ComposerHandle>(null);
   return (
@@ -35,7 +36,7 @@ function EditCard({ card, onClose }: { card: Card; onClose: () => void }) {
           void (async () => {
             if (!editor.current) throw new Error("편집기를 불러오는 중입니다.");
             const next = await editor.current.flush();
-            await store.updateCard(card.id, next);
+            await store.updateCard(card.id, next, base);
             onClose();
           })()
             .catch(showError)

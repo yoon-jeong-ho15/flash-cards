@@ -8,6 +8,7 @@ import { isFirebaseConfigured } from '../../lib/firebase';
 import { applyWriteResults, collections, enqueueChanges, hasPending, markCreationsAttempted, omitDeferredDeletes } from '../syncQueue';
 import { AccountSnapshot, readAccount, transactAccount, withAccountLock } from '../accountStorage';
 
+const conflictMessage = '다른 탭 또는 기기에서 저장한 카드가 반영되었습니다. 충돌한 편집은 이 브라우저에 보관했습니다.';
 const deleteRetryInterval = 5_000;
 const maxDeleteRetryInterval = 300_000;
 
@@ -53,10 +54,11 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
     running = Promise.resolve().then(async () => {
       if (!active()) return;
       let didSync = false;
+      let hadConflict = false;
       let pulling = false;
       try {
-        // Hold the sync lock across network requests, but allow local durable edits
-        // under the separate data lock. Closing a tab releases both browser locks.
+        // The account lock covers this browser sync pass, including the bounded wait.
+        // A timeout or tab closure can release it before Firestore settles.
         await withAccountLock(uid, 'sync', async () => {
           // Read the queue only after late acknowledgements have reached storage.
           await flashcardService.waitForWrites?.();
@@ -121,8 +123,12 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
               const record: RecordSyncWrites = async results => {
                 if (!active()) return;
                 recorded = true;
-                await transactAccount(uid, latest =>
-                  applyWriteResults(latest, snapshot, results, refreshCards, deferredDeletes), publish, active);
+                await transactAccount(uid, latest => {
+                  const next = applyWriteResults(latest, snapshot, results, refreshCards, deferredDeletes);
+                  hadConflict ||= next.cardConflicts !== latest.cardConflicts;
+                  return next;
+                }, publish, active);
+                if (hadConflict && active() && get().syncStatus === 'error') set({ syncError: conflictMessage });
               };
               const missing = await flashcardService.commitChanges(sent, uid!, active, record);
               if (!active()) return;
@@ -166,6 +172,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
         });
         if (active()) {
           if (!online()) set({ isInitialSyncComplete: true, syncStatus: 'offline' });
+          else if (hadConflict) set({ isInitialSyncComplete: true, syncStatus: 'error', syncError: conflictMessage });
           else if (deferredDeletes.size) set({ isInitialSyncComplete: true, syncStatus: 'pending' });
           else if (didSync) set({ isInitialSyncComplete: true, syncStatus: 'synced', lastSyncedAt: Date.now() });
           else set({ isInitialSyncComplete: true });

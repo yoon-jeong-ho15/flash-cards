@@ -14,9 +14,26 @@ service cloud.firestore {
     }
 
     match /flashcard_cards/{cardId} {
+      // contentVersion is an opaque revision. Missing legacy versions use a null base.
+      function advancesContentVersion(expected) {
+        let next = request.resource.data;
+        let version = next.get('contentVersion', null);
+        return version is string &&
+          version.matches('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$') &&
+          version != expected &&
+          next.get('baseContentVersion', false) == expected;
+      }
+
       allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow update: if request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid &&
+        advancesContentVersion(null);
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid &&
+        (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['learned']) &&
+            request.resource.data.learned is bool) ||
+          advancesContentVersion(resource.data.get('contentVersion', null))
+        );
     }
   }
 }

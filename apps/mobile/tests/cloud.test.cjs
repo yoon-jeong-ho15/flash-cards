@@ -28,7 +28,7 @@ async function fixture(firestoreOverride) {
     } }],
   });
   const module = { exports: {} };
-  new Function('require', 'module', 'exports', compiled.outputFiles[0].text)(id => ({ './firebase': native, 'firebase/firestore': firestoreOverride ?? firestore, 'firebase/storage': storage, 'expo-crypto': { CryptoDigestAlgorithm: { SHA256: 'SHA-256' }, digest: (algorithm, bytes) => require('node:crypto').webcrypto.subtle.digest(algorithm, bytes) } })[id], module, module.exports);
+  new Function('require', 'module', 'exports', compiled.outputFiles[0].text)(id => ({ './firebase': native, 'firebase/firestore': firestoreOverride ?? firestore, 'firebase/storage': storage, 'expo-crypto': { CryptoDigestAlgorithm: { SHA256: 'SHA-256' }, randomUUID: require('node:crypto').randomUUID, digest: (algorithm, bytes) => require('node:crypto').webcrypto.subtle.digest(algorithm, bytes) } })[id], module, module.exports);
   return { cloud: module.exports.cloud, context };
 }
 test('native cloud transport uses web collections, splits batches at 400, clears removed optional fields and checks the active account', async () => {
@@ -205,3 +205,38 @@ async function syncFixture({ legacy = false, existingDeck = false, legacyDeck = 
 registerLearnedSyncTests(syncFixture);
 registerAccountPullTests(syncFixture);
 registerDeckDeleteTests(syncFixture);
+
+test('mobile retires a stale body and uses the winning version only for a new edit', async () => {
+  const h = await syncFixture();
+  const { randomUUID } = require('node:crypto');
+  const card = h.server.cards.get('c1');
+  const winningVersion = randomUUID();
+  const attempts = [];
+  h.server.beforeBatch = async entries => {
+    for (const { id, data } of entries.filter(entry => entry.name === 'flashcard_cards')) {
+      attempts.push(data.termRichText);
+      const base = h.server.cards.get(id)?.contentVersion ?? null;
+      if (data.baseContentVersion !== base) {
+        throw Object.assign(Error('version conflict'), { code: 'permission-denied' });
+      }
+    }
+  };
+  await h.edit('c1', 'mobile offline edit');
+  h.server.cards.set('c1', { ...card, termRichText: 'web edit', contentVersion: winningVersion, baseContentVersion: null });
+  await h.connect();
+
+  assert.match(h.error(), /충돌한 편집/);
+  assert.equal(h.pending('c1'), false);
+  assert.equal(h.durable().cardConflicts.c1.termRichText, 'mobile offline edit');
+  assert.equal(h.cards().find(c => c.id === 'c1').termRichText, 'web edit');
+  await h.reload();
+  await h.connect();
+  assert.deepEqual(attempts, ['mobile offline edit']);
+
+  await h.edit('c1', 'new mobile edit');
+  await h.flush();
+  const saved = h.server.cards.get('c1');
+  assert.equal(saved.termRichText, 'new mobile edit');
+  assert.equal(saved.baseContentVersion, winningVersion);
+  assert.equal(h.cards().find(c => c.id === 'c1').contentVersion, saved.contentVersion);
+});

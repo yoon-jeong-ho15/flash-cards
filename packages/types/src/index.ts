@@ -18,6 +18,8 @@ export interface Card {
   backImageUrl?: string;      // 뒷면 첨부 이미지 (URL 또는 Base64)
   imageUrl?: string;          // 기존 첨부 이미지 (하위 호환용 뒷면 이미지)
   learned: boolean;           // 학습 완료 여부
+  /** Opaque version of the last confirmed cloud content. Legacy cards omit it. */
+  contentVersion?: string;
 }
 
 // 카드 덱 모델
@@ -63,8 +65,8 @@ export interface StudyResultStats {
 }
 
 /** Result of a single Firestore operation within a larger sync pass. */
-export interface SyncWriteResult {
-  key: string;
-  outcome: 'written' | 'missing' | 'not-sent';
-}
+export type SyncWriteResult =
+  | { key: string; outcome: 'written'; contentVersion?: string }
+  | { key: string; outcome: 'missing' | 'not-sent' }
+  | { key: string; outcome: 'conflict'; serverCard: Card };
 export type RecordSyncWrites = (results: SyncWriteResult[]) => Promise<void>;

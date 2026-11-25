@@ -87,8 +87,8 @@ export interface DeckEditBase {
 
 export interface CardSlice {
   cards: Card[];
-  addCard: (cardData: Omit<Card, 'id'>) => Promise<string>;
-  updateCard: (id: string, updates: Partial<Omit<Card, 'id' | 'deckId'>>) => Promise<void>;
+  addCard: (cardData: Omit<Card, 'id' | 'contentVersion'>) => Promise<string>;
+  updateCard: (id: string, updates: Partial<Omit<Card, 'id' | 'deckId' | 'contentVersion'>>) => Promise<void>;
   deleteCard: (id: string) => Promise<void>;
   saveDeckWithCards: (
     deckId: string | null,

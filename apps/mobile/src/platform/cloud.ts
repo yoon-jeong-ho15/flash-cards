@@ -1,7 +1,7 @@
 import type { RecordSyncWrites, SyncWriteResult } from '@flashcards/types';
-import { digest, CryptoDigestAlgorithm } from 'expo-crypto';
+import { digest, CryptoDigestAlgorithm, randomUUID } from 'expo-crypto';
 import { cardDataImages, replaceCardImage } from '../core/imageSync';
-import { collection, deleteDoc, doc, documentId, getDocsFromServer, query, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, documentId, getDocsFromServer, query, updateDoc, where, writeBatch, type DocumentData } from 'firebase/firestore';
 import { auth, configured, db, storage } from './firebase';
 import { getDownloadURL, ref, uploadBytesResumable, type UploadTaskSnapshot } from 'firebase/storage';
 import type { Card, Data, Kind, Transport, ImageUpload } from '../core/types';
@@ -78,6 +78,16 @@ async function uploadEmbeddedImages(card: Card, uid: string, active: () => boole
   }
   return output;
 }
+function readCard(id: string, data: DocumentData, uid: string): Card {
+  return {
+    id, userId: uid, deckId: data.deckId || '', order: data.order == null ? undefined : Number(data.order),
+    termRichText: data.termRichText || '', definitionRichText: data.definitionRichText || '',
+    learned: Boolean(data.learned), frontImageUrl: data.frontImageUrl || undefined,
+    backImageUrl: data.backImageUrl || data.imageUrl || undefined,
+    imageUrl: data.backImageUrl || data.imageUrl || undefined,
+    ...(typeof data.contentVersion === 'string' && { contentVersion: data.contentVersion }),
+  };
+}
 export const cloud: Transport = {
   available: configured,
   waitForWrites: () => bounded(outstandingWrite),
@@ -109,12 +119,13 @@ export const cloud: Transport = {
       });
       return false;
     });
-    // Keep the same 400-operation limit as the web app. Replays are idempotent.
+    // Keep the same 400-operation limit and card version check as the web app.
     const notSent = new Set(operations.map(operation => `${operation.kind}:${operation.id}`));
     try {
       for (let i = 0; i < operations.length; i += 400) {
         const batch = writeBatch(db);
         const chunk = operations.slice(i, i + 400);
+        const cardVersions = new Map<string, { id: string; base: string | null; version: string }>();
         for (const operation of chunk) {
           if (!canWrite()) throw new Error('계정이 변경되었습니다.');
           const target = doc(db, names[operation.kind], operation.id);
@@ -124,9 +135,17 @@ export const cloud: Transport = {
           const data: Record<string, unknown> = { ...normalized, userId: uid };
           for (const key of operation.kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) data[key] ??= null;
           for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
+          if (operation.kind === 'cards') {
+            const base = (item as Card).contentVersion ?? null;
+            const version = randomUUID();
+            cardVersions.set(`cards:${operation.id}`, { id: operation.id, base, version });
+            data.baseContentVersion = base;
+            data.contentVersion = version;
+          }
           batch.set(target, data, { merge: true });
         }
         const keys = chunk.map(operation => `${operation.kind}:${operation.id}`);
+        let reconciled = false;
         await commitWrite(async () => {
           for (const key of keys) notSent.delete(key);
           try {
@@ -134,12 +153,34 @@ export const cloud: Transport = {
           } catch (error) {
             const code = (error as { code?: string }).code;
             if (code === 'permission-denied' || code === 'invalid-argument' || code === 'failed-precondition') {
-              await record?.(keys.map(key => ({ key, outcome: 'not-sent' })));
+              const results = await Promise.all(keys.map(async (key): Promise<SyncWriteResult> => {
+                const card = cardVersions.get(key);
+                if (code === 'permission-denied' && card && canWrite()) {
+                  const owned = await getDocsFromServer(query(collection(db!, names.cards),
+                    where('userId', '==', uid), where(documentId(), '==', card.id)));
+                  const remote = owned.docs[0];
+                  if (remote) {
+                    const serverCard = readCard(remote.id, remote.data(), uid);
+                    if ((serverCard.contentVersion ?? null) !== card.base) {
+                      return { key, outcome: 'conflict', serverCard };
+                    }
+                  } else if (card.base !== null) return { key, outcome: 'missing' };
+                }
+                return { key, outcome: 'not-sent' };
+              }));
+              await record?.(results);
+              // Reload the durable queue before sending the remaining writes.
+              reconciled = Boolean(record && results.some(result => result.outcome !== 'not-sent'));
+              if (reconciled) return;
             }
             throw error;
           }
-          await record?.(keys.map(key => ({ key, outcome: 'written' })));
+          await record?.(keys.map(key => ({ key, outcome: 'written', contentVersion: cardVersions.get(key)?.version })));
         }, canWrite);
+        if (reconciled) {
+          if (notSent.size) await record?.(Array.from(notSent, key => ({ key, outcome: 'not-sent' })));
+          return missingDeletes;
+        }
       }
     } catch (error) {
       if (notSent.size) await record?.(Array.from(notSent, key => ({ key, outcome: 'not-sent' })));
@@ -167,7 +208,7 @@ export const cloud: Transport = {
     const folders = snapshots[0].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, title: v.title || '', description: v.description || '', createdAt: Number(v.createdAt || 0) }; });
     const decks = snapshots[1].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, title: v.title || '', description: v.description || '', folderId: v.folderId || null, createdAt: Number(v.createdAt || 0), updatedAt: Number(v.updatedAt || 0) }; });
     const ids = new Set(decks.map(d => d.id));
-    const cards = snapshots[2].docs.map(d => { const v = d.data(); return { id: d.id, userId: uid, deckId: v.deckId || '', order: v.order == null ? undefined : Number(v.order), termRichText: v.termRichText || '', definitionRichText: v.definitionRichText || '', learned: Boolean(v.learned), frontImageUrl: v.frontImageUrl || undefined, backImageUrl: v.backImageUrl || v.imageUrl || undefined, imageUrl: v.backImageUrl || v.imageUrl || undefined }; }).filter(c => ids.has(c.deckId));
+    const cards = snapshots[2].docs.map(d => readCard(d.id, d.data(), uid)).filter(c => ids.has(c.deckId));
     return { folders, decks, cards } satisfies Data;
   },
 };

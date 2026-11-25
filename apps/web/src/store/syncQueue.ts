@@ -130,20 +130,23 @@ export function acknowledge(current: PendingSync, versions: Record<string, numbe
 
 export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot, results: SyncWriteResult[],
   refreshCards: Set<string>, deferred: Map<string, number | undefined>): AccountSnapshot {
-  const outcomes = new Map(results.map(result => [result.key, result.outcome]));
+  const outcomes = new Map(results.map(result => [result.key, result]));
   const writeStates = { ...latest.pendingSync.writeStates };
   const versions = { ...latest.pendingVersions };
   const pending = { ...latest.pendingSync, writeStates };
   const refreshImages = new Set(pending.refreshImageCardIds);
   const confirmed = { ...EMPTY_PENDING_SYNC };
   let cards = latest.cards;
+  let cardConflicts = latest.cardConflicts;
+  const sentCards = new Map(sent.cards.map(card => [card.id, card]));
   for (const [kind, upserts, deletes] of collections) {
     for (const field of [upserts, deletes]) {
       const ids: string[] = [];
       for (const id of sent.pendingSync[field]) {
         const key = `${kind}:${id}`;
-        const outcome = outcomes.get(key);
-        if (!outcome) continue;
+        const result = outcomes.get(key);
+        if (!result) continue;
+        const { outcome } = result;
         const firstCreate = sent.pendingSync.writeStates?.[key] === 'unsent';
         if (outcome === 'not-sent') {
           if (!firstCreate || writeStates[key] !== 'attempted') continue;
@@ -159,6 +162,23 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
           continue;
         }
         const sameVersion = versions[key] === sent.pendingVersions[key];
+        if (field === 'cardIds' && pending.cardIds.includes(id)) {
+          const card = cards.find(card => card.id === id);
+          const sentCard = sentCards.get(id);
+          if (card?.contentVersion !== sentCard?.contentVersion &&
+              (outcome === 'conflict' || outcome === 'missing' ||
+                (outcome === 'written' && result.contentVersion))) continue;
+          if (outcome === 'conflict') {
+            if (!sameVersion || !card) continue;
+            cardConflicts = { ...cardConflicts, [id]: card };
+            cards = cards.map(item => item === card ? result.serverCard : item);
+            refreshImages.delete(id);
+          }
+          if (outcome === 'written' && result.contentVersion) {
+            // A confirmed write can advance later local edits on the same base.
+            cards = cards.map(item => item === card ? { ...item, contentVersion: result.contentVersion } : item);
+          }
+        }
         if (field === 'cardIds' && outcome === 'missing' && pending.cardIds.includes(id)) {
           if (sameVersion || pending.learnedOnlyCardIds?.includes(id)) {
             cards = cards.filter(card => card.id !== id);
@@ -166,7 +186,7 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
           } else {
             // Keep edits made during the request without recreating a remotely deleted ID.
             const copyId = `card-${crypto.randomUUID()}`;
-            cards = cards.map(card => card.id === id ? { ...card, id: copyId } : card);
+            cards = cards.map(card => card.id === id ? { ...card, id: copyId, contentVersion: undefined } : card);
             pending.cardIds = pending.cardIds.map(value => value === id ? copyId : value);
             versions[`cards:${copyId}`] = versions[key];
             writeStates[`cards:${copyId}`] = 'unsent';
@@ -185,5 +205,5 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
     }
   }
   if (refreshImages.size || pending.refreshImageCardIds) pending.refreshImageCardIds = [...refreshImages];
-  return { ...latest, cards, ...acknowledge(pending, versions, confirmed, sent.pendingVersions) };
+  return { ...latest, cards, cardConflicts, ...acknowledge(pending, versions, confirmed, sent.pendingVersions) };
 }
