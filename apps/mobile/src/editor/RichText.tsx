@@ -6,11 +6,12 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { ActivityIndicator, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { editorDocument } from './document.generated';
+import { parseEditorEvent, type EditorCommand, type EditorPresentation } from './protocol';
 import { plainText } from '../core/content';
 import type { CardDrag } from '../ui/useSwipeMotion';
 
 export interface RichTextHandle { getHTML(): Promise<string>; insertImage(url: string): void }
-interface Props { html: string; side?: 'front' | 'back'; editable?: boolean; label?: string; presentation?: 'default' | 'study-front' | 'study-back'; onChange?: (html: string) => void; onImage?: (url: string) => void; onFlip?: () => void; onCardDrag?: (event: CardDrag) => void; onPickImage?: () => void }
+interface Props { html: string; side?: 'front' | 'back'; editable?: boolean; label?: string; presentation?: EditorPresentation; onChange?: (html: string) => void; onImage?: (url: string) => void; onFlip?: () => void; onCardDrag?: (event: CardDrag) => void; onPickImage?: () => void }
 export const RichText = forwardRef<RichTextHandle, Props>(function RichText(props, ref) {
   const { imageCache } = useStore();
   const settings = useAppearance();
@@ -30,7 +31,7 @@ export const RichText = forwardRef<RichTextHandle, Props>(function RichText(prop
   const requests = useRef(new Map<string, (html: string) => void>());
   const lastHTML = useRef(props.html);
   const lastImageCache = useRef(imageCache);
-  const send = (value: unknown) => web.current?.injectJavaScript(`window.nativeReceive(${JSON.stringify(value)});true;`);
+  const send = (value: EditorCommand) => web.current?.injectJavaScript(`window.nativeReceive(${JSON.stringify(value)});true;`);
   useEffect(() => {
     if (ready && (props.html !== lastHTML.current || (!props.editable && imageCache !== lastImageCache.current))) { lastImageCache.current = imageCache; lastHTML.current = props.html; send({ type: 'set', html: store.displayHTML(props.html) }); }
   }, [props.html, props.editable, ready, imageCache]);
@@ -55,15 +56,52 @@ export const RichText = forwardRef<RichTextHandle, Props>(function RichText(prop
       onError={() => setFailed(true)} onContentProcessDidTerminate={() => web.current?.reload()}
       onMessage={event => {
         try {
-          const data = JSON.parse(event.nativeEvent.data);
-          if (data.type === 'ready') { lastHTML.current = latest.current.html; send({ type: 'init', html: store.displayHTML(latest.current.html), editable: props.editable, label: props.label, presentation: latest.current.presentation, ...currentAppearance.current }); setReady(true); }
-          if (data.type === 'height' && Number.isFinite(data.value) && !props.editable) setHeight(Math.max(60, Math.min(20000, data.value)));
-          if (data.type === 'change' && typeof data.html === 'string') { lastHTML.current = store.canonicalHTML(data.html); latest.current.onChange?.(lastHTML.current); }
-          if (data.type === 'value' && typeof data.html === 'string') { requests.current.get(data.id)?.(store.canonicalHTML(data.html)); requests.current.delete(data.id); }
-          if (data.type === 'image' && typeof data.url === 'string') latest.current.onImage?.(data.url);
-          if (data.type === 'flip') latest.current.onFlip?.();
-          if (data.type === 'card-drag' && ['move', 'end', 'cancel'].includes(data.phase) && Number.isFinite(data.dx) && Number.isFinite(data.dy)) latest.current.onCardDrag?.({ phase: data.phase, dx: data.dx, dy: data.dy, velocityX: Number.isFinite(data.velocityX) ? data.velocityX : 0, velocityY: Number.isFinite(data.velocityY) ? data.velocityY : 0 });
-          if (data.type === 'pick-image') latest.current.onPickImage?.();
+          const parsed: unknown = JSON.parse(event.nativeEvent.data);
+          const data = parseEditorEvent(parsed);
+          if (!data) return;
+          switch (data.type) {
+            case 'ready':
+              lastHTML.current = latest.current.html;
+              send({
+                type: 'init',
+                html: store.displayHTML(latest.current.html),
+                editable: props.editable,
+                label: props.label,
+                presentation: latest.current.presentation,
+                ...currentAppearance.current,
+              });
+              setReady(true);
+              break;
+            case 'height':
+              if (!props.editable) setHeight(Math.max(60, Math.min(20000, data.value)));
+              break;
+            case 'change':
+              lastHTML.current = store.canonicalHTML(data.html);
+              latest.current.onChange?.(lastHTML.current);
+              break;
+            case 'value':
+              requests.current.get(data.id)?.(store.canonicalHTML(data.html));
+              requests.current.delete(data.id);
+              break;
+            case 'image':
+              latest.current.onImage?.(data.url);
+              break;
+            case 'flip':
+              latest.current.onFlip?.();
+              break;
+            case 'card-drag':
+              latest.current.onCardDrag?.({
+                phase: data.phase,
+                dx: data.dx,
+                dy: data.dy,
+                velocityX: data.velocityX ?? 0,
+                velocityY: data.velocityY ?? 0,
+              });
+              break;
+            case 'pick-image':
+              latest.current.onPickImage?.();
+              break;
+          }
         } catch { /* Ignore malformed messages from the isolated document. */ }
       }} />
   </View>;

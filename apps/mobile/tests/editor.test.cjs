@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
-const { harness, user, accountKey, emptySnapshot } = require('./helpers.cjs');
+const { harness, load, user, accountKey, emptySnapshot } = require('./helpers.cjs');
 const generated = fs.readFileSync(path.join(__dirname, '../src/editor/document.generated.ts'), 'utf8');
 const html = JSON.parse(generated.slice(generated.indexOf(' = ') + 3).trim().replace(/;$/, ''));
 function document() {
@@ -171,5 +171,59 @@ test('card appearance updates fonts and dark theme without changing content, for
     assert.ok(root.querySelector('[contenteditable="true"]'));
     window.nativeReceive({ type: 'get', id: 'appearance-save' });
     assert.match(messages.find(message => message.id === 'appearance-save').html, /<strong>내 질문<\/strong>/);
+  } finally { close(); }
+});
+
+test('message parsers accept valid directional messages and reject unknown or malformed payloads', () => {
+  const { parseEditorCommand, parseEditorEvent } = load('editor/protocol.ts');
+
+  assert.deepEqual(parseEditorEvent({ type: 'ready' }), { type: 'ready' });
+  assert.deepEqual(parseEditorEvent({ type: 'height', value: 120 }), { type: 'height', value: 120 });
+  assert.deepEqual(parseEditorEvent({ type: 'change', html: '<p>a</p>' }), { type: 'change', html: '<p>a</p>' });
+  assert.deepEqual(parseEditorEvent({ type: 'value', id: 'req-1', html: '<p>b</p>' }), { type: 'value', id: 'req-1', html: '<p>b</p>' });
+  assert.deepEqual(parseEditorEvent({ type: 'image', url: 'https://example.com/a.png' }), { type: 'image', url: 'https://example.com/a.png' });
+  assert.deepEqual(parseEditorEvent({ type: 'flip' }), { type: 'flip' });
+  assert.deepEqual(parseEditorEvent({ type: 'pick-image' }), { type: 'pick-image' });
+  assert.deepEqual(parseEditorEvent({ type: 'card-drag', phase: 'move', dx: -12, dy: 0 }), {
+    type: 'card-drag',
+    phase: 'move',
+    dx: -12,
+    dy: 0,
+    velocityX: undefined,
+    velocityY: undefined,
+  });
+
+  assert.equal(parseEditorEvent(null), null);
+  assert.equal(parseEditorEvent([]), null);
+  assert.equal(parseEditorEvent({ type: 'unknown' }), null);
+  assert.equal(parseEditorEvent({ type: 'height', value: Number.NaN }), null);
+  assert.equal(parseEditorEvent({ type: 'value', html: '<p>missing id</p>' }), null);
+  assert.equal(parseEditorEvent({ type: 'image' }), null);
+  assert.equal(parseEditorEvent({ type: 'change', html: 123 }), null);
+  assert.equal(parseEditorEvent({ type: 'card-drag', phase: 'invalid', dx: 0, dy: 0 }), null);
+  assert.equal(parseEditorEvent({ type: 'card-drag', phase: 'end', dx: 10, dy: 0, velocityX: 'fast' }), null);
+
+  assert.equal(parseEditorCommand({ type: 'get', id: 'req-1' }).id, 'req-1');
+  assert.equal(parseEditorCommand({ type: 'image', url: 'https://example.com/a.png' }).url, 'https://example.com/a.png');
+  assert.equal(parseEditorCommand({ type: 'get' }), null);
+  assert.equal(parseEditorCommand({ type: 'image' }), null);
+  assert.equal(parseEditorCommand({ type: 'set' }), null);
+  assert.equal(parseEditorCommand({ type: 'init' }), null);
+  assert.equal(parseEditorCommand({ type: 'unknown' }), null);
+});
+
+test('bundled editor ignores unknown and malformed commands without breaking state', () => {
+  const { window, messages, close } = document();
+  try {
+    window.nativeReceive({ type: 'init', editable: true, html: '<p>안전한 내용</p>' });
+    const countBefore = messages.length;
+    window.nativeReceive({ type: 'unknown', payload: 1 });
+    window.nativeReceive({ type: 'get' });
+    window.nativeReceive({ type: 'image' });
+    window.nativeReceive({ type: 'set' });
+    window.nativeReceive({ type: 'init', editable: true });
+    assert.equal(messages.length, countBefore);
+    window.nativeReceive({ type: 'get', id: 'check-1' });
+    assert.equal(messages.find(m => m.type === 'value' && m.id === 'check-1').html, '<p>안전한 내용</p>');
   } finally { close(); }
 });

@@ -1,4 +1,5 @@
 import { CardPan } from "../src/core/cardPan";
+import { parseEditorCommand, type EditorAppearance, type EditorCommand, type EditorEvent } from "../src/editor/protocol";
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -7,9 +8,8 @@ import Image from '@tiptap/extension-image';
 import DOMPurify from 'dompurify';
 import { createElement, Bold, Italic, Underline as UnderlineIcon, Strikethrough, Highlighter, List, ListOrdered, Heading2, SquareCode, Quote, Undo2, Redo2, ImagePlus, type IconNode } from 'lucide';
 
-declare global { interface Window { ReactNativeWebView?: { postMessage(value: string): void }; nativeReceive: (data: Command) => void } }
-interface Command { type: 'init' | 'set' | 'get' | 'image' | 'appearance'; html?: string; editable?: boolean; label?: string; id?: string; url?: string; presentation?: 'default' | 'study-front' | 'study-back'; fontSize?: number; dark?: boolean; uiScale?: number }
-const send = (data: unknown) => window.ReactNativeWebView?.postMessage(JSON.stringify(data));
+declare global { interface Window { ReactNativeWebView?: { postMessage(value: string): void }; nativeReceive: (data: EditorCommand) => void } }
+const send = (data: EditorEvent) => window.ReactNativeWebView?.postMessage(JSON.stringify(data));
 export const safeImage = (url: string) => /^(https:\/\/|data:image\/(png|jpe?g|gif|webp);base64,)/i.test(url);
 export function sanitize(value: string): string {
   const clean = DOMPurify.sanitize(value, {
@@ -49,32 +49,47 @@ actions.forEach(([label, icon, action]) => {
   button.addEventListener('click', () => { if (editor) action(editor); });
   toolbar.append(button);
 });
-window.nativeReceive = data => {
-  if (data.type === 'init' || data.type === 'appearance') {
-    document.body.className = data.presentation === 'study-front' ? 'study-front' : data.presentation === 'study-back' ? 'study-back' : '';
-    if (typeof data.dark === 'boolean') document.documentElement.dataset.theme = data.dark ? 'dark' : 'light';
-    if (typeof data.fontSize === 'number' && Number.isFinite(data.fontSize)) document.body.style.setProperty('--content-font-size', `${Math.max(12, Math.min(40, data.fontSize))}px`);
-    if (typeof data.uiScale === 'number' && Number.isFinite(data.uiScale)) document.body.style.setProperty('--toolbar-font-size', `${14 * Math.max(0.8, Math.min(1.5, data.uiScale))}px`);
-    reportHeight();
+function applyAppearance(data: EditorAppearance) {
+  document.body.className = data.presentation === 'study-front' ? 'study-front' : data.presentation === 'study-back' ? 'study-back' : '';
+  if (typeof data.dark === 'boolean') document.documentElement.dataset.theme = data.dark ? 'dark' : 'light';
+  if (typeof data.fontSize === 'number' && Number.isFinite(data.fontSize)) document.body.style.setProperty('--content-font-size', `${Math.max(12, Math.min(40, data.fontSize))}px`);
+  if (typeof data.uiScale === 'number' && Number.isFinite(data.uiScale)) document.body.style.setProperty('--toolbar-font-size', `${14 * Math.max(0.8, Math.min(1.5, data.uiScale))}px`);
+  reportHeight();
+}
+
+window.nativeReceive = raw => {
+  const data = parseEditorCommand(raw);
+  if (!data) return;
+  switch (data.type) {
+    case 'init': {
+      applyAppearance(data);
+      editor?.destroy(); root.replaceChildren(); toolbar.hidden = !data.editable;
+      const html = sanitize(data.html || '');
+      if (data.editable) {
+        editor = new Editor({ element: root, extensions: [StarterKit, Underline, Highlight, Image.configure({ allowBase64: true })],
+          content: html, onUpdate: emit, editorProps: { attributes: { 'aria-label': data.label || '카드 내용', role: 'textbox', 'aria-multiline': 'true' },
+            transformPastedHTML: sanitize } });
+      } else { editor = null; root.innerHTML = html || '<p class="empty">내용이 없어요</p>'; }
+      reportHeight();
+      break;
+    }
+    case 'appearance':
+      applyAppearance(data);
+      break;
+    case 'get':
+      send({ type: 'value', id: data.id, html: editor?.getHTML() || root.innerHTML });
+      break;
+    case 'set': {
+      const html = sanitize(data.html || '');
+      if (editor) editor.commands.setContent(html, false);
+      else root.innerHTML = html || '<p class="empty">내용이 없어요</p>';
+      reportHeight();
+      break;
+    }
+    case 'image':
+      if (data.url && safeImage(data.url)) editor?.chain().focus().setImage({ src: data.url }).run();
+      break;
   }
-  if (data.type === 'init') {
-    editor?.destroy(); root.replaceChildren(); toolbar.hidden = !data.editable;
-    const html = sanitize(data.html || '');
-    if (data.editable) {
-      editor = new Editor({ element: root, extensions: [StarterKit, Underline, Highlight, Image.configure({ allowBase64: true })],
-        content: html, onUpdate: emit, editorProps: { attributes: { 'aria-label': data.label || '카드 내용', role: 'textbox', 'aria-multiline': 'true' },
-          transformPastedHTML: sanitize } });
-    } else { editor = null; root.innerHTML = html || '<p class="empty">내용이 없어요</p>'; }
-    reportHeight();
-  }
-  if (data.type === 'get') send({ type: 'value', id: data.id, html: editor?.getHTML() || root.innerHTML });
-  if (data.type === 'set') {
-    const html = sanitize(data.html || '');
-    if (editor) editor.commands.setContent(html, false);
-    else root.innerHTML = html || '<p class="empty">내용이 없어요</p>';
-    reportHeight();
-  }
-  if (data.type === 'image' && data.url && safeImage(data.url)) editor?.chain().focus().setImage({ src: data.url }).run();
 };
 let touch: { x: number; y: number; moved: boolean; dragging: boolean; pan: CardPan } | null = null;
 let suppressClickUntil = 0;
