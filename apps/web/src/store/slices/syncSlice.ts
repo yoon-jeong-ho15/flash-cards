@@ -120,18 +120,19 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
               }
               const sent = { ...snapshot, pendingSync };
               let recorded = false;
+              const sameAccount = () => get().user?.uid === uid;
               const record: RecordSyncWrites = async results => {
-                if (!active()) return;
                 recorded = true;
                 await transactAccount(uid, latest => {
                   const next = applyWriteResults(latest, snapshot, results, refreshCards, deferredDeletes);
-                  hadConflict ||= next.cardConflicts !== latest.cardConflicts;
+                  if (active()) hadConflict ||= next.cardConflicts !== latest.cardConflicts;
                   return next;
-                }, publish, active);
+                }, next => {
+                  if (sameAccount()) publish(next);
+                });
                 if (hadConflict && active() && get().syncStatus === 'error') set({ syncError: conflictMessage });
               };
               const missing = await flashcardService.commitChanges(sent, uid!, active, record);
-              if (!active()) return;
               if (!recorded) {
                 const absent = new Set(missing ?? []);
                 await record(collections.flatMap(([kind, upserts, deletes]) =>
@@ -140,6 +141,7 @@ export const createSyncSlice: StateCreator<FlashcardStoreState, [], [], SyncSlic
                     return { key, outcome: absent.has(key) ? 'missing' as const : 'written' as const };
                   })));
               }
+              if (!active()) return;
               didSync = true;
               continue;
             }

@@ -240,3 +240,249 @@ test('mobile retires a stale body and uses the winning version only for a new ed
   assert.equal(saved.baseContentVersion, winningVersion);
   assert.equal(h.cards().find(c => c.id === 'c1').contentVersion, saved.contentVersion);
 });
+
+async function multiAccountFixture(beforeBatch = async () => {}) {
+  const { deferred } = require('./helpers.cjs');
+  const context = {
+    uid: 'a',
+    writes: [],
+    collections: {
+      flashcard_folders: new Map([['f1', { id: 'f1', userId: 'a', title: 'folder', createdAt: 1 }]]),
+      flashcard_decks: new Map([
+        ['d1', { id: 'd1', userId: 'a', folderId: 'f1', title: 'deck A', createdAt: 1, updatedAt: 1 }],
+        ['bd1', { id: 'bd1', userId: 'b', folderId: null, title: 'deck B', createdAt: 1, updatedAt: 1 }],
+      ]),
+      flashcard_cards: new Map([
+        ['c1', { id: 'c1', userId: 'a', deckId: 'd1', order: 0, termRichText: 'original A', definitionRichText: 'answer A', learned: false, contentVersion: 'v0' }],
+        ['bc1', { id: 'bc1', userId: 'b', deckId: 'bd1', order: 0, termRichText: 'original B', definitionRichText: 'answer B', learned: false, contentVersion: 'bv0' }],
+      ]),
+    },
+  };
+  const native = { auth: { get currentUser() { return context.uid ? { uid: context.uid } : null; } }, configured: true, db: {}, storage: {} };
+  const firestore = {
+    doc: (_, name, id) => ({ name, id }),
+    collection: (_, name) => name,
+    documentId: () => '__name__',
+    where: (field, operator, value) => {
+      assert.equal(operator, '==');
+      return { field, value };
+    },
+    query: (name, ...filters) => ({ name, filters }),
+    getDocsFromServer: async ({ name, filters }) => {
+      const docs = Array.from(context.collections[name], ([id, data]) => ({ id, data }))
+        .filter(({ id, data }) => filters.every(({ field, value }) => (field === '__name__' ? id : data[field]) === value))
+        .map(({ id, data }) => ({ id, data: () => ({ ...data }) }));
+      return { docs, empty: docs.length === 0 };
+    },
+    deleteDoc: async ({ name, id }) => {
+      context.writes.push({ kind: 'delete', name, id });
+      context.collections[name].delete(id);
+    },
+    updateDoc: async ({ name, id }, data) => {
+      context.writes.push({ kind: 'update', name, id, data: { ...data } });
+      context.collections[name].set(id, { ...context.collections[name].get(id), ...data });
+    },
+    writeBatch: () => {
+      const entries = [];
+      return {
+        set: (doc, data) => entries.push({ kind: 'set', ...doc, data: { ...data } }),
+        delete: doc => entries.push({ kind: 'delete', ...doc }),
+        commit: async () => {
+          await beforeBatch(entries);
+          for (const entry of entries) {
+            context.writes.push(entry);
+            if (entry.kind === 'delete') context.collections[entry.name].delete(entry.id);
+            else context.collections[entry.name].set(entry.id, { ...context.collections[entry.name].get(entry.id), ...entry.data });
+          }
+        },
+      };
+    },
+  };
+  const compiled = await esbuild.build({
+    entryPoints: [path.resolve(__dirname, '../src/platform/cloud.ts')],
+    bundle: true, platform: 'node', format: 'cjs', write: false,
+    plugins: [{ name: 'platform-fixtures', setup(build) {
+      build.onResolve({ filter: /^(\.\/firebase|firebase\/firestore|firebase\/storage|expo-crypto)$/ }, args => ({ path: args.path, external: true }));
+    } }],
+  });
+  const module = { exports: {} };
+  new Function('require', 'module', 'exports', compiled.outputFiles[0].text)(id => ({
+    './firebase': native,
+    'firebase/firestore': firestore,
+    'firebase/storage': {},
+    'expo-crypto': { CryptoDigestAlgorithm: { SHA256: 'SHA-256' }, randomUUID: require('node:crypto').randomUUID, digest: (a, b) => require('node:crypto').webcrypto.subtle.digest(a, b) },
+  })[id], module, module.exports);
+  const { cloud } = module.exports;
+  const map = new Map([
+    [accountKey('a'), JSON.stringify({
+      ...emptySnapshot(),
+      folders: [context.collections.flashcard_folders.get('f1')],
+      decks: [context.collections.flashcard_decks.get('d1')],
+      cards: [context.collections.flashcard_cards.get('c1')],
+    })],
+    [accountKey('b'), JSON.stringify({
+      ...emptySnapshot(),
+      decks: [context.collections.flashcard_decks.get('bd1')],
+      cards: [{ ...context.collections.flashcard_cards.get('bc1'), termRichText: 'pending B' }],
+      revision: 1,
+      outbox: { 'cards:bc1': { kind: 'cards', id: 'bc1', revision: 1, deleted: false, writeState: 'existing' } },
+    })],
+  ]);
+  const h = harness({ ...cloud, available: false }, map);
+  return { ...h, context, deferred };
+}
+
+test('mobile write acknowledgement after logout and switching to B clears A queue without touching B or overwriting later remote edits', async () => {
+  const { deferred } = require('./helpers.cjs');
+  const enteredA = deferred();
+  const gateA = deferred();
+  const gateB = deferred();
+  const h = await multiAccountFixture(async entries => {
+    if (entries.some(e => e.id === 'c1')) {
+      enteredA.resolve();
+      await gateA.promise;
+    } else if (entries.some(e => e.id === 'bc1')) {
+      await gateB.promise;
+    }
+  });
+  await h.store.switchUser(user('a'));
+  h.cloud.available = true;
+  await h.store.updateCard('c1', { termRichText: 'edited by A' });
+  const syncA = h.store.sync(false);
+  await enteredA.promise;
+
+  h.context.uid = null;
+  await h.store.switchUser(null);
+  h.context.uid = 'b';
+  h.cloud.available = false;
+  await h.store.switchUser(user('b'));
+  const bStateBefore = {
+    decks: h.store.getState().decks,
+    cards: h.store.getState().cards,
+    outbox: h.store.getState().outbox,
+    status: h.store.getState().status,
+    error: h.store.getState().error,
+  };
+  const bDurableBefore = h.map.get(accountKey('b'));
+
+  gateA.resolve();
+  await syncA;
+
+  assert.equal(h.store.getState().user.uid, 'b');
+  assert.deepEqual({
+    decks: h.store.getState().decks,
+    cards: h.store.getState().cards,
+    outbox: h.store.getState().outbox,
+    status: h.store.getState().status,
+    error: h.store.getState().error,
+  }, bStateBefore);
+  assert.equal(h.map.get(accountKey('b')), bDurableBefore);
+
+  const durableA = JSON.parse(h.map.get(accountKey('a')));
+  assert.deepEqual(durableA.outbox, {});
+  const versionFromA = h.context.collections.flashcard_cards.get('c1').contentVersion;
+  assert.equal(durableA.cards[0].contentVersion, versionFromA);
+
+  h.context.collections.flashcard_cards.set('c1', {
+    ...h.context.collections.flashcard_cards.get('c1'),
+    termRichText: 'edited by other device',
+    contentVersion: 'v2-other-device',
+  });
+  const writesBeforeRelogin = h.context.writes.length;
+
+  h.context.uid = null;
+  await h.store.switchUser(null);
+  h.context.uid = 'a';
+  h.cloud.available = true;
+  await h.store.switchUser(user('a'));
+  await h.store.sync();
+
+  gateB.resolve();
+  assert.equal(h.context.writes.length, writesBeforeRelogin);
+  assert.equal(h.context.collections.flashcard_cards.get('c1').termRichText, 'edited by other device');
+  assert.equal(h.store.getState().cards.find(c => c.id === 'c1').termRichText, 'edited by other device');
+  assert.equal(JSON.parse(h.map.get(accountKey('a'))).cards[0].termRichText, 'edited by other device');
+});
+
+test('mobile first write acknowledgement arriving after A relogs in and makes a newer edit keeps the newer edit queued and sends it', async () => {
+  const { deferred } = require('./helpers.cjs');
+  const firstEntered = deferred();
+  const firstGate = deferred();
+  const secondEntered = deferred();
+  const secondGate = deferred();
+  let batchCount = 0;
+  const h = await multiAccountFixture(async entries => {
+    if (!entries.some(e => e.id === 'c1')) return;
+    batchCount++;
+    if (batchCount === 1) {
+      firstEntered.resolve();
+      await firstGate.promise;
+    } else {
+      secondEntered.resolve();
+      await secondGate.promise;
+    }
+  });
+  await h.store.switchUser(user('a'));
+  h.cloud.available = true;
+  await h.store.updateCard('c1', { termRichText: 'first edit' });
+  const sync1 = h.store.sync(false);
+  await firstEntered.promise;
+
+  h.context.uid = null;
+  await h.store.switchUser(null);
+  h.context.uid = 'a';
+  await h.store.switchUser(user('a'));
+  await h.store.updateCard('c1', { termRichText: 'second edit' });
+
+  firstGate.resolve();
+  await sync1;
+  await secondEntered.promise;
+
+  const cardWrites = () => h.context.writes.filter(write => write.id === 'c1');
+  const firstWriteVersion = cardWrites()[0].data.contentVersion;
+  assert.equal(cardWrites()[0].data.termRichText, 'first edit');
+  assert.equal(h.store.getState().outbox['cards:c1'].revision, 2);
+  assert.equal(h.store.getState().cards.find(c => c.id === 'c1').termRichText, 'second edit');
+  assert.equal(h.store.getState().cards.find(c => c.id === 'c1').contentVersion, firstWriteVersion);
+  const durableMid = JSON.parse(h.map.get(accountKey('a')));
+  assert.equal(durableMid.outbox['cards:c1'].revision, 2);
+
+  secondGate.resolve();
+  await h.store.sync(false);
+
+  assert.equal(batchCount, 2);
+  assert.equal(h.context.collections.flashcard_cards.get('c1').termRichText, 'second edit');
+  assert.equal(cardWrites()[1].data.baseContentVersion, firstWriteVersion);
+  assert.deepEqual(h.store.getState().outbox, {});
+  assert.deepEqual(JSON.parse(h.map.get(accountKey('a'))).outbox, {});
+  assert.equal(h.store.getState().status, 'synced');
+});
+
+test('mobile failed write after logout leaves the original account queue intact', async () => {
+  const { deferred } = require('./helpers.cjs');
+  const entered = deferred();
+  const gate = deferred();
+  const h = await multiAccountFixture(async () => {
+    entered.resolve();
+    await gate.promise;
+    throw Object.assign(Error('network failure'), { code: 'unavailable' });
+  });
+  await h.store.switchUser(user('a'));
+  h.cloud.available = true;
+  await h.store.updateCard('c1', { termRichText: 'failed edit' });
+  const syncA = h.store.sync(false);
+  await entered.promise;
+
+  h.context.uid = null;
+  await h.store.switchUser(null);
+  h.context.uid = 'b';
+  h.cloud.available = false;
+  await h.store.switchUser(user('b'));
+
+  gate.resolve();
+  await syncA;
+
+  const durableA = JSON.parse(h.map.get(accountKey('a')));
+  assert.ok(durableA.outbox['cards:c1']);
+  assert.equal(h.store.getState().status, 'offline');
+});

@@ -241,12 +241,18 @@ export class FlashcardStore {
             }
             let recorded = false;
             const record: RecordSyncWrites = results => this.serial(async () => {
-              if (!active()) return;
               recorded = true;
-              const next = snapshotOf(this.state);
+              const raw = await this.storage.getItem(accountKey(uid));
+              const next: Snapshot = raw
+                ? JSON.parse(raw)
+                : (this.state.ready && this.state.user?.uid === uid ? snapshotOf(this.state) : emptySnapshot());
+              if (!kinds.every(k => Array.isArray(next[k])) || !next.outbox || !Number.isFinite(next.revision)) {
+                throw new Error('기기에 저장된 데이터를 읽을 수 없습니다. 저장소를 확인한 뒤 다시 시도해 주세요.');
+              }
               const outbox = { ...next.outbox };
               let cards = next.cards;
-              let cardConflicts = next.cardConflicts;
+              const baseConflicts = next.cardConflicts || {};
+              let cardConflicts = baseConflicts;
               for (const result of results) {
                 const { key, outcome } = result;
                 const operation = sent.outbox[key];
@@ -293,9 +299,11 @@ export class FlashcardStore {
                 }
               }
               await this.persist({ ...next, cards, outbox, cardConflicts }, uid);
-              hadConflict ||= cardConflicts !== next.cardConflicts;
-              if (active()) this.publish({ cards, outbox, cardConflicts,
-                ...(hadConflict && this.state.status === 'error' && { error: conflictMessage }) });
+              if (active()) hadConflict ||= cardConflicts !== baseConflicts;
+              if (this.state.ready && this.state.user?.uid === uid) {
+                this.publish({ cards, outbox, cardConflicts,
+                  ...(active() && hadConflict && this.state.status === 'error' && { error: conflictMessage }) });
+              }
             });
             const missing = await this.transport.push(uid, sent, active, image => this.serial(async () => {
               if (!active() || !this.state.ready) throw new Error('계정이 변경되었습니다.');
@@ -314,6 +322,7 @@ export class FlashcardStore {
               const absent = new Set(missing ?? []);
               await record(Object.keys(sent.outbox).map(key => ({ key, outcome: absent.has(key) ? 'missing' : 'written' })));
             }
+            if (!active()) break;
             didSync = true;
             continue;
           }

@@ -123,3 +123,238 @@ test('local persistence failure does not publish or upload an unsaved mutation',
   assert.equal(h.store.getState().decks.length, 0);
   assert.equal(writes, 0);
 });
+
+function createMultiAccountCloudHarness(beforeBatch = async () => {}) {
+  const path = require('node:path');
+  const auth = { currentUser: { uid: 'a' } };
+  const collections = {
+    flashcard_folders: new Map([['f1', { id: 'f1', userId: 'a', title: 'folder', createdAt: 1 }]]),
+    flashcard_decks: new Map([
+      ['d1', { id: 'd1', userId: 'a', folderId: 'f1', title: 'deck A', createdAt: 1, updatedAt: 1 }],
+      ['bd1', { id: 'bd1', userId: 'b', folderId: null, title: 'deck B', createdAt: 1, updatedAt: 1 }],
+    ]),
+    flashcard_cards: new Map([
+      ['c1', { id: 'c1', userId: 'a', deckId: 'd1', order: 0, termRichText: 'original A', definitionRichText: 'answer A', learned: false, contentVersion: 'v0' }],
+      ['bc1', { id: 'bc1', userId: 'b', deckId: 'bd1', order: 0, termRichText: 'original B', definitionRichText: 'answer B', learned: false, contentVersion: 'bv0' }],
+    ]),
+  };
+  const writes = [];
+  const firestore = {
+    doc: (_db, name, id) => ({ name, id }),
+    collection: (_db, name) => name,
+    documentId: () => '__name__',
+    where: (field, operator, value) => {
+      assert.equal(operator, '==');
+      return { field, value };
+    },
+    query: (name, ...filters) => ({ name, filters }),
+    getDocsFromServer: async ({ name, filters }) => {
+      const docs = Array.from(collections[name], ([id, data]) => ({ id, data }))
+        .filter(({ id, data }) => filters.every(({ field, value }) => (field === '__name__' ? id : data[field]) === value))
+        .map(({ id, data }) => ({ id, data: () => ({ ...data }) }));
+      return { docs, empty: docs.length === 0 };
+    },
+    updateDoc: async ({ name, id }, data) => {
+      writes.push({ kind: 'update', name, id, data: { ...data } });
+      collections[name].set(id, { ...collections[name].get(id), ...data });
+    },
+    deleteDoc: async ({ name, id }) => {
+      writes.push({ kind: 'delete', name, id });
+      collections[name].delete(id);
+    },
+    writeBatch: () => {
+      const entries = [];
+      return {
+        set: ({ name, id }, data) => entries.push({ kind: 'set', name, id, data: { ...data } }),
+        delete: ({ name, id }) => entries.push({ kind: 'delete', name, id }),
+        commit: async () => {
+          await beforeBatch(entries);
+          for (const entry of entries) {
+            writes.push(entry);
+            const { kind, name, id, data } = entry;
+            if (kind === 'delete') collections[name].delete(id);
+            else collections[name].set(id, { ...collections[name].get(id), ...data });
+          }
+        },
+      };
+    },
+  };
+  const storage = new Map([
+    ['flashcards_account_v1:user:a', JSON.stringify({
+      folders: [collections.flashcard_folders.get('f1')],
+      decks: [collections.flashcard_decks.get('d1')],
+      cards: [collections.flashcard_cards.get('c1')],
+      pendingSync: seed.snapshot().pendingSync,
+      pendingVersions: {},
+      mutationRevision: 0,
+      cardConflicts: {},
+    })],
+    ['flashcards_account_v1:user:b', JSON.stringify({
+      folders: [],
+      decks: [collections.flashcard_decks.get('bd1')],
+      cards: [{ ...collections.flashcard_cards.get('bc1'), termRichText: 'pending B' }],
+      pendingSync: { ...seed.snapshot().pendingSync, cardIds: ['bc1'], writeStates: { 'cards:bc1': 'existing' } },
+      pendingVersions: { 'cards:bc1': 1 },
+      mutationRevision: 1,
+      cardConflicts: {},
+    })],
+  ]);
+  const h = createHarness({}, storage, {
+    [path.resolve(__dirname, '../src/services/flashcardService.ts')]: null,
+    [path.resolve(__dirname, '../src/lib/firebase.ts')]: { db: {}, auth, isFirebaseConfigured: true },
+    [path.resolve(__dirname, '../src/services/storageService.ts')]: {
+      uploadDataImage: async () => { throw Error('unexpected upload'); },
+      extractAllFirebaseImageUrlsFromCard: () => [],
+      deleteImagesByUrls: async () => {},
+    },
+    'firebase/firestore': firestore,
+  });
+  return { h, auth, collections, writes, storage };
+}
+
+test('write acknowledgement after logout and switching to B clears A queue without touching B or overwriting later remote edits', async () => {
+  const entered = deferred();
+  const gate = deferred();
+  const { h, auth, collections, writes, storage } = createMultiAccountCloudHarness(async entries => {
+    if (entries.some(entry => entry.id === 'c1')) {
+      entered.resolve();
+      await gate.promise;
+    }
+  });
+  h.store.getState().setUser({ uid: 'a' });
+  await h.store.getState().updateCard('c1', { termRichText: 'edited by A' });
+  const syncA = h.store.getState().flushPendingSync();
+  await entered.promise;
+
+  auth.currentUser = null;
+  h.store.getState().setUser(null);
+  auth.currentUser = { uid: 'b' };
+  h.store.getState().setUser({ uid: 'b' });
+  const bStateBefore = {
+    decks: h.store.getState().decks,
+    cards: h.store.getState().cards,
+    pendingSync: h.store.getState().pendingSync,
+    pendingVersions: h.store.getState().pendingVersions,
+    syncStatus: h.store.getState().syncStatus,
+    syncError: h.store.getState().syncError,
+  };
+  const bDurableBefore = storage.get('flashcards_account_v1:user:b');
+
+  gate.resolve();
+  await syncA;
+
+  assert.equal(h.store.getState().user.uid, 'b');
+  assert.deepEqual({
+    decks: h.store.getState().decks,
+    cards: h.store.getState().cards,
+    pendingSync: h.store.getState().pendingSync,
+    pendingVersions: h.store.getState().pendingVersions,
+    syncStatus: h.store.getState().syncStatus,
+    syncError: h.store.getState().syncError,
+  }, bStateBefore);
+  assert.equal(storage.get('flashcards_account_v1:user:b'), bDurableBefore);
+
+  const durableA = JSON.parse(storage.get('flashcards_account_v1:user:a'));
+  assert.deepEqual(durableA.pendingSync.cardIds, []);
+  const versionFromA = collections.flashcard_cards.get('c1').contentVersion;
+  assert.equal(durableA.cards[0].contentVersion, versionFromA);
+
+  collections.flashcard_cards.set('c1', {
+    ...collections.flashcard_cards.get('c1'),
+    termRichText: 'edited by other device',
+    contentVersion: 'v2-other-device',
+  });
+  const writesBeforeRelogin = writes.length;
+
+  auth.currentUser = null;
+  h.store.getState().setUser(null);
+  auth.currentUser = { uid: 'a' };
+  h.store.getState().setUser({ uid: 'a' });
+  await h.store.getState().initCloudSync();
+  await h.store.getState().initCloudSync();
+
+  assert.equal(writes.length, writesBeforeRelogin);
+  assert.equal(collections.flashcard_cards.get('c1').termRichText, 'edited by other device');
+  assert.equal(h.store.getState().cards.find(c => c.id === 'c1').termRichText, 'edited by other device');
+  assert.equal(JSON.parse(storage.get('flashcards_account_v1:user:a')).cards[0].termRichText, 'edited by other device');
+});
+
+test('first write acknowledgement arriving after A relogs in and makes a newer edit keeps the newer edit queued and sends it', async () => {
+  const firstEntered = deferred();
+  const firstGate = deferred();
+  const secondEntered = deferred();
+  const secondGate = deferred();
+  let batchCount = 0;
+  const { h, auth, collections, writes, storage } = createMultiAccountCloudHarness(async entries => {
+    if (!entries.some(entry => entry.id === 'c1')) return;
+    batchCount++;
+    if (batchCount === 1) {
+      firstEntered.resolve();
+      await firstGate.promise;
+    } else {
+      secondEntered.resolve();
+      await secondGate.promise;
+    }
+  });
+  h.store.getState().setUser({ uid: 'a' });
+  await h.store.getState().updateCard('c1', { termRichText: 'first edit' });
+  const sync1 = h.store.getState().flushPendingSync();
+  await firstEntered.promise;
+
+  auth.currentUser = null;
+  h.store.getState().setUser(null);
+  auth.currentUser = { uid: 'a' };
+  h.store.getState().setUser({ uid: 'a' });
+  h.store.getState().initCloudSync();
+  await h.store.getState().updateCard('c1', { termRichText: 'second edit' });
+
+  firstGate.resolve();
+  await sync1;
+  await secondEntered.promise;
+
+  const cardWrites = () => writes.filter(write => write.id === 'c1');
+  const firstWriteVersion = cardWrites()[0].data.contentVersion;
+  assert.equal(cardWrites()[0].data.termRichText, 'first edit');
+  assert.ok(h.store.getState().pendingSync.cardIds.includes('c1'));
+  assert.equal(h.store.getState().cards.find(c => c.id === 'c1').termRichText, 'second edit');
+  assert.equal(h.store.getState().cards.find(c => c.id === 'c1').contentVersion, firstWriteVersion);
+  const durableMid = JSON.parse(storage.get('flashcards_account_v1:user:a'));
+  assert.deepEqual(durableMid.pendingSync.cardIds, ['c1']);
+  assert.equal(durableMid.pendingVersions['cards:c1'], 2);
+
+  secondGate.resolve();
+  await h.store.getState().flushPendingSync();
+
+  assert.equal(batchCount, 2);
+  assert.equal(collections.flashcard_cards.get('c1').termRichText, 'second edit');
+  assert.equal(cardWrites()[1].data.baseContentVersion, firstWriteVersion);
+  assert.equal(h.store.getState().pendingSync.cardIds.length, 0);
+  assert.deepEqual(JSON.parse(storage.get('flashcards_account_v1:user:a')).pendingSync.cardIds, []);
+  assert.equal(h.store.getState().syncStatus, 'synced');
+});
+
+test('failed write after logout leaves the original account queue intact', async () => {
+  const entered = deferred();
+  const gate = deferred();
+  const { h, auth, storage } = createMultiAccountCloudHarness(async () => {
+    entered.resolve();
+    await gate.promise;
+    throw Object.assign(Error('network failure'), { code: 'unavailable' });
+  });
+  h.store.getState().setUser({ uid: 'a' });
+  await h.store.getState().updateCard('c1', { termRichText: 'failed edit' });
+  const syncA = h.store.getState().flushPendingSync();
+  await entered.promise;
+
+  auth.currentUser = null;
+  h.store.getState().setUser(null);
+  auth.currentUser = { uid: 'b' };
+  h.store.getState().setUser({ uid: 'b' });
+
+  gate.resolve();
+  await syncA;
+
+  const durableA = JSON.parse(storage.get('flashcards_account_v1:user:a'));
+  assert.deepEqual(durableA.pendingSync.cardIds, ['c1']);
+  assert.equal(h.store.getState().syncStatus, 'offline');
+});

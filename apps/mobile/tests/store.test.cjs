@@ -234,3 +234,48 @@ test('failed acknowledgement persistence keeps the durable URL and its pending o
   h.storage.setItem = write; h.cloud.push = async (_, snapshot) => assert.equal(snapshot.cards[0].frontImageUrl, remoteImage);
   await h.store.sync(false); assert.equal(Object.keys(h.store.getState().outbox).length, 0);
 });
+
+test('delayed push resolution without record callback clears A outbox after logout without affecting B, and preserves newer relogin edits', async () => {
+  const entered1 = deferred(), release1 = deferred(), entered2 = deferred(), release2 = deferred();
+  const pushed = [];
+  const { store, cloud, map } = harness({
+    push: async (uid, snapshot) => {
+      pushed.push({ uid, title: snapshot.decks[0]?.title });
+      if (pushed.length === 1) { entered1.resolve(); await release1.promise; }
+      else if (pushed.length === 2) { entered2.resolve(); await release2.promise; }
+    },
+    pull: async uid => uid === 'a' ? { folders: [], decks: [{ id: 'd1', title: 'remote A', createdAt: 0, updatedAt: 0 }], cards: [] } : { folders: [], decks: [], cards: [] },
+  });
+  await store.switchUser(user('a'));
+  const deckId = await store.saveDeck(undefined, { title: 'first' }, [item()]);
+  cloud.available = true;
+  const sync1 = store.sync(false);
+  await entered1.promise;
+
+  cloud.available = false;
+  await store.switchUser(null);
+  await store.switchUser(user('b'));
+  await store.saveDeck(undefined, { title: 'B deck' }, [item()]);
+  const bSnap = map.get(accountKey('b'));
+
+  release1.resolve();
+  await sync1;
+  assert.equal(store.getState().decks[0].title, 'B deck');
+  assert.equal(map.get(accountKey('b')), bSnap);
+  assert.deepEqual(JSON.parse(map.get(accountKey('a'))).outbox, {});
+
+  // Scenario 2: A relogs in, edits before first request resolves
+  await store.switchUser(user('a'));
+  cloud.available = true;
+  await store.saveDeck(deckId, { title: 'v1' }, [item()]);
+  const firstPush = store.sync(false);
+  await entered2.promise;
+  await store.switchUser(null);
+  await store.switchUser(user('a'));
+  await store.saveDeck(deckId, { title: 'v2' }, [item()]);
+  release2.resolve();
+  await firstPush;
+  await store.sync(false);
+  assert.equal(pushed.at(-1).title, 'v2');
+  assert.deepEqual(store.getState().outbox, {});
+});
