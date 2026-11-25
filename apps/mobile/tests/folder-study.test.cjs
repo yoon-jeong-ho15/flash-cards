@@ -5,14 +5,14 @@ const esbuild = require('esbuild');
 const { harness: storeHarness, item, load, tick } = require('./helpers.cjs');
 const { folderCards } = load('core/content.ts');
 
-const externals = ['react-native-safe-area-context', 'react-native-svg', 'react', 'react-native', 'expo-haptics', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Library', './Typography', './theme'];
-const sources = Object.fromEntries(['Study', 'Library', 'DeckDetail', 'StudySetup'].map(name => [name, esbuild.buildSync({
+const externals = ['react-native-safe-area-context', 'react-native-svg', 'react', 'react-native', 'expo-haptics', '../platform/runtime', '../editor/RichText', './kit', './CardComposer', './Icon', './useSwipeMotion', './FolderForm', './FolderPicker', './Typography', './theme'];
+const sources = Object.fromEntries(['Study', 'DeckLibrary', 'FolderLibrary', 'Search', 'StudyLibrary', 'DeckDetail', 'StudySetup'].map(name => [name, esbuild.buildSync({
   entryPoints: [path.resolve(__dirname, `../src/ui/${name}.tsx`)], bundle: true, platform: 'node', format: 'cjs',
   write: false, external: externals, tsconfigRaw: { compilerOptions: { jsx: 'react' } },
 }).outputFiles[0].text]));
 
 // Render the actual screen functions with deterministic hooks and native view stubs.
-function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckLibrary' : screen, dimensions = { width: 390, fontScale: 1 }) {
+function screenHarness(store, screen, exportName = screen, dimensions = { width: 390, fontScale: 1 }) {
   const slots = [];
   const cardSlots = [];
   const flipAnimations = [];
@@ -68,7 +68,7 @@ function screenHarness(store, screen, exportName = screen === 'Library' ? 'DeckL
     './theme': { useUI: () => ({ colors: {}, s: {}, uiScale: 1, dark: false }), useThemedStyles: factory => factory({}), radius: { control: 10, card: 12, sheet: 20 } },
     react, 'react-native': native, '../platform/runtime': { store, useStore: () => store.getState() },
     '../editor/RichText': { RichText: 'RichText' }, './CardComposer': { CardComposer: 'CardComposer' },
-    './Library': { deckAccent: () => ({ bg: '#FFFFFF', ink: '#000000' }) }, './FolderPicker': { FolderPicker: 'FolderPicker' },
+    './FolderPicker': { FolderPicker: 'FolderPicker' },
     './Icon': { Icon: 'Icon' }, './FolderForm': { FolderForm: 'FolderForm' },
     './kit': { colors: {}, s: {}, useImage: () => () => {}, attempt: fn => fn(), showError: error => { throw error; },
       ...Object.fromEntries(['Attachment', 'Button', 'Empty', 'Progress', 'Chips', 'Field', 'Select', 'ProgressRing', 'Sheet'].map(name => [name, name])),
@@ -168,7 +168,7 @@ async function fixture() {
 
 test('library folder supports filtering and keeps study actions in the study tab', async () => {
   const f = await fixture();
-  const screen = screenHarness(f.store, 'Library');
+  const screen = screenHarness(f.store, 'DeckLibrary');
   let destination;
   const props = { folderId: f.folder, nav: { go: route => { destination = route; }, back() {} } };
   try {
@@ -420,7 +420,7 @@ test('study picker separates folder tiles from unfiled decks and preserves setup
   const f = await fixture();
   const emptyDeck = await f.store.saveDeck(undefined, { title: '빈 미분류 덱' }, [item()]);
   await f.store.deleteCard(f.store.getState().cards.find(card => card.deckId === emptyDeck).id);
-  const screen = screenHarness(f.store, 'Library', 'StudyLibrary');
+  const screen = screenHarness(f.store, 'StudyLibrary');
   let destination;
   try {
     const tree = screen.render({ nav: { go: route => { destination = route; } } });
@@ -453,12 +453,12 @@ test('study picker adapts to narrow screens and enlarged text and supports unfil
     [{ width: 390, fontScale: 1 }, 2], [{ width: 320, fontScale: 1 }, 1],
     [{ width: 390, fontScale: 1.5 }, 1], [{ width: 768, fontScale: 1 }, 3],
   ]) {
-    const screen = screenHarness(f.store, 'Library', 'StudyLibrary', dimensions);
+    const screen = screenHarness(f.store, 'StudyLibrary', 'StudyLibrary', dimensions);
     assert.equal(nodes(screen.render({ nav })).find(node => node.type === 'FlatList').props.numColumns, columns);
     screen.cleanup();
   }
   for (const folder of f.store.getState().folders) await f.store.deleteFolder(folder.id);
-  const screen = screenHarness(f.store, 'Library', 'StudyLibrary');
+  const screen = screenHarness(f.store, 'StudyLibrary');
   try {
     const tree = nodes(screen.render({ nav })).find(node => node.type === 'FlatList');
     assert.equal(tree.props.data.length, 0);
@@ -682,8 +682,8 @@ test('fixed library lists preserve items, sorting and active filters when the sh
   ]) {
     await t.test(`${name}${props.folderId ? ' inside a folder' : ''}`, async () => {
       await f.store.setPreferences({ collectionLayout: 'grid' });
-      const screen = screenHarness(f.store, 'Library', name);
-      const controller = screenHarness(f.store, 'Library', 'Search');
+      const screen = screenHarness(f.store, name);
+      const controller = screenHarness(f.store, 'Search');
       try {
         let tree = screen.render(props);
         if (name === 'DeckLibrary') {
@@ -722,8 +722,8 @@ test('switchable study, search and card collections preserve items, order and ac
   const f = await layoutFixture();
   const nav = { go() {}, back() {} };
   for (const [file, name, props] of [
-    ['Library', 'StudyLibrary', { nav }],
-    ['Library', 'Search', { nav }],
+    ['StudyLibrary', 'StudyLibrary', { nav }],
+    ['Search', 'Search', { nav }],
     ['StudySetup', 'StudyFolder', { nav, folderId: f.folder }],
     ['DeckDetail', 'DeckDetail', { nav, deckId: f.first }],
   ]) {
