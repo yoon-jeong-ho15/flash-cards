@@ -16,6 +16,7 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
   const writeStates = { ...pending.writeStates };
   const learnedOnly = new Set(pending.learnedOnlyCardIds);
   const refreshImages = new Set(pending.refreshImageCardIds);
+  const cardContentVersions = { ...pending.cardContentVersions };
   for (const [collection, upserts, deletes] of collections) {
     if (before[collection] === after[collection]) continue;
     const oldItems = new Map<string, unknown>(before[collection].map(item => [item.id, item]));
@@ -31,11 +32,18 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
         const sameContent = oldCard && (Object.keys({ ...oldCard, ...card }) as (keyof Card)[])
           .every(key => key === 'learned' || Object.is(oldCard[key], card[key]));
         if (sameContent && oldCard.learned === card.learned && cardChange !== 'learned') continue;
-        if (sameContent &&
-            (!updated.has(item.id) || learnedOnly.has(item.id))) learnedOnly.add(item.id);
-        else {
+        if (sameContent && (!updated.has(item.id) || learnedOnly.has(item.id))) {
+          learnedOnly.add(item.id);
+          delete cardContentVersions[item.id];
+        } else {
           learnedOnly.delete(item.id);
           refreshImages.delete(item.id);
+          if (sameContent) {
+            const existingContentVersion = cardContentVersions[item.id] ?? versions[`cards:${item.id}`];
+            if (existingContentVersion !== undefined) cardContentVersions[item.id] = existingContentVersion;
+          } else {
+            cardContentVersions[item.id] = revision;
+          }
         }
       }
       const token = `${collection}:${item.id}`;
@@ -51,6 +59,7 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
       if (collection === 'cards') {
         learnedOnly.delete(id);
         refreshImages.delete(id);
+        delete cardContentVersions[id];
       }
       const token = `${collection}:${id}`;
       const queued = updated.delete(id);
@@ -70,6 +79,8 @@ export function enqueueChanges(before: AccountData, after: AccountData, pending:
   }
   next.learnedOnlyCardIds = [...learnedOnly];
   next.writeStates = writeStates;
+  if (Object.keys(cardContentVersions).length) next.cardContentVersions = cardContentVersions;
+  else delete next.cardContentVersions;
   if (pending.refreshImageCardIds) next.refreshImageCardIds = [...refreshImages];
   return { pendingSync: next, pendingVersions: nextVersions };
 }
@@ -134,6 +145,8 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
   const writeStates = { ...latest.pendingSync.writeStates };
   const versions = { ...latest.pendingVersions };
   const pending = { ...latest.pendingSync, writeStates };
+  const learnedOnly = new Set(pending.learnedOnlyCardIds);
+  const cardContentVersions = { ...pending.cardContentVersions };
   const refreshImages = new Set(pending.refreshImageCardIds);
   const confirmed = { ...EMPTY_PENDING_SYNC };
   let cards = latest.cards;
@@ -180,7 +193,7 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
           }
         }
         if (field === 'cardIds' && outcome === 'missing' && pending.cardIds.includes(id)) {
-          if (sameVersion || pending.learnedOnlyCardIds?.includes(id)) {
+          if (sameVersion || learnedOnly.has(id)) {
             cards = cards.filter(card => card.id !== id);
             pending.cardIds = pending.cardIds.filter(value => value !== id);
           } else {
@@ -190,14 +203,26 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
             pending.cardIds = pending.cardIds.map(value => value === id ? copyId : value);
             versions[`cards:${copyId}`] = versions[key];
             writeStates[`cards:${copyId}`] = 'unsent';
+            cardContentVersions[copyId] = versions[key];
           }
           refreshImages.delete(id);
+          learnedOnly.delete(id);
+          delete cardContentVersions[id];
           delete versions[key];
           delete writeStates[key];
         } else if (field === 'cardIds' && sameVersion && refreshCards.has(id)) {
           refreshImages.add(id);
         } else if (field === upserts && outcome === 'written' && pending[deletes].includes(id)) {
           writeStates[key] = 'existing';
+        } else if (field === 'cardIds' && outcome === 'written' && !sameVersion &&
+            !sent.pendingSync.learnedOnlyCardIds?.includes(id) && !learnedOnly.has(id) &&
+            pending.cardIds.includes(id)) {
+          const sentContentVersion = sent.pendingSync.cardContentVersions?.[id] ?? sent.pendingVersions[key];
+          const latestContentVersion = cardContentVersions[id] ?? versions[key];
+          if (sentContentVersion !== undefined && latestContentVersion === sentContentVersion) {
+            learnedOnly.add(id);
+            delete cardContentVersions[id];
+          }
         }
         ids.push(id);
       }
@@ -205,5 +230,13 @@ export function applyWriteResults(latest: AccountSnapshot, sent: AccountSnapshot
     }
   }
   if (refreshImages.size || pending.refreshImageCardIds) pending.refreshImageCardIds = [...refreshImages];
-  return { ...latest, cards, cardConflicts, ...acknowledge(pending, versions, confirmed, sent.pendingVersions) };
+  if (learnedOnly.size || pending.learnedOnlyCardIds) pending.learnedOnlyCardIds = [...learnedOnly];
+  const acknowledged = acknowledge(pending, versions, confirmed, sent.pendingVersions);
+  const remainingCards = new Set(acknowledged.pendingSync.cardIds);
+  for (const id of Object.keys(cardContentVersions)) {
+    if (!remainingCards.has(id)) delete cardContentVersions[id];
+  }
+  if (Object.keys(cardContentVersions).length) acknowledged.pendingSync.cardContentVersions = cardContentVersions;
+  else delete acknowledged.pendingSync.cardContentVersions;
+  return { ...latest, cards, cardConflicts, ...acknowledged };
 }

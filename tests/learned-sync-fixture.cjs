@@ -275,6 +275,193 @@ function registerLearnedSyncTests(fixture) {
       ({ id, kind }) => [id, kind],
     ), [['c2', 'set'], ['c1', 'update']]);
   });
+
+  test('toggling learned during a body write promotes the follow-up to learned-only without overwriting later remote body edits', async () => {
+    const h = await fixture();
+    let releaseBatch, enteredBatch, releaseUpdate, enteredUpdate;
+    const waitBatch = new Promise(resolve => { releaseBatch = resolve; });
+    const batchStarted = new Promise(resolve => { enteredBatch = resolve; });
+    const waitUpdate = new Promise(resolve => { releaseUpdate = resolve; });
+    const updateStarted = new Promise(resolve => { enteredUpdate = resolve; });
+    h.server.beforeBatch = async entries => {
+      if (entries.some(entry => entry.id === 'c1')) {
+        enteredBatch();
+        await waitBatch;
+      }
+    };
+    h.server.beforeUpdate = async id => {
+      if (id === 'c1') {
+        enteredUpdate();
+        await waitUpdate;
+      }
+    };
+    await h.edit('c1', '<p>local body</p>');
+    const sync = h.connect();
+    await Promise.race([batchStarted, sync]);
+    try {
+      await h.rate('c1', true);
+    } finally {
+      releaseBatch();
+    }
+    await Promise.race([updateStarted, sync]);
+    try {
+      // Simulate another device modifying the body right after the first write succeeded.
+      assert.equal(h.server.cards.get('c1').termRichText, '<p>local body</p>');
+      h.server.cards.set('c1', {
+        ...h.server.cards.get('c1'),
+        termRichText: '<p>other device latest body</p>',
+        contentVersion: 'other-device-v2',
+      });
+    } finally {
+      releaseUpdate();
+    }
+    await sync;
+
+    const cardWrites = h.server.writes.filter(write => write.id === 'c1');
+    assert.deepEqual(cardWrites.map(write => write.kind), ['set', 'update']);
+    assert.deepEqual(cardWrites[1].data, { learned: true });
+    for (const field of ['termRichText', 'definitionRichText', 'frontImageUrl', 'backImageUrl', 'imageUrl', 'order', 'contentVersion', 'baseContentVersion']) {
+      assert.equal(field in cardWrites[1].data, false);
+    }
+    assert.equal(h.server.cards.get('c1').termRichText, '<p>other device latest body</p>');
+    assert.equal(h.server.cards.get('c1').learned, true);
+    assert.equal(h.pending('c1'), false);
+    assert.equal(h.status(), 'synced');
+  });
+
+  test('failed or uncertain body write followed by learned toggle preserves both unconfirmed body and learned across restart', async () => {
+    const h = await fixture();
+    let release, entered;
+    const wait = new Promise(resolve => { release = resolve; });
+    const started = new Promise(resolve => { entered = resolve; });
+    h.server.beforeBatch = async entries => {
+      if (entries.some(entry => entry.id === 'c1')) {
+        entered();
+        await wait;
+        throw Object.assign(Error('network failure'), { code: 'unavailable' });
+      }
+    };
+    await h.edit('c1', '<p>unconfirmed body</p>');
+    const sync = h.connect();
+    await Promise.race([started, sync]);
+    try {
+      await h.rate('c1', true);
+    } finally {
+      release();
+    }
+    await sync;
+    assert.equal(h.status(), 'error');
+    assert.equal(h.pending('c1'), true);
+
+    await h.reload();
+    assert.equal(h.pending('c1'), true);
+    h.server.beforeBatch = async () => {};
+    await h.connect();
+
+    const cardWrites = h.server.writes.filter(write => write.id === 'c1');
+    assert.deepEqual(cardWrites.map(write => write.kind), ['set']);
+    assert.equal(h.server.cards.get('c1').termRichText, '<p>unconfirmed body</p>');
+    assert.equal(h.server.cards.get('c1').learned, true);
+    assert.equal(h.pending('c1'), false);
+  });
+
+  test('new body edit after sending the first request is not cleared or downgraded by the first ack', async () => {
+    const h = await fixture();
+    let release, entered;
+    const wait = new Promise(resolve => { release = resolve; });
+    const started = new Promise(resolve => { entered = resolve; });
+    let batchCount = 0;
+    h.server.beforeBatch = async entries => {
+      if (entries.some(entry => entry.id === 'c1') && ++batchCount === 1) {
+        entered();
+        await wait;
+      }
+    };
+    await h.edit('c1', '<p>body v1</p>');
+    const sync = h.connect();
+    await Promise.race([started, sync]);
+    try {
+      await h.rate('c1', true);
+      await h.edit('c1', '<p>body v2</p>');
+    } finally {
+      release();
+    }
+    await sync;
+
+    const cardWrites = h.server.writes.filter(write => write.id === 'c1');
+    assert.deepEqual(cardWrites.map(write => write.kind), ['set', 'set']);
+    assert.equal(cardWrites[0].data.termRichText, '<p>body v1</p>');
+    assert.equal(cardWrites[1].data.termRichText, '<p>body v2</p>');
+    assert.equal(cardWrites[1].data.learned, true);
+    assert.equal(h.server.cards.get('c1').termRichText, '<p>body v2</p>');
+    assert.equal(h.server.cards.get('c1').learned, true);
+    assert.equal(h.pending('c1'), false);
+  });
+
+  test('legacy queued body write and newly created card promote follow-up learned toggles and survive restart', async () => {
+    const h = await fixture({ legacy: true });
+    let releaseLegacy, enteredLegacy;
+    const waitLegacy = new Promise(resolve => { releaseLegacy = resolve; });
+    const legacyStarted = new Promise(resolve => { enteredLegacy = resolve; });
+    h.server.beforeBatch = async entries => {
+      if (entries.some(entry => entry.id === 'c3')) {
+        enteredLegacy();
+        await waitLegacy;
+      }
+    };
+    const syncLegacy = h.connect();
+    await Promise.race([legacyStarted, syncLegacy]);
+    try {
+      await h.rate('c3', true);
+    } finally {
+      releaseLegacy();
+    }
+    await syncLegacy;
+
+    const c3Writes = h.server.writes.filter(write => write.id === 'c3');
+    assert.deepEqual(c3Writes.map(write => write.kind), ['set', 'update']);
+    assert.deepEqual(c3Writes[1].data, { learned: true });
+    assert.equal(h.server.cards.get('c3').termRichText, '<p>legacy queued edit</p>');
+    assert.equal(h.server.cards.get('c3').learned, true);
+
+    // Also verify a newly created card (writeState: attempted -> existing) followed by learned + restart.
+    const newId = await h.create('<p>brand new card</p>');
+    let releaseNew, enteredNew;
+    const waitNew = new Promise(resolve => { releaseNew = resolve; });
+    const newStarted = new Promise(resolve => { enteredNew = resolve; });
+    h.server.beforeBatch = async entries => {
+      if (entries.some(entry => entry.id === newId)) {
+        enteredNew();
+        await waitNew;
+      }
+    };
+    h.server.beforeUpdate = async id => {
+      if (id === newId) throw Object.assign(Error('offline before learned update'), { code: 'unavailable' });
+    };
+    const syncNew = h.flush();
+    await Promise.race([newStarted, syncNew]);
+    try {
+      await h.rate(newId, true);
+    } finally {
+      releaseNew();
+    }
+    await syncNew;
+    assert.equal(h.status(), 'error');
+    assert.deepEqual(h.queued(`cards:${newId}`), { state: 'existing', deleted: false });
+
+    await h.reload();
+    h.server.beforeBatch = async () => {};
+    h.server.beforeUpdate = async () => {};
+    h.server.cards.set(newId, { ...h.server.cards.get(newId), termRichText: '<p>edited remotely after create</p>' });
+    await h.connect();
+
+    const newCardWrites = h.server.writes.filter(write => write.id === newId);
+    assert.deepEqual(newCardWrites.map(write => write.kind), ['set', 'update', 'update']);
+    assert.deepEqual(newCardWrites[2].data, { learned: true });
+    assert.equal(h.server.cards.get(newId).termRichText, '<p>edited remotely after create</p>');
+    assert.equal(h.server.cards.get(newId).learned, true);
+    assert.equal(h.pending(newId), false);
+  });
 }
 
 module.exports = { firestoreFixture, registerLearnedSyncTests, seedData };

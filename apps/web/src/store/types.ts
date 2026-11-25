@@ -9,6 +9,8 @@ export interface PendingSync {
   cardIds: string[];
   /** Subset of cardIds. Older snapshots omit this and retain full writes. */
   learnedOnlyCardIds?: string[];
+  /** Revision of the latest non-learned edit for cards queued as full writes. */
+  cardContentVersions?: Record<string, number>;
   /** Keyed by collection:id. An absent entry in a legacy queue is unknown. */
   /** Progress was committed; refresh cached inline images before migrating them. */
   refreshImageCardIds?: string[];

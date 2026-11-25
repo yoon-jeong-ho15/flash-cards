@@ -8,6 +8,8 @@ export interface Operation {
   kind: Kind;
   id: string;
   revision: number;
+  /** Revision of the latest non-learned edit for full card operations. */
+  contentRevision?: number;
   deleted: boolean;
   learnedOnly?: true;
   /** Missing on legacy operations, whose first transmission is unknown. */

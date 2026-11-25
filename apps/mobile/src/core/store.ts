@@ -79,13 +79,19 @@ export class FlashcardStore {
           const queued = outbox[key];
           const operation: Operation = { kind, id: item.id, revision, deleted: false,
             writeState: queued ? queued.writeState : previous ? 'existing' : 'unsent' };
-          if (kind === 'cards' && previous) {
-            const oldCard = previous as Card;
-            const card = item as Card;
-            const sameContent = (Object.keys({ ...oldCard, ...card }) as (keyof Card)[])
-              .every(key => key === 'learned' || Object.is(oldCard[key], card[key]));
-            if (sameContent && oldCard.learned === card.learned && cardChange !== 'learned') continue;
-            if (sameContent && (!queued || queued.learnedOnly)) operation.learnedOnly = true;
+          if (kind === 'cards') {
+            if (previous) {
+              const oldCard = previous as Card;
+              const card = item as Card;
+              const sameContent = (Object.keys({ ...oldCard, ...card }) as (keyof Card)[])
+                .every(key => key === 'learned' || Object.is(oldCard[key], card[key]));
+              if (sameContent && oldCard.learned === card.learned && cardChange !== 'learned') continue;
+              if (sameContent && (!queued || queued.learnedOnly)) operation.learnedOnly = true;
+              else if (sameContent && queued) operation.contentRevision = queued.contentRevision ?? queued.revision;
+              else operation.contentRevision = revision;
+            } else {
+              operation.contentRevision = revision;
+            }
           }
           outbox[key] = operation;
         }
@@ -290,12 +296,21 @@ export class FlashcardStore {
                   } else {
                     const id = `card-${this.uuid()}`;
                     cards = cards.map(card => card.id === operation.id ? { ...card, id, contentVersion: undefined } : card);
-                    outbox[`cards:${id}`] = { ...current, id, writeState: 'unsent' };
+                    outbox[`cards:${id}`] = { ...current, id, contentRevision: current.revision, writeState: 'unsent' };
                   }
                   delete outbox[key];
                 } else if (current.revision === operation.revision) delete outbox[key];
-                else if (current.writeState === 'attempted' && !operation.deleted) {
-                  outbox[key] = { ...current, writeState: 'existing' };
+                else {
+                  const sentContentRevision = operation.contentRevision ?? operation.revision;
+                  const currentContentRevision = current.contentRevision ?? current.revision;
+                  if (outcome === 'written' && operation.kind === 'cards' && !operation.deleted && !operation.learnedOnly &&
+                      !current.deleted && !current.learnedOnly && currentContentRevision === sentContentRevision) {
+                    const { contentRevision: _cleared, ...rest } = current;
+                    outbox[key] = { ...rest, learnedOnly: true,
+                      ...(current.writeState === 'attempted' ? { writeState: 'existing' as const } : {}) };
+                  } else if (current.writeState === 'attempted' && !operation.deleted) {
+                    outbox[key] = { ...current, writeState: 'existing' };
+                  }
                 }
               }
               await this.persist({ ...next, cards, outbox, cardConflicts }, uid);
