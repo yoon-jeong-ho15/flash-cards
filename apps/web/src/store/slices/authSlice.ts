@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { FlashcardStoreState, AuthSlice } from '../types';
 import { auth, googleProvider } from '../../lib/firebase';
-import { readAccount } from '../accountStorage';
+import { loadAccountView } from '../accountStorage';
 
 export const createAuthSlice: StateCreator<
   FlashcardStoreState,
@@ -19,7 +19,7 @@ export const createAuthSlice: StateCreator<
       set({ user, isAuthInitialized: true });
       return;
     }
-    const data = readAccount(user?.uid);
+    const data = loadAccountView(user?.uid);
     set({ ...data, user, isAuthInitialized: true, sessionVersion: get().sessionVersion + 1,
       isInitialSyncComplete: !user, syncStatus: 'offline', syncError: null, authError: null, lastSyncedAt: null });
   },

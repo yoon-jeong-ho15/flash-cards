@@ -1,4 +1,4 @@
-// Iris for actions, blue for decks, amber for folders, and teal for learning progress.
+// Iris for actions, blue for sets, amber for folders, and teal for learning progress.
 export const lightColors = {
   bg: "#F7F7FC",
   studyBg: "#E2DEFA",

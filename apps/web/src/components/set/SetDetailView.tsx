@@ -1,10 +1,10 @@
 import { CollectionLayoutToggle } from '../common/CollectionLayoutToggle';
 import { useCollectionLayout } from '../../hooks/useCollectionLayout';
 import React, { useState, useMemo, useDeferredValue } from 'react';
-import { selectDeckCards } from '../../store/cardSelectors';
+import { selectSetCards } from '../../store/cardSelectors';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
-import { DeckCardPreviewItem } from './DeckCardPreviewItem';
-import { MoveDeckModal } from './MoveDeckModal';
+import { SetCardPreviewItem } from './SetCardPreviewItem';
+import { MoveSetModal } from './MoveSetModal';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -29,28 +29,28 @@ import {
   Shuffle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { deckAccent } from '@/lib/learning';
+import { setAccent } from '@/lib/learning';
 
-interface DeckDetailViewProps {
-  deckId: string;
+interface SetDetailViewProps {
+  setId: string;
   onStartStudy: (id: string, shuffle?: boolean) => void;
-  onEditDeck: (id: string, focusCardId?: string) => void;
+  onEditSet: (id: string, focusCardId?: string) => void;
   onNavigateFolder: (id: string) => void;
   onBack: () => void;
 }
-export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
-  deckId,
+export const SetDetailView: React.FC<SetDetailViewProps> = ({
+  setId,
   onStartStudy,
-  onEditDeck,
+  onEditSet,
   onNavigateFolder,
   onBack,
 }) => {
   const { layout, collectionClassName } = useCollectionLayout();
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const folders = useFlashcardStore((state) => state.folders);
-  const deleteDeck = useFlashcardStore((state) => state.deleteDeck);
-  const resetDeckProgress = useFlashcardStore((state) => state.resetDeckProgress);
-  const deckCards = useFlashcardStore((state) => selectDeckCards(state, deckId));
+  const deleteSet = useFlashcardStore((state) => state.deleteSet);
+  const resetSetProgress = useFlashcardStore((state) => state.resetSetProgress);
+  const setCards = useFlashcardStore((state) => selectSetCards(state, setId));
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -58,13 +58,13 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
   const [cardFilter, setCardFilter] = useState<'all' | 'unlearned' | 'learned'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const query = useDeferredValue(searchQuery);
-  const deck = decks.find((item) => item.id === deckId);
-  const folder = folders.find((item) => item.id === deck?.folderId);
-  const learnedCount = deckCards.filter((card) => card.learned).length;
-  const progress = deckCards.length ? Math.round((learnedCount / deckCards.length) * 100) : 0;
+  const cardSet = sets.find((item) => item.id === setId);
+  const folder = folders.find((item) => item.id === cardSet?.folderId);
+  const learnedCount = setCards.filter((card) => card.learned).length;
+  const progress = setCards.length ? Math.round((learnedCount / setCards.length) * 100) : 0;
   const filteredCards = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('ko-KR');
-    return deckCards.filter(
+    return setCards.filter(
       (card) =>
         (cardFilter === 'all' || card.learned === (cardFilter === 'learned')) &&
         (!q ||
@@ -72,12 +72,12 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
             .toLocaleLowerCase('ko-KR')
             .includes(q))
     );
-  }, [deckCards, query, cardFilter]);
+  }, [setCards, query, cardFilter]);
   const indices = useMemo(
-    () => new Map(deckCards.map((card, index) => [card.id, index])),
-    [deckCards]
+    () => new Map(setCards.map((card, index) => [card.id, index])),
+    [setCards]
   );
-  if (!deck)
+  if (!cardSet)
     return (
       <div className="page-container">
         <EmptyState
@@ -87,9 +87,9 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
         />
       </div>
     );
-  const accent = deckAccent(deck.title);
+  const accent = setAccent(cardSet.title);
   const back = () => (folder ? onNavigateFolder(folder.id) : onBack());
-  const start = () => onStartStudy(deck.id, mode === 'shuffle');
+  const start = () => onStartStudy(cardSet.id, mode === 'shuffle');
   return (
     <div className="page-container space-y-7">
       <div className="flex items-center justify-between gap-3">
@@ -107,7 +107,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onEditDeck(deck.id)}
+            onClick={() => onEditSet(cardSet.id)}
             leftIcon={<Pencil className="h-4 w-4" />}
           >
             세트 편집
@@ -157,15 +157,15 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
               '미분류'
             )}
           </div>
-          <h1 className="page-title break-words">{deck.title}</h1>
-          {deck.description && (
+          <h1 className="page-title break-words">{cardSet.title}</h1>
+          {cardSet.description && (
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-              {deck.description}
+              {cardSet.description}
             </p>
           )}
           <p className="mt-3 text-xs text-muted-foreground">
-            카드 {deckCards.length}장 ·{' '}
-            {new Date(deck.updatedAt).toLocaleDateString('ko-KR', {
+            카드 {setCards.length}장 ·{' '}
+            {new Date(cardSet.updatedAt).toLocaleDateString('ko-KR', {
               month: 'long',
               day: 'numeric',
             })}{' '}
@@ -220,7 +220,7 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
             <Button
               size="lg"
               onClick={start}
-              disabled={!deckCards.length}
+              disabled={!setCards.length}
               className="mt-4 w-full xl:hidden"
               leftIcon={<Play className="h-4 w-4" />}
             >
@@ -231,13 +231,13 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
             <h2 className="text-lg font-bold">
               카드 둘러보기{' '}
               <span className="ml-1 text-sm font-medium text-muted-foreground">
-                {deckCards.length}
+                {setCards.length}
               </span>
             </h2>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onEditDeck(deck.id)}
+              onClick={() => onEditSet(cardSet.id)}
               leftIcon={<Plus className="h-4 w-4" />}
               className="text-xs text-primary"
             >
@@ -277,36 +277,36 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
           {!filteredCards.length ? (
             <EmptyState
               icon={<Layers className="h-7 w-7 text-primary" />}
-              title={deckCards.length ? '조건에 맞는 카드가 없어요' : '첫 카드를 채워보세요'}
+              title={setCards.length ? '조건에 맞는 카드가 없어요' : '첫 카드를 채워보세요'}
               description={
-                deckCards.length
+                setCards.length
                   ? '검색어나 학습 상태를 변경해 보세요.'
                   : '질문과 답을 입력하면 학습을 시작할 수 있어요.'
               }
               action={
                 <Button
                   onClick={
-                    deckCards.length
+                    setCards.length
                       ? () => {
                           setSearchQuery('');
                           setCardFilter('all');
                         }
-                      : () => onEditDeck(deck.id)
+                      : () => onEditSet(cardSet.id)
                   }
                 >
-                  {deckCards.length ? '검색 및 필터 초기화' : '카드 추가하기'}
+                  {setCards.length ? '검색 및 필터 초기화' : '카드 추가하기'}
                 </Button>
               }
             />
           ) : (
             <div className={collectionClassName}>
               {filteredCards.map((card) => (
-                <DeckCardPreviewItem
+                <SetCardPreviewItem
                   key={card.id}
                   layout={layout}
                   card={card}
                   index={indices.get(card.id) || 0}
-                  onEdit={(id) => onEditDeck(deck.id, id)}
+                  onEdit={(id) => onEditSet(cardSet.id, id)}
                 />
               ))}
             </div>
@@ -326,14 +326,14 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
               </div>
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">다시 볼 카드</dt>
-                <dd className="font-semibold">{deckCards.length - learnedCount}장</dd>
+                <dd className="font-semibold">{setCards.length - learnedCount}장</dd>
               </div>
             </dl>
             <Button
               size="lg"
               className="w-full"
               onClick={start}
-              disabled={!deckCards.length}
+              disabled={!setCards.length}
               leftIcon={<Play className="h-4 w-4" />}
               rightIcon={<ArrowRight className="h-4 w-4" />}
             >
@@ -351,30 +351,30 @@ export const DeckDetailView: React.FC<DeckDetailViewProps> = ({
         </aside>
       </div>
       {moving && (
-        <MoveDeckModal
-          deckId={deck.id}
-          currentFolderId={deck.folderId}
+        <MoveSetModal
+          setId={cardSet.id}
+          currentFolderId={cardSet.folderId}
           onClose={() => setMoving(false)}
         />
       )}
       <ConfirmModal
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => {
-          deleteDeck(deck.id);
+        onConfirm={async () => {
+          try { await deleteSet(cardSet.id); } catch { return; }
           setShowDeleteConfirm(false);
           back();
         }}
         title="학습 세트 삭제"
-        message={`'${deck.title}' 세트와 모든 카드를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`}
+        message={`'${cardSet.title}' 세트와 모든 카드를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`}
         confirmText="세트 삭제"
         isDanger
       />
       <ConfirmModal
         isOpen={showResetConfirm}
         onClose={() => setShowResetConfirm(false)}
-        onConfirm={() => {
-          resetDeckProgress(deck.id);
+        onConfirm={async () => {
+          try { await resetSetProgress(cardSet.id); } catch { return; }
           setShowResetConfirm(false);
         }}
         title="학습 진행도 초기화"

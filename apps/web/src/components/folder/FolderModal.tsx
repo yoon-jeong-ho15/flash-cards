@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { Folder } from 'lucide-react';
 import { Modal } from '../common/Modal';
@@ -20,21 +20,14 @@ export const FolderModal: React.FC<FolderModalProps> = ({
   const folders = useFlashcardStore(state => state.folders);
   const addFolder = useFlashcardStore(state => state.addFolder);
   const updateFolder = useFlashcardStore(state => state.updateFolder);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const initial = folders.find(folder => folder.id === folderId);
+  const [title, setTitle] = useState(initial?.title || '');
+  const [description, setDescription] = useState(initial?.description || '');
   const [error, setError] = useState<string | null>(null);
+  const saving = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (folderId) {
-      const existing = folders.find((f) => f.id === folderId);
-      if (existing) {
-        setTitle(existing.title);
-        setDescription(existing.description || '');
-      }
-    }
-  }, [folderId, folders]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
@@ -42,16 +35,26 @@ export const FolderModal: React.FC<FolderModalProps> = ({
       return;
     }
 
-    let savedId: string;
-    if (folderId) {
-      updateFolder(folderId, { title: trimmedTitle, description: description.trim() });
-      savedId = folderId;
-    } else {
-      savedId = addFolder(trimmedTitle, description.trim());
-    }
+    if (saving.current) return;
+    saving.current = true;
+    setIsSaving(true);
+    try {
+      let savedId: string;
+      if (folderId) {
+        await updateFolder(folderId, { title: trimmedTitle, description: description.trim() });
+        savedId = folderId;
+      } else {
+        savedId = await addFolder(trimmedTitle, description.trim());
+      }
 
-    if (onSaved) onSaved(savedId);
-    onClose();
+      if (onSaved) onSaved(savedId);
+      onClose();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '저장하지 못했습니다.');
+    } finally {
+      saving.current = false;
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -96,7 +99,7 @@ export const FolderModal: React.FC<FolderModalProps> = ({
           <Button variant="outline" size="sm" onClick={onClose}>
             취소
           </Button>
-          <Button type="submit" variant="default" size="sm">
+          <Button type="submit" disabled={isSaving} variant="default" size="sm">
             {folderId ? '수정 완료' : '폴더 만들기'}
           </Button>
         </div>

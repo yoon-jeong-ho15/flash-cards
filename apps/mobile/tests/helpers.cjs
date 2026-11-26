@@ -19,7 +19,7 @@ const user = uid => ({ uid, displayName: uid, email: null, photoURL: null });
 function harness(transport = {}, map = new Map()) {
   let count = 0;
   const storage = { getItem: async key => map.get(key) ?? null, setItem: async (key, value) => { map.set(key, value); }, removeItem: async key => { map.delete(key); } };
-  const cloud = { available: false, push: async () => {}, pull: async () => ({ folders: [], decks: [], cards: [] }), ...transport };
+  const cloud = { available: false, push: async () => {}, pull: async () => ({ folders: [], sets: [], cards: [] }), ...transport };
   return { store: new FlashcardStore(storage, cloud, () => String(++count)), storage, cloud, map };
 }
 const item = (term = '질문') => ({ termRichText: `<p>${term}</p>`, definitionRichText: '<p>답</p>' });

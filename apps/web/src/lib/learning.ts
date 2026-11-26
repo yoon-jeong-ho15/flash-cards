@@ -4,7 +4,7 @@ const accents = [
   { background: '#FFF0E7', color: '#BA7549' },
   { background: '#E9F0FF', color: '#4E79C9' },
 ];
-export const deckAccent = (title: string) =>
+export const setAccent = (title: string) =>
   accents[Array.from(title).reduce((sum, c) => sum + c.charCodeAt(0), 0) % accents.length];
 export const travelSample = [
   ['Where is the nearest station?', '가장 가까운 역이 어디인가요?'],

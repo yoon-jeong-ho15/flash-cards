@@ -2,6 +2,63 @@ import { RefObject, useEffect, useRef } from 'react';
 
 const openDialogs: symbol[] = [];
 let originalOverflow = '';
+const MAX_RECENT_FOCUSES = 16;
+const recentFocuses: Array<HTMLElement | null> = [];
+let focusTrackingInitialized = false;
+
+function pushRecentFocus(element: HTMLElement | null) {
+  if (element && recentFocuses[recentFocuses.length - 1] === element) return;
+  recentFocuses.push(element);
+  if (recentFocuses.length > MAX_RECENT_FOCUSES) {
+    recentFocuses.splice(0, recentFocuses.length - MAX_RECENT_FOCUSES);
+  }
+}
+
+function ensureFocusTracking() {
+  if (
+    focusTrackingInitialized ||
+    typeof document === 'undefined' ||
+    typeof document.addEventListener !== 'function'
+  ) {
+    return;
+  }
+  focusTrackingInitialized = true;
+  if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+    pushRecentFocus(document.activeElement);
+  }
+  document.addEventListener(
+    'focusin',
+    (event) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const related = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+      if (event.relatedTarget === null) {
+        pushRecentFocus(null);
+      } else if (related && related !== document.body) {
+        pushRecentFocus(related);
+      }
+      if (target && target !== document.body) {
+        pushRecentFocus(target);
+      }
+    },
+    true
+  );
+}
+
+ensureFocusTracking();
+
+function resolveRestoreTarget(dialog: HTMLElement): HTMLElement | null {
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (active && !dialog.contains(active)) {
+    return active === document.body ? null : active;
+  }
+  for (let i = recentFocuses.length - 1; i >= 0; i--) {
+    const candidate = recentFocuses[i];
+    if (candidate === null) return null;
+    if (!candidate.isConnected) continue;
+    if (!dialog.contains(candidate)) return candidate;
+  }
+  return null;
+}
 
 /** Shared focus and scroll handling for dialogs and the mobile navigation drawer. */
 export function useDialogFocus(
@@ -10,21 +67,16 @@ export function useDialogFocus(
   onClose?: () => void
 ) {
   const closeRef = useRef(onClose);
-  const restoreTargetRef = useRef<HTMLElement | null>(null);
-  const wasEnabledRef = useRef(false);
-  closeRef.current = onClose;
-  // Capture before React commits an autoFocus field inside the new dialog.
-  if (enabled && !wasEnabledRef.current) {
-    restoreTargetRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  }
-  wasEnabledRef.current = enabled;
   useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    ensureFocusTracking();
     if (!enabled) return;
     const dialog = ref.current;
     if (!dialog) return;
     const token = Symbol('dialog');
-    const previousFocus = restoreTargetRef.current;
+    const previousFocus = resolveRestoreTarget(dialog);
     if (!openDialogs.length) {
       originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';

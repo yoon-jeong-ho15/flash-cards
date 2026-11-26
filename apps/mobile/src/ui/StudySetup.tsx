@@ -1,12 +1,12 @@
 import { CollectionLayoutToggle } from './CollectionLayoutToggle';
-import { CollectionIcon, DeckSummary } from './CollectionSurface';
+import { CollectionIcon, SetSummary } from './CollectionSurface';
 import { StudyOrderModal } from './StudyOrderModal';
 import { useCollectionGrid } from './useCollectionGrid';
 import { useUI } from './theme';
 import { Text } from './Typography';
 import React, { useState } from "react";
 import { FlatList, Pressable, ScrollView, View } from 'react-native';
-import { folderCards, sortDecks } from "../core/content";
+import { folderCards, sortSets } from "../core/content";
 import { useStore } from "../platform/runtime";
 import { Button, Empty } from "./kit";
 import { Icon } from "./Icon";
@@ -22,14 +22,14 @@ export function StudyFolder({
   const { s } = useUI();
   const state = useStore();
   const grid = useCollectionGrid();
-  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const folder = state.folders.find((item) => item.id === folderId);
-  const decks = sortDecks(
-    state.decks.filter((deck) => deck.folderId === folderId),
-    state.preferences.folderDeckSort || "date-desc",
+  const sets = sortSets(
+    state.sets.filter((cardSet) => cardSet.folderId === folderId),
+    state.preferences.folderSetSort || "date-desc",
   );
-  const count = folderCards(state.cards, state.decks, folderId).length;
-  const selectedDeck = decks.find((deck) => deck.id === selectedDeckId);
+  const count = folderCards(state.cards, state.sets, folderId).length;
+  const selectedSet = sets.find((cardSet) => cardSet.id === selectedSetId);
   if (!folder)
     return (
       <View style={s.page}>
@@ -43,8 +43,8 @@ export function StudyFolder({
         key={grid.columns}
         numColumns={grid.columns}
         columnWrapperStyle={grid.columns > 1 ? grid.rowStyle : undefined}
-        data={decks}
-        keyExtractor={(deck) => deck.id}
+        data={sets}
+        keyExtractor={(cardSet) => cardSet.id}
         contentContainerStyle={[s.page, { gap: 0 }]}
         ListHeaderComponentStyle={{ marginBottom: 12 }}
         showsVerticalScrollIndicator={false}
@@ -58,7 +58,7 @@ export function StudyFolder({
                   <Text style={s.muted}>{folder.description}</Text>
                 )}
                 <Text style={s.label}>
-                  학습 세트 {decks.length}개 · 카드 {count}장
+                  학습 세트 {sets.length}개 · 카드 {count}장
                 </Text>
               </View>
             </View>
@@ -82,7 +82,7 @@ export function StudyFolder({
               />
             </View>
             <View style={[s.row, { justifyContent: 'space-between', flexWrap: 'nowrap' }]}>
-              <Text numberOfLines={1} style={[s.h2, { flex: 1, minWidth: 0 }]}>덱별 학습</Text>
+              <Text numberOfLines={1} style={[s.h2, { flex: 1, minWidth: 0 }]}>세트별 학습</Text>
               <CollectionLayoutToggle />
             </View>
           </View>
@@ -94,7 +94,7 @@ export function StudyFolder({
           />
         }
         renderItem={({ item }) => {
-          const cards = state.cards.filter((card) => card.deckId === item.id);
+          const cards = state.cards.filter((card) => card.setId === item.id);
           const learned = cards.filter((card) => card.learned).length;
           return (
             <View style={grid.itemStyle}>
@@ -104,23 +104,23 @@ export function StudyFolder({
                 accessibilityState={{ disabled: !cards.length }}
                 disabled={!cards.length}
                 style={{ flex: 1 }}
-                onPress={() => setSelectedDeckId(item.id)}
+                onPress={() => setSelectedSetId(item.id)}
               >
                 {({ pressed }) => (
-                  <DeckSummary hideDetails pressed={pressed} title={item.title} count={cards.length} learned={learned} />
+                  <SetSummary hideDetails pressed={pressed} title={item.title} count={cards.length} learned={learned} />
                 )}
               </Pressable>
             </View>
           );
         }}
       />
-      {selectedDeck && (
+      {selectedSet && (
         <StudyOrderModal
-          title={selectedDeck.title}
-          onClose={() => setSelectedDeckId(null)}
+          title={selectedSet.title}
+          onClose={() => setSelectedSetId(null)}
           onChoose={(shuffle) => {
-            setSelectedDeckId(null);
-            nav.go({ type: "study", deckId: selectedDeck.id, shuffle, onlyDifficult: false });
+            setSelectedSetId(null);
+            nav.go({ type: "study", setId: selectedSet.id, shuffle, onlyDifficult: false });
           }}
         />
       )}
@@ -128,22 +128,22 @@ export function StudyFolder({
   );
 }
 
-export function DeckStudyOptions({
-  deckId,
+export function SetStudyOptions({
+  setId,
   nav,
 }: {
-  deckId: string;
+  setId: string;
   nav: Navigation;
 }) {
   const { colors, s } = useUI();
-  const { decks, cards } = useStore();
+  const { sets, cards } = useStore();
   const [shuffle, setShuffle] = useState(false);
-  const deck = decks.find((item) => item.id === deckId);
-  const count = cards.filter((card) => card.deckId === deckId).length;
-  if (!deck)
+  const cardSet = sets.find((item) => item.id === setId);
+  const count = cards.filter((card) => card.setId === setId).length;
+  if (!cardSet)
     return (
       <View style={s.page}>
-        <Empty title="덱을 찾을 수 없어요" />
+        <Empty title="세트를 찾을 수 없어요" />
         <Button title="돌아가기" onPress={nav.back} />
       </View>
     );
@@ -154,9 +154,9 @@ export function DeckStudyOptions({
         showsVerticalScrollIndicator={false}
       >
         <View style={[s.row, { flexWrap: "nowrap", gap: 12 }]}>
-          <CollectionIcon kind="deck" size={40} />
+          <CollectionIcon kind="set" size={40} />
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={s.title}>{deck.title}</Text>
+            <Text style={s.title}>{cardSet.title}</Text>
             <Text style={s.muted}>전체 카드 {count}장</Text>
           </View>
         </View>
@@ -195,7 +195,7 @@ export function DeckStudyOptions({
         {!count && (
           <Empty
             title="학습할 카드가 없어요"
-            detail="라이브러리에서 이 덱에 카드를 추가해 주세요."
+            detail="라이브러리에서 이 세트에 카드를 추가해 주세요."
           />
         )}
       </ScrollView>
@@ -205,7 +205,7 @@ export function DeckStudyOptions({
           icon="play"
           disabled={!count}
           onPress={() =>
-            nav.go({ type: "study", deckId, shuffle, onlyDifficult: false })
+            nav.go({ type: "study", setId, shuffle, onlyDifficult: false })
           }
         />
       </View>

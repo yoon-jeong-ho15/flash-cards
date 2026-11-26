@@ -6,13 +6,13 @@ import { cn } from '@/lib/utils';
 export function BottomNavigation({
   currentView,
   onHome,
-  onDecks,
+  onSets,
   onFolders,
   onCreate,
 }: {
   currentView: ViewMode;
   onHome: () => void;
-  onDecks: () => void;
+  onSets: () => void;
   onFolders: () => void;
   onCreate: () => void;
 }) {
@@ -23,7 +23,7 @@ export function BottomNavigation({
         ? 'folders'
         : currentView.type === 'account'
           ? undefined
-          : 'decks';
+          : 'sets';
   return (
     <nav
       aria-label="빠른 탐색"
@@ -31,7 +31,7 @@ export function BottomNavigation({
     >
       {[
         { id: 'home', label: '홈', icon: Home, action: onHome },
-        { id: 'decks', label: '라이브러리', icon: Layers, action: onDecks },
+        { id: 'sets', label: '라이브러리', icon: Layers, action: onSets },
         { id: 'folders', label: '폴더', icon: Folder, action: onFolders },
         { id: 'create', label: '만들기', icon: Plus, action: onCreate },
       ].map((item) => (

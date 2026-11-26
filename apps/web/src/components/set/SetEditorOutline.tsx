@@ -3,10 +3,10 @@ import { Plus, Trash2, Image as ImageIcon, FileText, GripVertical } from 'lucide
 import { Reorder, useDragControls, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CardFormItem } from './DeckCardEditorItem';
+import { CardFormItem } from './SetCardEditorItem';
 import { cn } from '@/lib/utils';
 
-interface DeckEditorOutlineProps {
+interface SetEditorOutlineProps {
   cards: CardFormItem[];
   activeIndex?: number;
   activeCardId?: string;
@@ -34,7 +34,7 @@ function stripHtml(html?: string): string {
     .trim();
 }
 
-interface DeckEditorOutlineItemProps {
+interface SetEditorOutlineItemProps {
   card: CardFormItem;
   index: number;
   isCurrentActive: boolean;
@@ -44,7 +44,7 @@ interface DeckEditorOutlineItemProps {
   onGrabCardHandle?: (index: number, cardId?: string) => void;
 }
 
-const DeckEditorOutlineItem: React.FC<DeckEditorOutlineItemProps> = React.memo(
+const SetEditorOutlineItem: React.FC<SetEditorOutlineItemProps> = React.memo(
   ({ card, index, isCurrentActive, canRemove, onSelectCard, onRemoveCard, onGrabCardHandle }) => {
     const dragControls = useDragControls();
     const [isDragging, setIsDragging] = useState(false);
@@ -157,9 +157,9 @@ const DeckEditorOutlineItem: React.FC<DeckEditorOutlineItemProps> = React.memo(
   }
 );
 
-DeckEditorOutlineItem.displayName = 'DeckEditorOutlineItem';
+SetEditorOutlineItem.displayName = 'SetEditorOutlineItem';
 
-export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(
+export const SetEditorOutline: React.FC<SetEditorOutlineProps> = React.memo(
   ({
     cards,
     activeIndex,
@@ -229,7 +229,7 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(
                     (activeIndex !== undefined && activeIndex === index);
 
                   return (
-                    <DeckEditorOutlineItem
+                    <SetEditorOutlineItem
                       key={card.id || `outline-card-${index}`}
                       card={card}
                       index={index}
@@ -263,4 +263,4 @@ export const DeckEditorOutline: React.FC<DeckEditorOutlineProps> = React.memo(
   }
 );
 
-DeckEditorOutline.displayName = 'DeckEditorOutline';
+SetEditorOutline.displayName = 'SetEditorOutline';

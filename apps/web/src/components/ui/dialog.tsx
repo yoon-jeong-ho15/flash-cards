@@ -15,7 +15,8 @@ export interface DialogProps {
 export const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) => {
   const titleId = React.useId();
   const containerRef = React.useRef<HTMLDivElement>(null);
-  useDialogFocus(containerRef, open, () => onOpenChange?.(false));
+  const handleClose = React.useCallback(() => onOpenChange?.(false), [onOpenChange]);
+  useDialogFocus(containerRef, open, handleClose);
 
   if (!open) return null;
 

@@ -8,11 +8,11 @@ const routes = [
   { path: '/folders', id: 'all-folders' },
   { path: '/folders/:folderId', id: 'folder' },
   { path: '/folders/:folderId/study', id: 'folder-study' },
-  { path: '/decks', id: 'all-decks' },
-  { path: '/decks/new', id: 'new-deck' },
-  { path: '/decks/:deckId', id: 'deck' },
-  { path: '/decks/:deckId/edit', id: 'edit-deck' },
-  { path: '/decks/:deckId/study', id: 'study' },
+  { path: '/sets', id: 'all-sets' },
+  { path: '/sets/new', id: 'new-set' },
+  { path: '/sets/:setId', id: 'set' },
+  { path: '/sets/:setId/edit', id: 'edit-set' },
+  { path: '/sets/:setId/study', id: 'study' },
 ];
 
 // The URL is the only source of navigation state. ViewMode remains a UI adapter
@@ -20,19 +20,19 @@ const routes = [
 export function resolveView(pathname: string, search = ''): ViewMode | null {
   const match = matchRoutes(routes, pathname)?.[0];
   if (!match) return null;
-  const { deckId, folderId } = match.params;
+  const { setId, folderId } = match.params;
   const query = new URLSearchParams(search);
   switch (match.route.id) {
     case 'dashboard': return { type: 'dashboard' };
     case 'account': return { type: 'account' };
     case 'all-folders': return { type: 'all-folders' };
-    case 'all-decks': return { type: 'all-decks' };
+    case 'all-sets': return { type: 'all-sets' };
     case 'folder': return { type: 'folder', folderId: folderId! };
     case 'folder-study': return { type: 'folder-study', folderId: folderId! };
-    case 'deck': return { type: 'deck', deckId: deckId! };
-    case 'new-deck': return { type: 'edit-deck', folderId: query.get('folderId') || undefined };
-    case 'edit-deck': return { type: 'edit-deck', deckId: deckId!, focusCardId: query.get('cardId') || undefined };
-    case 'study': return { type: 'study', deckId: deckId!, onlyDifficult: query.get('onlyDifficult') === '1', shuffle: query.get('shuffle') === '1' };
+    case 'set': return { type: 'set', setId: setId! };
+    case 'new-set': return { type: 'edit-set', folderId: query.get('folderId') || undefined };
+    case 'edit-set': return { type: 'edit-set', setId: setId!, focusCardId: query.get('cardId') || undefined };
+    case 'study': return { type: 'study', setId: setId!, onlyDifficult: query.get('onlyDifficult') === '1', shuffle: query.get('shuffle') === '1' };
     default: return null;
   }
 }
@@ -44,17 +44,17 @@ export function viewUrl(view: ViewMode): string {
     case 'dashboard': return '/';
     case 'account': return '/account';
     case 'all-folders': return '/folders';
-    case 'all-decks': return '/decks';
+    case 'all-sets': return '/sets';
     case 'folder': return `/folders/${encodeURIComponent(view.folderId)}`;
     case 'folder-study': return `/folders/${encodeURIComponent(view.folderId)}/study`;
-    case 'deck': return `/decks/${encodeURIComponent(view.deckId)}`;
-    case 'edit-deck':
-      path = view.deckId ? `/decks/${encodeURIComponent(view.deckId)}/edit` : '/decks/new';
-      if (!view.deckId && view.folderId) query.set('folderId', view.folderId);
-      if (view.deckId && view.focusCardId) query.set('cardId', view.focusCardId);
+    case 'set': return `/sets/${encodeURIComponent(view.setId)}`;
+    case 'edit-set':
+      path = view.setId ? `/sets/${encodeURIComponent(view.setId)}/edit` : '/sets/new';
+      if (!view.setId && view.folderId) query.set('folderId', view.folderId);
+      if (view.setId && view.focusCardId) query.set('cardId', view.focusCardId);
       break;
     case 'study':
-      path = `/decks/${encodeURIComponent(view.deckId)}/study`;
+      path = `/sets/${encodeURIComponent(view.setId)}/study`;
       if (view.onlyDifficult) query.set('onlyDifficult', '1');
       if (view.shuffle) query.set('shuffle', '1');
       break;
@@ -63,16 +63,16 @@ export function viewUrl(view: ViewMode): string {
 }
 
 type RouteData = Pick<FlashcardStoreState,
-  'isAuthInitialized' | 'isInitialSyncComplete' | 'user' | 'syncStatus' | 'decks' | 'folders'>;
+  'isAuthInitialized' | 'isInitialSyncComplete' | 'user' | 'syncStatus' | 'sets' | 'folders'>;
 
 export function routeStatus(view: ViewMode | null, state: RouteData) {
   if (!state.isAuthInitialized) return 'loading';
   if (view?.type === 'account') return 'ready';
   if (state.user && !state.isInitialSyncComplete) return 'loading';
   if (!view) return 'not-found';
-  const deckId = 'deckId' in view ? view.deckId : undefined;
+  const setId = 'setId' in view ? view.setId : undefined;
   const folderId = 'folderId' in view ? view.folderId : undefined;
-  const missing = (deckId && !state.decks.some(deck => deck.id === deckId)) ||
+  const missing = (setId && !state.sets.some(set => set.id === setId)) ||
     (folderId && !state.folders.some(folder => folder.id === folderId));
   if (!missing) return 'ready';
   if (state.user && state.syncStatus === 'syncing') return 'loading';

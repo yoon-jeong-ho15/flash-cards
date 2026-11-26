@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { DeckCard } from '../deck/DeckCard';
+import { SetCard } from '../set/SetCard';
 import {
   ArrowRight,
   BookOpen,
@@ -15,45 +15,45 @@ import {
 import { travelSample } from '@/lib/learning';
 
 interface DashboardViewProps {
-  lastStudiedDeckId: string | null;
-  onCreateDeck: () => void;
+  lastStudiedSetId: string | null;
+  onCreateSet: () => void;
   onCreateFolder: () => void;
-  onNavigateDeck: (id: string) => void;
-  onNavigateAllDecks: () => void;
+  onNavigateSet: (id: string) => void;
+  onNavigateAllSets: () => void;
   onStartStudy: (id: string) => void;
   onNavigateFolder?: (id: string) => void;
   onNavigateAllFolders?: () => void;
 }
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onCreateFolder,
-  onNavigateDeck,
-  onNavigateAllDecks,
+  onNavigateSet,
+  onNavigateAllSets,
   onStartStudy,
   onNavigateFolder,
   onNavigateAllFolders,
 }) => {
   const { collectionClassName } = useCollectionLayout();
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const cards = useFlashcardStore((state) => state.cards);
   const folders = useFlashcardStore((state) => state.folders);
   const user = useFlashcardStore((state) => state.user);
-  const addDeck = useFlashcardStore((state) => state.addDeck);
+  const addSet = useFlashcardStore((state) => state.addSet);
   const summaries = useMemo(() => {
     const counts = new Map<string, { total: number; learned: number }>();
     cards.forEach((card) => {
-      const count = counts.get(card.deckId) || { total: 0, learned: 0 };
+      const count = counts.get(card.setId) || { total: 0, learned: 0 };
       count.total++;
       if (card.learned) count.learned++;
-      counts.set(card.deckId, count);
+      counts.set(card.setId, count);
     });
-    return [...decks]
+    return [...sets]
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .map((deck) => ({
-        deck,
-        total: counts.get(deck.id)?.total || 0,
-        learned: counts.get(deck.id)?.learned || 0,
+      .map((cardSet) => ({
+        set: cardSet,
+        total: counts.get(cardSet.id)?.total || 0,
+        learned: counts.get(cardSet.id)?.learned || 0,
       }));
-  }, [decks, cards]);
+  }, [sets, cards]);
   const total = summaries.reduce((sum, item) => sum + item.total, 0);
   const learned = summaries.reduce((sum, item) => sum + item.learned, 0);
   const progress = total ? Math.round((learned / total) * 100) : 0;
@@ -63,16 +63,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     day: 'numeric',
     weekday: 'long',
   }).format(new Date());
-  const createSample = () => {
+  const createSample = async () => {
     try {
-      const id = addDeck(
+      const id = await addSet(
         {
           title: '하루 6개, 여행 영어',
           description: '여행에서 바로 쓰는 표현으로 첫 학습을 시작해 보세요.',
         },
         travelSample
       );
-      onNavigateDeck(id);
+      onNavigateSet(id);
     } catch {
       window.alert('샘플을 저장하지 못했어요. 브라우저 저장 공간을 확인해 주세요.');
     }
@@ -133,7 +133,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
         <div className="grid grid-cols-3 border-t border-border pt-5 text-center">
           {[
-            [decks.length, '학습 세트'],
+            [sets.length, '학습 세트'],
             [total, '전체 카드'],
             [unfinished.length, '학습 중'],
           ].map(([value, label]) => (
@@ -158,7 +158,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               variant="ghost"
               size="sm"
               aria-label="최근 학습 세트 전체 보기"
-              onClick={onNavigateAllDecks}
+              onClick={onNavigateAllSets}
               rightIcon={<ArrowRight className="h-4 w-4" />}
               className="text-xs text-primary"
             >
@@ -168,14 +168,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
         {summaries.length ? (
           <div className={collectionClassName}>
-            {summaries.slice(0, 6).map(({ deck, total: count, learned: known }) => (
-              <DeckCard
-                key={deck.id}
-                deck={deck}
+            {summaries.slice(0, 6).map(({ set: cardSet, total: count, learned: known }) => (
+              <SetCard
+                key={cardSet.id}
+                set={cardSet}
                 cardsCount={count}
                 learnedCount={known}
-                parentFolderTitle={folders.find((folder) => folder.id === deck.folderId)?.title}
-                onNavigateDeck={onNavigateDeck}
+                parentFolderTitle={folders.find((folder) => folder.id === cardSet.folderId)?.title}
+                onNavigateSet={onNavigateSet}
                 onStartStudy={onStartStudy}
               />
             ))}
@@ -232,7 +232,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold">{folder.title}</span>
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  세트 {decks.filter((deck) => deck.folderId === folder.id).length}개
+                  세트 {sets.filter((cardSet) => cardSet.folderId === folder.id).length}개
                 </span>
               </span>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />

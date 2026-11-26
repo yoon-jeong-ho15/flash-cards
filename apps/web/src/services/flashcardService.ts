@@ -1,8 +1,12 @@
+import type { RecordSyncWrites, SyncWriteResult } from '@flashcards/types';
 import {
   collection,
+  type DocumentData,
   doc,
-  getDocs,
+  documentId,
+  getDocsFromServer,
   setDoc,
+  updateDoc,
   deleteDoc,
   writeBatch,
   query,
@@ -10,9 +14,43 @@ import {
   WriteBatch,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../lib/firebase';
-import { Card, Deck, Folder } from '../types';
+import { Card, CardSet, Folder } from '../types';
 import { AccountData, PendingSync } from '../store/types';
 import { collections } from '../store/syncQueue';
+import { bounded, cardDataImages, validateDocument } from './imageSync';
+
+// Wait for acknowledgements in this runtime. The timeout does not cancel a submitted
+// Firestore write. Card content also requires a server-checked base version.
+let outstandingCommit: Promise<void> = Promise.resolve();
+async function commitWrite(write: () => Promise<void>, active: () => boolean): Promise<void> {
+  await bounded(outstandingCommit);
+  if (!active()) throw new Error('Authentication session changed');
+  const work = write();
+  outstandingCommit = work.catch(() => {});
+  await bounded(work);
+}
+
+function commitBatch(batch: WriteBatch, active: () => boolean = () => true) {
+  return commitWrite(() => batch.commit(), active);
+}
+
+async function writeExisting(name: string, id: string, userId: string, active: () => boolean, write: () => Promise<void>) {
+  try {
+    await write();
+    return true;
+  } catch (error) {
+    if (!active()) throw new Error('Authentication session changed');
+    const code = (error as { code?: string }).code;
+    if (code === 'not-found') return false;
+    if (code !== 'permission-denied') throw error;
+
+    // Missing documents can also be denied by the ownership rule. Confirm on the server.
+    const owned = await getDocsFromServer(query(collection(db!, name), where('userId', '==', userId), where(documentId(), '==', id)));
+    if (!active()) throw new Error('Authentication session changed');
+    if (!owned.empty) throw error;
+    return false;
+  }
+}
 
 /**
  * Firestore의 WriteBatch 500개 제한을 안전하게 처리하기 위한 청크 커밋 헬퍼
@@ -26,7 +64,7 @@ async function commitInBatches(
     const chunk = operations.slice(i, i + CHUNK_SIZE);
     const batch = writeBatch(db);
     chunk.forEach((op) => op(batch));
-    await batch.commit();
+    await commitBatch(batch);
   }
 }
 
@@ -44,48 +82,155 @@ export function sortCardsByOrder(cards: Card[]): Card[] {
   });
 }
 
+function readCard(id: string, data: DocumentData, userId: string): Card {
+  return {
+    id: data.id || id,
+    userId: data.userId || userId,
+    setId: data.setId || '',
+    order: data.order !== undefined ? Number(data.order) : undefined,
+    termRichText: data.termRichText || '',
+    definitionRichText: data.definitionRichText || '',
+    frontImageUrl: data.frontImageUrl || undefined,
+    backImageUrl: data.backImageUrl || data.imageUrl || undefined,
+    imageUrl: data.imageUrl || data.backImageUrl || undefined,
+    learned: Boolean(data.learned),
+    ...(typeof data.contentVersion === 'string' && { contentVersion: data.contentVersion }),
+  };
+}
+
 export const flashcardService = {
+  waitForWrites: () => bounded(outstandingCommit),
   async commitChanges(snapshot: AccountData & { pendingSync: PendingSync }, userId: string,
-    isActive: () => boolean): Promise<void> {
+    isActive: () => boolean, record?: RecordSyncWrites): Promise<string[]> {
     if (!db || !isFirebaseConfigured) throw new Error('Firebase is unavailable');
-    const operations: Array<(batch: WriteBatch) => void> = [];
-    const names = { folders: 'flashcard_folders', decks: 'flashcard_decks', cards: 'flashcard_cards' };
-    for (const [kind, upserts, deletes] of collections) {
-      for (const id of snapshot.pendingSync[deletes]) {
-        operations.push(batch => batch.delete(doc(db!, names[kind], id)));
-      }
-      const ids = new Set(snapshot.pendingSync[upserts]);
-      for (const item of snapshot[kind]) {
-        if (!ids.has(item.id)) continue;
-        const data: Record<string, unknown> = { ...item, userId };
-        // Explicit nulls clear optional fields in merge writes.
-        for (const key of kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) {
-          data[key] ??= null;
+    const operations: Array<{
+      key: string;
+      apply: (batch: WriteBatch) => void;
+      card?: { id: string; base: string | null; version: string };
+    }> = [];
+    const learnedOnlyIds = new Set(snapshot.pendingSync.learnedOnlyCardIds);
+    const individualWrites: Array<() => Promise<SyncWriteResult>> = [];
+    const missingDeletes: string[] = [];
+    const active = () => isActive() && auth?.currentUser?.uid === userId;
+    const names = { folders: 'flashcard_folders', sets: 'flashcard_sets', cards: 'flashcard_cards' };
+    const notSent = new Set(collections.flatMap(([kind, upserts]) =>
+      snapshot.pendingSync[upserts].map(id => `${kind}:${id}`)));
+    try {
+      for (const [kind, upserts, deletes] of collections) {
+        for (const id of snapshot.pendingSync[deletes]) {
+          // A missing delete must not reject a batch of unrelated upserts.
+          individualWrites.push(async () => {
+            const deleted = await writeExisting(names[kind], id, userId, active,
+              () => deleteDoc(doc(db!, names[kind], id)));
+            if (!deleted) missingDeletes.push(`${kind}:${id}`);
+            return { key: `${kind}:${id}`, outcome: deleted ? 'written' : 'missing' };
+          });
         }
-        for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
-        operations.push(batch => batch.set(doc(db!, names[kind], item.id), data, { merge: true }));
+        const ids = new Set(snapshot.pendingSync[upserts]);
+        for (const item of snapshot[kind]) {
+          if (!ids.has(item.id)) continue;
+          if (kind === 'cards' && learnedOnlyIds.has(item.id)) {
+            individualWrites.push(async () => {
+              const exists = await writeExisting(names.cards, item.id, userId, active,
+                () => updateDoc(doc(db!, names.cards, item.id), { learned: Boolean((item as Card).learned) }));
+              return { key: `cards:${item.id}`, outcome: exists ? 'written' : 'missing' };
+            });
+            continue;
+          }
+          if (kind === 'cards' && cardDataImages(item as Card).length) {
+            throw new Error('이미지 업로드가 완료되지 않았습니다. 연결을 확인한 후 다시 동기화해 주세요. 원본은 보관됩니다.');
+          }
+          const data: Record<string, unknown> = { ...item, userId };
+          // Explicit nulls clear optional fields in merge writes.
+          for (const key of kind === 'cards' ? ['frontImageUrl', 'backImageUrl', 'imageUrl'] : ['description']) {
+            data[key] ??= null;
+          }
+          for (const key of Object.keys(data)) if (data[key] === undefined) data[key] = null;
+          const card = kind === 'cards' ? {
+            id: item.id, base: (item as Card).contentVersion ?? null, version: crypto.randomUUID(),
+          } : undefined;
+          if (card) {
+            data.baseContentVersion = card.base;
+            data.contentVersion = card.version;
+          }
+          validateDocument(data);
+          operations.push({ key: `${kind}:${item.id}`, card,
+            apply: batch => batch.set(doc(db!, names[kind], item.id), data, { merge: true }) });
+        }
       }
+      for (let i = 0; i < operations.length; i += 400) {
+        if (!active()) throw new Error('Authentication session changed');
+        const batch = writeBatch(db);
+        const chunk = operations.slice(i, i + 400);
+        chunk.forEach(operation => operation.apply(batch));
+        const keys = chunk.map(operation => operation.key);
+        let reconciled = false;
+        await commitWrite(async () => {
+          for (const key of keys) notSent.delete(key);
+          try {
+            await batch.commit();
+          } catch (error) {
+            const code = (error as { code?: string }).code;
+            if (code === 'permission-denied' || code === 'invalid-argument' || code === 'failed-precondition') {
+              const results = await Promise.all(chunk.map(async ({ key, card }): Promise<SyncWriteResult> => {
+                if (code === 'permission-denied' && card && active()) {
+                  const owned = await getDocsFromServer(query(collection(db!, names.cards),
+                    where('userId', '==', userId), where(documentId(), '==', card.id)));
+                  const remote = owned.docs[0];
+                  if (remote) {
+                    const serverCard = readCard(remote.id, remote.data(), userId);
+                    if ((serverCard.contentVersion ?? null) !== card.base) {
+                      return { key, outcome: 'conflict', serverCard };
+                    }
+                  } else if (card.base !== null) return { key, outcome: 'missing' };
+                }
+                return { key, outcome: 'not-sent' };
+              }));
+              await record?.(results);
+              // The rejected batch was atomic. Let the sync loop reload the outbox
+              // before sending any unaffected operations.
+              reconciled = Boolean(record && results.some(result => result.outcome !== 'not-sent'));
+              if (reconciled) return;
+            }
+            throw error;
+          }
+          await record?.(chunk.map(({ key, card }) => ({ key, outcome: 'written', contentVersion: card?.version })));
+        }, active);
+        if (reconciled) {
+          if (notSent.size) await record?.(Array.from(notSent, key => ({ key, outcome: 'not-sent' })));
+          return missingDeletes;
+        }
+      }
+    } catch (error) {
+      if (notSent.size) await record?.(Array.from(notSent, key => ({ key, outcome: 'not-sent' })));
+      throw error;
     }
-    for (let i = 0; i < operations.length; i += 400) {
-      if (!isActive() || auth?.currentUser?.uid !== userId) throw new Error('Authentication session changed');
-      const batch = writeBatch(db);
-      operations.slice(i, i + 400).forEach(operation => operation(batch));
-      await batch.commit();
+    for (let i = 0; i < individualWrites.length; i += 25) {
+      const chunk = individualWrites.slice(i, i + 25);
+      await commitWrite(async () => {
+        const results = await Promise.allSettled(chunk.map(async write => {
+          const result = await write();
+          await record?.([result]);
+        }));
+        const failure = results.find(result => result.status === 'rejected');
+        if (failure) throw failure.reason;
+      }, active);
     }
+    return missingDeletes;
   },
 
   /**
-   * Firebase Firestore로부터 현재 사용자의 모든 폴더, 덱, 카드 데이터를 조회합니다.
+   * Firebase Firestore로부터 현재 사용자의 모든 폴더, 세트, 카드 데이터를 조회합니다.
    */
-  async fetchAllData(userId: string): Promise<{ folders: Folder[]; decks: Deck[]; cards: Card[] } | null> {
-    if (!db || !isFirebaseConfigured || !userId) return null;
+  async fetchAllData(userId: string): Promise<AccountData> {
+    if (!db || !isFirebaseConfigured || !userId) throw new Error('Firebase is unavailable');
 
     try {
-      const [foldersSnap, decksSnap, cardsSnap] = await Promise.all([
-        getDocs(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
-        getDocs(query(collection(db, 'flashcard_decks'), where('userId', '==', userId))),
-        getDocs(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
-      ]);
+      const [foldersSnap, setsSnap, cardsSnap] = await bounded(Promise.all([
+        getDocsFromServer(query(collection(db, 'flashcard_folders'), where('userId', '==', userId))),
+        getDocsFromServer(query(collection(db, 'flashcard_sets'), where('userId', '==', userId))),
+        getDocsFromServer(query(collection(db, 'flashcard_cards'), where('userId', '==', userId))),
+      ]));
 
       const folders: Folder[] = foldersSnap.docs
         .map((d) => {
@@ -100,7 +245,7 @@ export const flashcardService = {
         })
         .sort((a, b) => b.createdAt - a.createdAt);
 
-      const decks: Deck[] = decksSnap.docs
+      const sets: CardSet[] = setsSnap.docs
         .map((d) => {
           const data = d.data();
           return {
@@ -115,48 +260,34 @@ export const flashcardService = {
         })
         .sort((a, b) => b.updatedAt - a.updatedAt);
 
-      const rawCards: Card[] = cardsSnap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: data.id || d.id,
-          userId: data.userId || userId,
-          deckId: data.deckId || '',
-          order: data.order !== undefined ? Number(data.order) : undefined,
-          termRichText: data.termRichText || '',
-          definitionRichText: data.definitionRichText || '',
-          frontImageUrl: data.frontImageUrl || undefined,
-          backImageUrl: data.backImageUrl || data.imageUrl || undefined,
-          imageUrl: data.imageUrl || data.backImageUrl || undefined,
-          learned: Boolean(data.learned),
-        };
-      });
+      const rawCards = cardsSnap.docs.map(d => readCard(d.id, d.data(), userId));
 
-      // 1. 현재 존재하는 유효 덱 ID 목록 확인
-      const validDeckIds = new Set(decks.map((d) => d.id));
+      // 1. 현재 존재하는 유효 세트 ID 목록 확인
+      const validSetIds = new Set(sets.map((s) => s.id));
       const validRawCards: Card[] = [];
       const orphanCardIds: string[] = [];
 
       rawCards.forEach((c) => {
-        if (validDeckIds.has(c.deckId)) {
+        if (validSetIds.has(c.setId)) {
           validRawCards.push(c);
         } else {
           orphanCardIds.push(c.id);
         }
       });
 
-      // 3. 유효 덱의 카드들만 덱별로 묶어서 정렬하고, order가 없는 카드는 index를 부여
-      const cardsByDeck = new Map<string, Card[]>();
+      // 3. 유효 세트의 카드들만 세트별로 묶어서 정렬하고, order가 없는 카드는 index를 부여
+      const cardsBySet = new Map<string, Card[]>();
       validRawCards.forEach((c) => {
-        const list = cardsByDeck.get(c.deckId) || [];
+        const list = cardsBySet.get(c.setId) || [];
         list.push(c);
-        cardsByDeck.set(c.deckId, list);
+        cardsBySet.set(c.setId, list);
       });
 
       const cards: Card[] = [];
       const cardsToMigrate: Card[] = [];
 
-      cardsByDeck.forEach((deckCardsList) => {
-        const sorted = sortCardsByOrder(deckCardsList);
+      cardsBySet.forEach((setCardsList) => {
+        const sorted = sortCardsByOrder(setCardsList);
         sorted.forEach((card, index) => {
           if (card.order === undefined) {
             const updatedCard = { ...card, order: index };
@@ -168,7 +299,7 @@ export const flashcardService = {
         });
       });
 
-      return { folders, decks, cards };
+      return { folders, sets, cards };
     } catch (err) {
       console.error('Firebase Firestore 데이터 조회 실패:', err);
       throw err;
@@ -236,43 +367,43 @@ export const flashcardService = {
   },
 
   /**
-   * 단건 덱 저장
+   * 단건 세트 저장
    */
-  async upsertDeck(deck: Deck, userId: string): Promise<void> {
+  async upsertSet(cardSet: CardSet, userId: string): Promise<void> {
     if (!db || !isFirebaseConfigured || !userId) return;
-    const docRef = doc(db, 'flashcard_decks', deck.id);
+    const docRef = doc(db, 'flashcard_sets', cardSet.id);
     await setDoc(
       docRef,
       {
-        id: deck.id,
+        id: cardSet.id,
         userId,
-        folderId: deck.folderId || null,
-        title: deck.title,
-        description: deck.description || null,
-        createdAt: deck.createdAt,
-        updatedAt: deck.updatedAt,
+        folderId: cardSet.folderId || null,
+        title: cardSet.title,
+        description: cardSet.description || null,
+        createdAt: cardSet.createdAt,
+        updatedAt: cardSet.updatedAt,
       },
       { merge: true }
     );
   },
 
   /**
-   * 복수 덱 일괄 저장
+   * 복수 세트 일괄 저장
    */
-  async batchUpsertDecks(decks: Deck[], userId: string): Promise<void> {
-    if (!db || !isFirebaseConfigured || !userId || decks.length === 0) return;
-    const ops = decks.map((d) => (batch: WriteBatch) => {
-      const docRef = doc(db!, 'flashcard_decks', d.id);
+  async batchUpsertSets(sets: CardSet[], userId: string): Promise<void> {
+    if (!db || !isFirebaseConfigured || !userId || sets.length === 0) return;
+    const ops = sets.map((s) => (batch: WriteBatch) => {
+      const docRef = doc(db!, 'flashcard_sets', s.id);
       batch.set(
         docRef,
         {
-          id: d.id,
+          id: s.id,
           userId,
-          folderId: d.folderId || null,
-          title: d.title,
-          description: d.description || null,
-          createdAt: d.createdAt,
-          updatedAt: d.updatedAt,
+          folderId: s.folderId || null,
+          title: s.title,
+          description: s.description || null,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
         },
         { merge: true }
       );
@@ -281,124 +412,22 @@ export const flashcardService = {
   },
 
   /**
-   * 덱 단건 삭제
+   * 세트 단건 삭제
    */
-  async deleteDeck(deckId: string): Promise<void> {
+  async deleteSet(setId: string): Promise<void> {
     if (!db || !isFirebaseConfigured) return;
-    await deleteDoc(doc(db, 'flashcard_decks', deckId));
+    await deleteDoc(doc(db, 'flashcard_sets', setId));
   },
 
   /**
-   * 복수 덱 일괄 삭제
+   * 복수 세트 일괄 삭제
    */
-  async batchDeleteDecks(deckIds: string[]): Promise<void> {
-    if (!db || !isFirebaseConfigured || deckIds.length === 0) return;
-    const ops = deckIds.map((id) => (batch: WriteBatch) => {
-      batch.delete(doc(db!, 'flashcard_decks', id));
+  async batchDeleteSets(setIds: string[]): Promise<void> {
+    if (!db || !isFirebaseConfigured || setIds.length === 0) return;
+    const ops = setIds.map((id) => (batch: WriteBatch) => {
+      batch.delete(doc(db!, 'flashcard_sets', id));
     });
     await commitInBatches(ops);
-  },
-
-  /**
-   * 카드 단건 저장
-   */
-  async upsertCard(card: Card, userId: string): Promise<void> {
-    if (!db || !isFirebaseConfigured || !userId) return;
-    const docRef = doc(db, 'flashcard_cards', card.id);
-    await setDoc(
-      docRef,
-      {
-        id: card.id,
-        userId,
-        deckId: card.deckId,
-        order: card.order !== undefined ? card.order : 0,
-        termRichText: card.termRichText,
-        definitionRichText: card.definitionRichText,
-        frontImageUrl: card.frontImageUrl || null,
-        backImageUrl: card.backImageUrl || card.imageUrl || null,
-        imageUrl: card.imageUrl || card.backImageUrl || null,
-        learned: card.learned,
-      },
-      { merge: true }
-    );
-  },
-
-  /**
-   * 복수 카드 일괄 저장
-   */
-  async batchUpsertCards(cards: Card[], userId: string): Promise<void> {
-    if (!db || !isFirebaseConfigured || !userId || cards.length === 0) return;
-    const ops = cards.map((c, index) => (batch: WriteBatch) => {
-      const docRef = doc(db!, 'flashcard_cards', c.id);
-      batch.set(
-        docRef,
-        {
-          id: c.id,
-          userId,
-          deckId: c.deckId,
-          order: c.order !== undefined ? c.order : index,
-          termRichText: c.termRichText,
-          definitionRichText: c.definitionRichText,
-          frontImageUrl: c.frontImageUrl || null,
-          backImageUrl: c.backImageUrl || c.imageUrl || null,
-          imageUrl: c.imageUrl || c.backImageUrl || null,
-          learned: c.learned,
-        },
-        { merge: true }
-      );
-    });
-    await commitInBatches(ops);
-  },
-
-  /**
-   * 특정 덱의 카드 일괄 동기화 (기존 덱 카드와 비교하여 삭제 및 upsert)
-   */
-  async syncDeckCards(deckId: string, cards: Card[], userId: string): Promise<void> {
-    if (!db || !isFirebaseConfigured || !userId) return;
-
-    try {
-      const cardsRef = collection(db, 'flashcard_cards');
-      const q = query(cardsRef, where('deckId', '==', deckId), where('userId', '==', userId));
-      const existingSnap = await getDocs(q);
-
-      const targetCardIds = new Set(cards.map((c) => c.id));
-      const ops: Array<(batch: WriteBatch) => void> = [];
-
-      // 1. 기존 카드 중 대상 목록에 없는 카드 삭제
-      existingSnap.docs.forEach((docSnap) => {
-        if (!targetCardIds.has(docSnap.id)) {
-          ops.push((batch: WriteBatch) => batch.delete(docSnap.ref));
-        }
-      });
-
-      // 2. 전달된 카드들 저장
-      cards.forEach((c, index) => {
-        ops.push((batch: WriteBatch) => {
-          const docRef = doc(db!, 'flashcard_cards', c.id);
-          batch.set(
-            docRef,
-            {
-              id: c.id,
-              userId,
-              deckId: deckId,
-              order: c.order !== undefined ? c.order : index,
-              termRichText: c.termRichText,
-              definitionRichText: c.definitionRichText,
-              frontImageUrl: c.frontImageUrl || null,
-              backImageUrl: c.backImageUrl || c.imageUrl || null,
-              imageUrl: c.imageUrl || c.backImageUrl || null,
-              learned: c.learned,
-            },
-            { merge: true }
-          );
-        });
-      });
-
-      await commitInBatches(ops);
-    } catch (err) {
-      console.error('덱 카드 일괄 동기화 실패:', err);
-      throw err;
-    }
   },
 
   /**

@@ -5,16 +5,28 @@ const ts = require('typescript');
 const { createRequire } = require('node:module');
 const webRequire = createRequire(path.resolve(__dirname, '../package.json'));
 const root = path.resolve(__dirname, '../src');
-const emptyPending = { folderIds: [], deckIds: [], cardIds: [], deletedFolderIds: [], deletedDeckIds: [], deletedCardIds: [] };
+const emptyPending = { folderIds: [], setIds: [], cardIds: [], deletedFolderIds: [], deletedSetIds: [], deletedCardIds: [] };
 const card = { termRichText: 'old', definitionRichText: 'answer', learned: true };
-const seed = { card, data: () => ({ folders: [], decks: [{id:'d1',title:'deck',createdAt:1,updatedAt:1}],
-  cards: ['c1','c2'].map(id => ({...card,id,deckId:'d1'})) }) };
+const seed = { card, data: () => ({ folders: [], sets: [{id:'s1',title:'set',createdAt:1,updatedAt:1}],
+  cards: ['c1','c2'].map(id => ({...card,id,setId:'s1'})) }) };
 seed.snapshot = () => ({ ...seed.data(), pendingSync: emptyPending, pendingVersions: {}, mutationRevision: 0 });
 
+const locksByStorage = new WeakMap();
+function locksFor(storage) {
+  if (!locksByStorage.has(storage)) {
+    const tails = new Map();
+    locksByStorage.set(storage, { request(name, work) {
+      const next = (tails.get(name) || Promise.resolve()).then(work);
+      tails.set(name, next.catch(() => {}));
+      return next;
+    } });
+  }
+  return locksByStorage.get(storage);
+}
 function createHarness(service = {}, storage = new Map(), overrides = {}) {
-  const navigator = { onLine: true };
+  const navigator = { onLine: true, locks: locksFor(storage) };
   const localStorage = { getItem: key => storage.get(key) ?? null, setItem: (key,value) => storage.set(key,value), removeItem: key => storage.delete(key) };
-  const transport = { commitChanges: async () => {}, fetchAllData: async () => null, sortCardsByOrder: cards => [...cards].sort((a,b)=>(a.order??0)-(b.order??0)), ...service };
+  const transport = { commitChanges: async () => {}, fetchAllData: async () => { throw Error('No server response configured'); }, sortCardsByOrder: cards => [...cards].sort((a,b)=>(a.order??0)-(b.order??0)), ...service };
   const mocks = {
     [path.join(root,'lib/firebase.ts')]: {isFirebaseConfigured:true,auth:{},googleProvider:{}},
     [path.join(root,'services/flashcardService.ts')]: {flashcardService:transport,sortCardsByOrder:transport.sortCardsByOrder},
@@ -24,7 +36,7 @@ function createHarness(service = {}, storage = new Map(), overrides = {}) {
   };
   const cache = new Map();
   const window = { addEventListener() {}, removeEventListener() {} };
-  const context = vm.createContext({console, window, navigator, localStorage, crypto:require('node:crypto').webcrypto, setTimeout,clearTimeout});
+  const context = vm.createContext({console, window, navigator, localStorage, TextEncoder, atob, crypto:require('node:crypto').webcrypto, setTimeout,clearTimeout});
   function load(file) {
     if (mocks[file]) return mocks[file];
     if (cache.has(file)) return cache.get(file).exports;

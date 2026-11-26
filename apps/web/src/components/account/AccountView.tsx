@@ -1,3 +1,4 @@
+import { countPending } from '../../store/syncQueue';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowDownToLine, ArrowRight, RefreshCw, UserRound } from 'lucide-react';
@@ -9,6 +10,7 @@ import { Button, buttonVariants } from '../ui/button';
 import { Card } from '../ui/card';
 
 const syncLabels = {
+  pending: '삭제 확인 대기 중',
   synced: '동기화 완료',
   syncing: '자료를 동기화하고 있어요',
   offline: '동기화 연결 대기 중',
@@ -19,10 +21,11 @@ export function AccountView() {
   const user = useFlashcardStore((state) => state.user);
   const login = useFlashcardStore((state) => state.loginWithGoogle);
   const logout = useFlashcardStore((state) => state.logout);
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const folders = useFlashcardStore((state) => state.folders);
   const cards = useFlashcardStore((state) => state.cards);
   const syncStatus = useFlashcardStore((state) => state.syncStatus);
+  const syncError = useFlashcardStore(state => state.syncError);
   const lastSyncedAt = useFlashcardStore((state) => state.lastSyncedAt);
   const pendingSync = useFlashcardStore((state) => state.pendingSync);
   const sync = useFlashcardStore((state) => state.initCloudSync);
@@ -31,7 +34,7 @@ export function AccountView() {
   const [exportStatus, setExportStatus] = useState<'idle' | 'started' | 'error'>('idle');
   const learned = useMemo(() => cards.filter((card) => card.learned).length, [cards]);
   const progress = cards.length ? Math.round((learned / cards.length) * 100) : 0;
-  const pendingCount = Object.values(pendingSync).reduce((sum, ids) => sum + ids.length, 0);
+  const pendingCount = countPending(pendingSync);
 
   const handleAccountAction = async () => {
     setIsPending(true);
@@ -89,13 +92,13 @@ export function AccountView() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 id="learning-summary" className="text-sm font-semibold">나의 학습 현황</h2>
               <div className="flex gap-4 text-xs font-medium text-primary">
-                <Link to={viewUrl({ type: 'all-decks' })} className="py-2 hover:underline">학습 세트 보기</Link>
+                <Link to={viewUrl({ type: 'all-sets' })} className="py-2 hover:underline">학습 세트 보기</Link>
                 <Link to={viewUrl({ type: 'all-folders' })} className="py-2 hover:underline">폴더 보기</Link>
               </div>
             </div>
             <dl className="grid grid-cols-2 gap-5 sm:grid-cols-4">
               {([
-                ['학습 세트', decks.length], ['폴더', folders.length],
+                ['학습 세트', sets.length], ['폴더', folders.length],
                 ['전체 카드', cards.length], ['기억한 카드', learned],
               ] as const).map(([label, value]) => (
                 <div key={label}>
@@ -116,8 +119,8 @@ export function AccountView() {
                   : '첫 학습 세트를 만들고 학습을 시작해 보세요.'}
               </p>
             </div>
-            {!decks.length && (
-              <Link to={viewUrl({ type: 'edit-deck' })} className={buttonVariants({ size: 'sm' })}>
+            {!sets.length && (
+              <Link to={viewUrl({ type: 'edit-set' })} className={buttonVariants({ size: 'sm' })}>
                 새 학습 세트 만들기 <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>
             )}
@@ -137,7 +140,7 @@ export function AccountView() {
                     <p className="text-xs leading-5 text-muted-foreground">
                       {lastSyncedAt ? `최근 동기화 · ${new Date(lastSyncedAt).toLocaleString('ko-KR')}` : '아직 동기화 기록이 없어요.'}
                     </p>
-                    {syncStatus === 'error' && <p role="alert" className="text-sm text-destructive">인터넷 연결을 확인한 뒤 다시 시도해 주세요.</p>}
+                    {syncStatus === 'error' && <p role="alert" className="text-sm text-destructive">{syncError || '인터넷 연결을 확인한 뒤 다시 시도해 주세요.'} 원본과 대기 작업은 이 브라우저에 보관됩니다.</p>}
                   </>
                 ) : (
                   <p className="max-w-md text-xs leading-5 text-muted-foreground">Google로 로그인하면 계정에 저장한 자료를 다른 기기에서도 볼 수 있어요. 게스트 자료는 이 브라우저에 보관돼요.</p>

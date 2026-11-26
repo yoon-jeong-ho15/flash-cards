@@ -1,10 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { createHarness, seed } = require('./support.cjs');
+const { createHarness, seed, tick } = require('./support.cjs');
 const { hookRenderer } = require('./hookRenderer.cjs');
 
-test('study shortcuts preserve native button activation, select inputs, and handled modal events', () => {
+test('study shortcuts preserve native button activation, select inputs, and handled modal events', async () => {
   const h = createHarness();
   h.navigator.onLine = false;
   const snapshot = seed.snapshot();
@@ -33,7 +33,7 @@ test('study shortcuts preserve native button activation, select inputs, and hand
   const onExit = () => {
     exits++;
   };
-  const render = () => renderer.render(() => useStudySession({ deckId: 'd1', onExit }));
+  const render = () => renderer.render(() => useStudySession({ setId: 's1', onExit }));
   const dispatch = (key, tagName = 'DIV', extra = {}) =>
     keydown({
       key,
@@ -67,16 +67,46 @@ test('study shortcuts preserve native button activation, select inputs, and hand
     dispatch(' ');
     assert.equal(render().isFlipped, true, 'Space flips the study card');
     dispatch('Enter');
+    await tick();
     assert.equal(
       h.store.getState().cards[0].learned,
       true,
       'study Enter shortcut still marks the card'
     );
+    dispatch('1', 'DIV', { preventDefault: () => assert.fail('1 must be ignored') });
+    await tick();
+    assert.equal(render().currentIndex, 0);
+    assert.equal(h.store.getState().cards[0].learned, true);
     dispatch('ArrowRight');
     assert.equal(render().currentIndex, 1, 'study navigation shortcut still works');
-    dispatch('2');
-    assert.equal(render().isFinishModalOpen, true, 'rating the last card opens the result');
-    assert.equal(h.store.getState().cards[1].learned, true);
+    dispatch('2', 'DIV', { preventDefault: () => assert.fail('2 must be ignored') });
+    await tick();
+    assert.equal(render().isFinishModalOpen, false);
+    assert.equal(h.store.getState().cards[1].learned, false);
+
+    // Unused aliases are removed and modal Escape priority stays intact.
+    const session = render();
+    assert.equal('handleUnknown' in session, false);
+    assert.equal('handleKnow' in session, false);
+
+    dispatch('e');
+    assert.equal(render().isEditModalOpen, true);
+    render().openDeleteModal();
+    render();
+    dispatch('Escape');
+    assert.equal(render().isDeleteModalOpen, false);
+    assert.equal(render().isEditModalOpen, true);
+
+    render().openFinishModal();
+    render();
+    dispatch('Escape');
+    assert.equal(render().isFinishModalOpen, false);
+    assert.equal(render().isEditModalOpen, true);
+
+    dispatch('Escape');
+    assert.equal(render().isEditModalOpen, false);
+    dispatch('Escape');
+    assert.equal(exits, 1);
   } finally {
     renderer.cleanup();
   }

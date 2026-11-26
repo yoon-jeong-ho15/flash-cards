@@ -1,29 +1,29 @@
 import React from 'react';
 import { Check, RotateCcw, ArrowLeft, ArrowRight } from 'lucide-react';
-import { Deck } from '../../types';
+import { CardSet } from '../../types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 interface StudyCompleteProps {
-  deck: Pick<Deck, 'title'>;
-  sourceType?: '덱' | '폴더';
+  set: Pick<CardSet, 'title'>;
+  sourceType?: '세트' | '폴더';
   totalCards: number;
   difficultCardsCount: number;
   roundCount: number;
   onRestartAll: () => void;
   onRestartDifficultOnly: () => void;
-  onBackToDeck: () => void;
+  onBackToSet: () => void;
   onContinue?: () => void;
 }
 export const StudyComplete: React.FC<StudyCompleteProps> = ({
-  deck,
-  sourceType = '덱',
+  set: cardSet,
+  sourceType = '세트',
   totalCards,
   difficultCardsCount,
   roundCount,
   onRestartAll,
   onRestartDifficultOnly,
-  onBackToDeck,
+  onBackToSet,
   onContinue,
 }) => {
   const known = Math.max(0, totalCards - difficultCardsCount);
@@ -34,7 +34,7 @@ export const StudyComplete: React.FC<StudyCompleteProps> = ({
         <Check className="h-12 w-12" />
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        {deck.title} · {roundCount}회차
+        {cardSet.title} · {roundCount}회차
       </p>
       <h1 className="page-title">
         {difficultCardsCount ? '오늘도 한 걸음 나아갔어요' : '모두 기억했어요!'}
@@ -91,7 +91,7 @@ export const StudyComplete: React.FC<StudyCompleteProps> = ({
         <Button
           variant="outline"
           className="w-full"
-          onClick={onBackToDeck}
+          onClick={onBackToSet}
           leftIcon={<ArrowLeft className="h-4 w-4" />}
         >
           {sourceType === '폴더' ? '폴더' : '학습 세트'}로 돌아가기

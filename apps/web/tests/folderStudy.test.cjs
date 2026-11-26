@@ -12,16 +12,16 @@ function folderSession() {
     title: id,
     createdAt: 1,
   }));
-  snapshot.decks = [
-    { id: 'd1', folderId: 'f1', title: 'First', createdAt: 1, updatedAt: 1 },
-    { id: 'd2', folderId: 'f1', title: 'Second', createdAt: 1, updatedAt: 1 },
-    { id: 'd3', folderId: 'f2', title: 'Other', createdAt: 1, updatedAt: 1 },
+  snapshot.sets = [
+    { id: 's1', folderId: 'f1', title: 'First', createdAt: 1, updatedAt: 1 },
+    { id: 's2', folderId: 'f1', title: 'Second', createdAt: 1, updatedAt: 1 },
+    { id: 's3', folderId: 'f2', title: 'Other', createdAt: 1, updatedAt: 1 },
     { id: 'root', title: 'Root', createdAt: 1, updatedAt: 1 },
   ];
-  snapshot.cards = ['d1', 'd1', 'd2', 'd3', 'root', 'missing'].map((deckId, order) => ({
+  snapshot.cards = ['s1', 's1', 's2', 's3', 'root', 'missing'].map((setId, order) => ({
     ...seed.card,
     id: `c${order + 1}`,
-    deckId,
+    setId,
     order,
     learned: order === 0,
   }));
@@ -48,14 +48,14 @@ function folderSession() {
 
 const ids = (cards) => Array.from(cards, (card) => card.id);
 
-test('folder study shuffles every card across its decks exactly once, including learned cards', () => {
+test('folder study shuffles every card across its sets exactly once, including learned cards', async () => {
   const h = folderSession();
   try {
     const session = h.render();
     assert.equal(session.folder.id, 'f1');
     assert.equal(session.isShuffle, true);
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c3', 'c1']);
-    assert.equal(session.totalInitialCount, 3);
+    assert.equal(session.sessionCardCount, 3);
     assert.equal(session.masteredCount, 1);
     assert.equal(session.remainingUnlearnedCount, 2);
     assert.equal(h.store.getState().cards[0].learned, true);
@@ -65,15 +65,15 @@ test('folder study shuffles every card across its decks exactly once, including 
   }
 });
 
-test('folder progress and edits update the original deck without resetting the shuffled session', () => {
+test('folder progress and edits update the original set without resetting the shuffled session', async () => {
   const h = folderSession();
   try {
     let session = h.render();
     session.handleNext();
     session = h.render();
     assert.equal(session.currentCard.id, 'c3');
-    session.handleToggleKnow();
-    session.handleUpdateCurrentCard({
+    await session.handleToggleKnow();
+    await session.handleUpdateCurrentCard({
       termRichText: 'edited',
       definitionRichText: 'new answer',
     });
@@ -81,29 +81,98 @@ test('folder progress and edits update the original deck without resetting the s
     assert.equal(session.currentIndex, 1);
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c3', 'c1']);
     const edited = h.store.getState().cards.find((card) => card.id === 'c3');
-    assert.equal(edited.deckId, 'd2');
+    assert.equal(edited.setId, 's2');
     assert.equal(edited.learned, true);
     assert.equal(session.currentCard.termRichText, 'edited');
     assert.equal(session.remainingUnlearnedCount, 1);
-    session.handleDeleteCurrentCard();
+    await session.handleDeleteCurrentCard();
     session = h.render();
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c1']);
+    assert.equal(session.sessionCardCount, 2);
     assert.equal(session.currentCard.id, 'c1');
     assert.equal(
       h.store.getState().cards.some((card) => card.id === 'c3'),
       false
     );
-    assert.equal(h.store.getState().cards.find((card) => card.id === 'c4').deckId, 'd3');
+    assert.equal(h.store.getState().cards.find((card) => card.id === 'c4').setId, 's3');
   } finally {
     h.cleanup();
   }
 });
 
-test('folder restarts filter unlearned cards or reshuffle all cards from the current folder', () => {
+test('study edit form saves image-only cards and rejects completely empty cards', async (t) => {
+  for (const imageField of ['frontImageUrl', 'backImageUrl', 'imageUrl', null]) {
+    await t.test(imageField ?? 'no image', async () => {
+      const h = folderSession();
+      const modalRenderer = hookRenderer();
+      try {
+        const imageUrl = 'https://example.com/attachment.png';
+        const accountKey = 'flashcards_account_v1:guest';
+        let session = h.render();
+        const { id } = session.currentCard;
+        if (imageField) {
+          await h.store.getState().updateCard(id, { [imageField]: imageUrl });
+        }
+        session.openEditModal();
+        session = h.render();
+
+        const loader = createHarness({}, h.storage, {
+          react: modalRenderer.react,
+          'lucide-react': { Pencil: 'svg', Save: 'svg', Trash2: 'svg', AlertCircle: 'svg' },
+          '@/components/ui/button': { Button: 'button' },
+          '@/components/ui/badge': { Badge: 'span' },
+          [path.join(h.root, 'components/common/Modal.tsx')]: { Modal: 'dialog' },
+          [path.join(h.root, 'components/editor/RichTextEditor.tsx')]: { RichTextEditor: 'textarea' },
+        });
+        const { EditCardModal } = loader.load(path.join(h.root, 'components/study/EditCardModal.tsx'));
+        const { CardEditorFields } = loader.load(path.join(h.root, 'components/editor/CardEditorFields.tsx'));
+        let save;
+        const renderForm = () => modalRenderer.render(() =>
+          EditCardModal({
+            isOpen: session.isEditModalOpen,
+            onClose: session.closeEditModal,
+            card: session.currentCard,
+            onSave: (updates) => { save = session.handleUpdateCurrentCard(updates); },
+          })
+        ).props.children;
+
+        const fields = renderForm().props.children.find((child) => child?.type === CardEditorFields);
+        const [frontEditor, backEditor] = CardEditorFields(fields.props).props.children.map(
+          (field) => field.props.children[1]
+        );
+        frontEditor.props.onChange('<p>&nbsp;</p>');
+        backEditor.props.onChange('<p><br></p>');
+
+        const before = h.storage.get(accountKey);
+        renderForm().props.onSubmit({ preventDefault() {} });
+        if (imageField) {
+          assert.ok(save);
+          await save;
+          const { cards } = JSON.parse(h.storage.get(accountKey));
+          const saved = cards.find((card) => card.id === id);
+          assert.equal(saved.termRichText, '<p>&nbsp;</p>');
+          assert.equal(saved.definitionRichText, '<p><br></p>');
+          assert.equal(saved[imageField], imageUrl);
+          assert.equal(h.render().isEditModalOpen, false);
+        } else {
+          assert.equal(save, undefined);
+          assert.equal(h.storage.get(accountKey), before);
+          assert.ok(renderForm().props.children[0]);
+          assert.equal(h.render().isEditModalOpen, true);
+        }
+      } finally {
+        modalRenderer.cleanup();
+        h.cleanup();
+      }
+    });
+  }
+});
+
+test('folder restarts filter unlearned cards or reshuffle all cards from the current folder', async () => {
   const h = folderSession();
   try {
     let session = h.render();
-    session.handleToggleKnow(); // c2
+    await session.handleToggleKnow(); // c2
     session = h.render();
     session.handleRestartUnlearned();
     session = h.render();
@@ -111,7 +180,7 @@ test('folder restarts filter unlearned cards or reshuffle all cards from the cur
     assert.equal(session.round, 2);
     session.handleNext();
     assert.equal(h.render().isFinishModalOpen, true);
-    h.store.getState().moveDeck('d2', 'f2');
+    await h.store.getState().moveSet('s2', 'f2');
     session.handleRestartAll();
     session = h.render();
     assert.deepEqual(ids(session.sessionCards), ['c2', 'c1']);
@@ -123,11 +192,11 @@ test('folder restarts filter unlearned cards or reshuffle all cards from the cur
   }
 });
 
-test('empty folders wait for cards and changing the folder initializes a fresh session', () => {
+test('empty folders wait for cards and changing the folder initializes a fresh session', async () => {
   const h = folderSession();
   try {
     assert.equal(h.render({ folderId: 'empty' }).sessionCards.length, 0);
-    h.store.getState().moveDeck('d2', 'empty');
+    await h.store.getState().moveSet('s2', 'empty');
     assert.deepEqual(ids(h.render({ folderId: 'empty' }).sessionCards), ['c3']);
     const second = h.render({ folderId: 'f2' });
     assert.deepEqual(ids(second.sessionCards), ['c4']);
@@ -138,38 +207,39 @@ test('empty folders wait for cards and changing the folder initializes a fresh s
   }
 });
 
-test('deck study still starts with only that deck’s unlearned cards in order', () => {
+test('set study still starts with only that set’s unlearned cards in order', async () => {
   const h = folderSession();
   try {
-    const session = h.render({ deckId: 'd1' });
+    const session = h.render({ setId: 's1' });
     assert.equal(session.isShuffle, false);
     assert.deepEqual(ids(session.sessionCards), ['c2']);
     session.handleRestartAll();
-    assert.deepEqual(ids(h.render({ deckId: 'd1' }).sessionCards), ['c1', 'c2']);
+    assert.deepEqual(ids(h.render({ setId: 's1' }).sessionCards), ['c1', 'c2']);
   } finally {
     h.cleanup();
   }
 });
 
-test('rating stores the answer once before advancing and supports correcting a finished card', () => {
+test('rating stores the answer once before advancing and supports correcting a finished card', async () => {
   const h = folderSession();
   try {
     let session = h.render();
     assert.equal(session.currentCard.id, 'c2');
-    session.handleRate(true);
-    session.handleRate(true);
+    const firstRating = session.handleRate(true);
+    await session.handleRate(true);
+    await firstRating;
     session = h.render();
     assert.equal(session.currentIndex, 1, 'a repeated callback must not skip the next card');
     assert.equal(h.store.getState().cards.find((card) => card.id === 'c2').learned, true);
-    session.handleRate(false);
+    await session.handleRate(false);
     session = h.render();
     assert.equal(session.currentCard.id, 'c1');
-    session.handleRate(true);
+    await session.handleRate(true);
     session = h.render();
     assert.equal(session.isFinishModalOpen, true);
     session.closeFinishModal();
     session = h.render();
-    session.handleRate(false);
+    await session.handleRate(false);
     assert.equal(h.store.getState().cards.find((card) => card.id === 'c1').learned, false);
     assert.equal(h.render().isFinishModalOpen, true);
   } finally {
@@ -177,25 +247,25 @@ test('rating stores the answer once before advancing and supports correcting a f
   }
 });
 
-test('a mastered deck starts a full review and restarts accept ratings again', () => {
+test('a mastered set starts a full review and restarts accept ratings again', async () => {
   const h = folderSession();
   try {
-    h.store.getState().setCardLearned('c2', true);
-    let session = h.render({ deckId: 'd1' });
+    await h.store.getState().setCardLearned('c2', true);
+    let session = h.render({ setId: 's1' });
     assert.deepEqual(ids(session.sessionCards), ['c1', 'c2']);
-    session.handleRate(false);
+    await session.handleRate(false);
     assert.equal(h.store.getState().cards.find((card) => card.id === 'c1').learned, false);
-    session = h.render({ deckId: 'd1' });
+    session = h.render({ setId: 's1' });
     session.handleRestartAll();
-    session = h.render({ deckId: 'd1' });
-    session.handleRate(true);
+    session = h.render({ setId: 's1' });
+    await session.handleRate(true);
     assert.equal(h.store.getState().cards.find((card) => card.id === 'c1').learned, true);
   } finally {
     h.cleanup();
   }
 });
 
-test('a failed rating write does not advance or lock out a retry', () => {
+test('a failed rating write does not advance or lock out a retry', async () => {
   const h = folderSession();
   try {
     let session = h.render();
@@ -203,12 +273,13 @@ test('a failed rating write does not advance or lock out a retry', () => {
     h.localStorage.setItem = () => {
       throw Error('quota');
     };
-    assert.throws(() => session.handleRate(true));
+    await session.handleRate(true);
+    assert.match(h.store.getState().storageError, /quota/);
     session = h.render();
     assert.equal(session.currentIndex, 0);
     assert.equal(session.currentCard.learned, false);
     h.localStorage.setItem = write;
-    session.handleRate(true);
+    await session.handleRate(true);
     assert.equal(h.render().currentIndex, 1);
   } finally {
     h.cleanup();

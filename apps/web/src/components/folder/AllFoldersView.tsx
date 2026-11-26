@@ -13,18 +13,18 @@ interface AllFoldersViewProps {
   onNavigateFolder: (folderId: string) => void;
   onCreateFolder: () => void;
   onBack: () => void;
-  onNavigateAllDecks?: () => void;
+  onNavigateAllSets?: () => void;
 }
 
 export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
   onNavigateFolder,
   onCreateFolder,
   onBack,
-  onNavigateAllDecks,
+  onNavigateAllSets,
 }) => {
   const folders = useFlashcardStore((state) => state.folders);
   const { layout, collectionClassName } = useCollectionLayout();
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const [searchQuery, setSearchQuery] = useState('');
 
   // 폴더 검색 필터링 및 이름순 정렬
@@ -48,7 +48,7 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
     <div className="page-container space-y-6">
       <LibraryHeader
         active="folders"
-        onDecks={onNavigateAllDecks || onBack}
+        onSets={onNavigateAllSets || onBack}
         onCreate={onCreateFolder}
       />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -93,7 +93,7 @@ export const AllFoldersView: React.FC<AllFoldersViewProps> = ({
             <FolderCard
               key={folder.id}
               folder={folder}
-              decksCount={decks.filter((deck) => deck.folderId === folder.id).length}
+              setsCount={sets.filter((cardSet) => cardSet.folderId === folder.id).length}
               onClick={() => onNavigateFolder(folder.id)}
             />
           ))}

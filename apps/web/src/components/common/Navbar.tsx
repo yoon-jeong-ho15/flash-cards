@@ -15,7 +15,7 @@ import { Modal } from './Modal';
 import { Button } from '@/components/ui/button';
 
 const viewLabels: Partial<Record<ViewMode['type'], string>> = {
-  'all-decks': '학습 세트',
+  'all-sets': '학습 세트',
   'all-folders': '폴더',
   account: '마이페이지',
 };
@@ -35,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateFolder,
 }) => {
   const folders = useFlashcardStore((state) => state.folders);
-  const decks = useFlashcardStore((state) => state.decks);
+  const sets = useFlashcardStore((state) => state.sets);
   const user = useFlashcardStore((state) => state.user);
   const syncStatus = useFlashcardStore((state) => state.syncStatus);
   const login = useFlashcardStore((state) => state.loginWithGoogle);
@@ -43,15 +43,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   const authError = useFlashcardStore((state) => state.authError);
   const setAuthError = useFlashcardStore((state) => state.setAuthError);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const deck =
-    'deckId' in currentView ? decks.find((item) => item.id === currentView.deckId) : undefined;
-  const folderId = 'folderId' in currentView ? currentView.folderId : deck?.folderId;
+  const cardSet =
+    'setId' in currentView ? sets.find((item) => item.id === currentView.setId) : undefined;
+  const folderId = 'folderId' in currentView ? currentView.folderId : cardSet?.folderId;
   const folder = folders.find((item) => item.id === folderId);
   const label =
     viewLabels[currentView.type] ??
-    (currentView.type === 'edit-deck' && !currentView.deckId
+    (currentView.type === 'edit-set' && !currentView.setId
       ? '새 학습 세트'
-      : deck?.title || folder?.title || '학습 홈');
+      : cardSet?.title || folder?.title || '학습 홈');
   const handleLogin = async () => {
     setIsLoggingIn(true);
     try {
@@ -85,7 +85,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Home className="h-4 w-4" />
             </button>
             <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-            {folder && deck && (
+            {folder && cardSet && (
               <>
                 <button
                   type="button"
@@ -133,6 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? '동기화 완료'
                   : syncStatus === 'syncing'
                     ? '동기화 중'
+                    : syncStatus === 'pending' ? '삭제 확인 대기 중'
                     : syncStatus === 'error'
                       ? '동기화 재시도'
                       : '오프라인'}

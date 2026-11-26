@@ -1,7 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { store } from './runtime';
-import { uploadImage } from './cloud';
 
 export async function chooseImage(camera = false): Promise<string | null> {
   const session = store.getState().session;
@@ -23,11 +22,7 @@ export async function chooseImage(camera = false): Promise<string | null> {
   if (compressed.base64.length > 500000) throw new Error('이미지가 너무 큽니다. 잘라내거나 작은 사진을 선택해 주세요.');
   if (session !== store.getState().session) throw new Error('계정이 변경되었습니다. 다시 첨부해 주세요.');
   const data = `data:image/jpeg;base64,${compressed.base64}`;
-  const { user, online } = store.getState();
-  if (user && online) {
-    try { return await uploadImage(data, user.uid, () => session === store.getState().session); }
-    catch { /* Durable data URL is uploaded by the outbox on the next successful sync. */ }
-  }
+  // Store the original first; the outbox uploads it and preserves an offline copy.
   if (session !== store.getState().session) throw new Error('계정이 변경되었습니다.');
   return data;
 }

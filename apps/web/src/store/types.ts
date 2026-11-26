@@ -1,22 +1,31 @@
-import { Card, Deck, Folder, UserProfile } from '../types';
+import { Card, CardSet, Folder, UserProfile } from '../types';
 
-export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
+export type SyncStatus = 'pending' | 'synced' | 'syncing' | 'offline' | 'error';
+export type WriteState = 'unsent' | 'attempted' | 'existing';
 
 export interface PendingSync {
   folderIds: string[];
-  deckIds: string[];
+  setIds: string[];
   cardIds: string[];
+  /** Subset of cardIds. Older snapshots omit this and retain full writes. */
+  learnedOnlyCardIds?: string[];
+  /** Revision of the latest non-learned edit for cards queued as full writes. */
+  cardContentVersions?: Record<string, number>;
+  /** Keyed by collection:id. An absent entry in a legacy queue is unknown. */
+  /** Progress was committed; refresh cached inline images before migrating them. */
+  refreshImageCardIds?: string[];
+  writeStates?: Record<string, WriteState>;
   deletedFolderIds: string[];
-  deletedDeckIds: string[];
+  deletedSetIds: string[];
   deletedCardIds: string[];
 }
 
 export const EMPTY_PENDING_SYNC: PendingSync = {
   folderIds: [],
-  deckIds: [],
+  setIds: [],
   cardIds: [],
   deletedFolderIds: [],
-  deletedDeckIds: [],
+  deletedSetIds: [],
   deletedCardIds: [],
 };
 
@@ -31,13 +40,15 @@ export interface AuthSlice {
   resetUserData: () => void;
 }
 
-export type AccountData = Pick<FlashcardStoreState, 'folders' | 'decks' | 'cards'>;
+export type AccountData = Pick<FlashcardStoreState, 'folders' | 'sets' | 'cards'>;
 export interface SyncSlice {
   isInitialSyncComplete: boolean;
   sessionVersion: number;
   mutationRevision: number;
   pendingVersions: Record<string, number>;
-  applyChanges: (change: (state: FlashcardStoreState) => Partial<AccountData>) => void;
+  applyChanges: (change: (state: FlashcardStoreState) => Partial<AccountData>, cardChange?: 'learned') => Promise<void>;
+  refreshAccount: () => Promise<void>;
+  storageError: string | null;
   syncStatus: SyncStatus;
   lastSyncedAt: number | null;
   syncError: string | null;
@@ -49,15 +60,15 @@ export interface SyncSlice {
 
 export interface FolderSlice {
   folders: Folder[];
-  addFolder: (title: string, description?: string) => string;
-  updateFolder: (id: string, updates: Partial<Pick<Folder, 'title' | 'description'>>) => void;
-  deleteFolder: (id: string, deleteContainedDecks?: boolean) => void;
+  addFolder: (title: string, description?: string) => Promise<string>;
+  updateFolder: (id: string, updates: Partial<Pick<Folder, 'title' | 'description'>>) => Promise<void>;
+  deleteFolder: (id: string, deleteContainedSets?: boolean) => Promise<void>;
 }
 
-export interface DeckSlice {
-  decks: Deck[];
-  addDeck: (
-    deckData: { title: string; description?: string; folderId?: string | null },
+export interface SetSlice {
+  sets: CardSet[];
+  addSet: (
+    setData: { title: string; description?: string; folderId?: string | null },
     initialCards?: Array<{
       termRichText: string;
       definitionRichText: string;
@@ -65,20 +76,25 @@ export interface DeckSlice {
       backImageUrl?: string;
       imageUrl?: string;
     }>
-  ) => string;
-  updateDeck: (id: string, updates: Partial<Pick<Deck, 'title' | 'description' | 'folderId'>>) => void;
-  deleteDeck: (id: string) => void;
-  moveDeck: (deckId: string, folderId: string | null) => void;
+  ) => Promise<string>;
+  updateSet: (id: string, updates: Partial<Pick<CardSet, 'title' | 'description' | 'folderId'>>) => Promise<void>;
+  deleteSet: (id: string) => Promise<void>;
+  moveSet: (setId: string, folderId: string | null) => Promise<void>;
+}
+
+export interface SetEditBase {
+  set?: CardSet;
+  cards: Card[];
 }
 
 export interface CardSlice {
   cards: Card[];
-  addCard: (cardData: Omit<Card, 'id'>) => string;
-  updateCard: (id: string, updates: Partial<Omit<Card, 'id' | 'deckId'>>) => void;
-  deleteCard: (id: string) => void;
-  saveDeckWithCards: (
-    deckId: string | null,
-    deckData: { title: string; description?: string; folderId?: string | null },
+  addCard: (cardData: Omit<Card, 'id' | 'contentVersion'>) => Promise<string>;
+  updateCard: (id: string, updates: Partial<Omit<Card, 'id' | 'setId' | 'contentVersion'>>) => Promise<void>;
+  deleteCard: (id: string) => Promise<void>;
+  saveSetWithCards: (
+    setId: string | null,
+    setData: { title: string; description?: string; folderId?: string | null },
     cardsData: Array<{
       id?: string;
       order?: number;
@@ -88,10 +104,11 @@ export interface CardSlice {
       backImageUrl?: string;
       imageUrl?: string;
       learned?: boolean;
-    }>
-  ) => string;
-  setCardLearned: (id: string, learned: boolean) => void;
-  resetDeckProgress: (deckId: string) => void;
+    }>,
+    base?: SetEditBase
+  ) => Promise<string>;
+  setCardLearned: (id: string, learned: boolean) => Promise<void>;
+  resetSetProgress: (setId: string) => Promise<void>;
 }
 
-export type FlashcardStoreState = AuthSlice & SyncSlice & FolderSlice & DeckSlice & CardSlice;
+export type FlashcardStoreState = AuthSlice & SyncSlice & FolderSlice & SetSlice & CardSlice;

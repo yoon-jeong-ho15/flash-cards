@@ -1,3 +1,4 @@
+import { store, useStore } from '../platform/runtime';
 import { Text, TextInput } from './Typography';
 import React, { createContext, useContext, useState } from "react";
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View, type TextInputProps } from 'react-native';
@@ -478,6 +479,7 @@ const ImageContext = createContext<(url: string) => void>(() => {});
 export const useImage = () => useContext(ImageContext);
 export function ImageProvider({ children }: { children: React.ReactNode }) {
   const { colors, s } = useUI();
+  useStore();
   const [url, setURL] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   return (
@@ -518,7 +520,7 @@ export function ImageProvider({ children }: { children: React.ReactNode }) {
               >
                 <Image
                   accessibilityLabel="첨부 이미지 확대 보기"
-                  source={{ uri: url }}
+                  source={{ uri: store.resolveImage(url) }}
                   resizeMode="contain"
                   style={{ width: 360 * zoom, height: 580 * zoom }}
                 />
@@ -531,6 +533,7 @@ export function ImageProvider({ children }: { children: React.ReactNode }) {
   );
 }
 export function Attachment({ url }: { url?: string }) {
+  useStore();
   const open = useImage();
   return url ? (
     <Pressable
@@ -539,7 +542,7 @@ export function Attachment({ url }: { url?: string }) {
       onPress={() => open(url)}
     >
       <Image
-        source={{ uri: url }}
+        source={{ uri: store.resolveImage(url) }}
         accessibilityLabel="첨부 이미지"
         resizeMode="contain"
         style={{ height: 180, width: "100%", borderRadius: 12 }}

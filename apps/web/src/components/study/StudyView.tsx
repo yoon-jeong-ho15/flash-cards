@@ -23,35 +23,35 @@ import {
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 
 interface StudyViewProps {
-  deckId?: string;
+  setId?: string;
   folderId?: string;
   onlyDifficult?: boolean;
   shuffle?: boolean;
   onExit: () => void;
-  onEditDeck: (id: string) => void;
+  onEditSet: (id: string) => void;
 }
 export const StudyView: React.FC<StudyViewProps> = ({
-  deckId,
+  setId,
   folderId,
   onlyDifficult = false,
   shuffle = folderId !== undefined,
   onExit,
-  onEditDeck,
+  onEditSet,
 }) => {
   const session = useStudySession({
-    deckId,
+    setId,
     folderId,
     onlyDifficult,
     shuffle,
     onExit,
   });
   const {
-    deck,
+    set: cardSet,
     folder,
-    deckCards,
+    setCards,
     sessionCards,
     currentIndex,
-    totalInitialCount,
+    sessionCardCount,
     currentCard,
     masteredCount,
     isFlipped,
@@ -83,12 +83,12 @@ export const StudyView: React.FC<StudyViewProps> = ({
     handleUpdateCurrentCard,
     handleDeleteCurrentCard,
   } = session;
-  const currentDeck = useFlashcardStore((state) =>
-    state.decks.find((item) => item.id === currentCard?.deckId)
+  const currentSet = useFlashcardStore((state) =>
+    state.sets.find((item) => item.id === currentCard?.setId)
   );
   const skipClick = useRef(false);
-  const source = folderId !== undefined ? folder : deck;
-  const sourceType = folderId !== undefined ? '폴더' : '덱';
+  const source = folderId !== undefined ? folder : cardSet;
+  const sourceType = folderId !== undefined ? '폴더' : '세트';
   if (!source)
     return (
       <div className="page-container">
@@ -98,7 +98,7 @@ export const StudyView: React.FC<StudyViewProps> = ({
         />
       </div>
     );
-  if (!deckCards.length)
+  if (!setCards.length)
     return (
       <div className="mx-auto max-w-lg px-5 py-16">
         <EmptyState
@@ -110,8 +110,8 @@ export const StudyView: React.FC<StudyViewProps> = ({
               <Button variant="outline" onClick={onExit}>
                 돌아가기
               </Button>
-              {deck && (
-                <Button onClick={() => onEditDeck(deck.id)} leftIcon={<Plus className="h-4 w-4" />}>
+              {cardSet && (
+                <Button onClick={() => onEditSet(cardSet.id)} leftIcon={<Plus className="h-4 w-4" />}>
                   카드 추가
                 </Button>
               )}
@@ -135,14 +135,14 @@ export const StudyView: React.FC<StudyViewProps> = ({
   if (isCompleted || isFinishModalOpen)
     return (
       <StudyComplete
-        deck={source}
+        set={source}
         sourceType={sourceType}
-        totalCards={totalInitialCount}
-        difficultCardsCount={Math.max(0, totalInitialCount - masteredCount)}
+        totalCards={sessionCardCount}
+        difficultCardsCount={Math.max(0, sessionCardCount - masteredCount)}
         roundCount={round}
         onRestartAll={handleRestartAll}
         onRestartDifficultOnly={handleRestartUnlearned}
-        onBackToDeck={onExit}
+        onBackToSet={onExit}
         onContinue={closeFinishModal}
       />
     );
@@ -177,21 +177,21 @@ export const StudyView: React.FC<StudyViewProps> = ({
           aria-live="polite"
           className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-bold tabular-nums text-primary"
         >
-          {currentIndex + 1} / {totalInitialCount}
+          {currentIndex + 1} / {sessionCardCount}
         </span>
       </header>
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col py-6 sm:py-8">
         <div className="mb-6">
-          <ProgressBar value={totalInitialCount ? (currentIndex / totalInitialCount) * 100 : 0} />
+          <ProgressBar value={sessionCardCount ? (currentIndex / sessionCardCount) * 100 : 0} />
           <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-muted-foreground">
             <span>
               {isFlipped ? '얼마나 기억했는지 표시해 보세요' : '답을 보기 전에 먼저 떠올려 보세요'}
             </span>
             <span className="font-medium text-emerald-700">기억한 카드 {masteredCount}장</span>
           </div>
-          {folderId !== undefined && currentDeck && (
+          {folderId !== undefined && currentSet && (
             <p className="mt-3 truncate text-xs text-muted-foreground">
-              현재 덱: <strong className="font-medium text-foreground">{currentDeck.title}</strong>
+              현재 세트: <strong className="font-medium text-foreground">{currentSet.title}</strong>
             </p>
           )}
         </div>
@@ -273,9 +273,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
             className="h-14"
           >
             다시 볼게요
-            <kbd className="ml-2 hidden rounded border border-primary/15 px-1.5 py-0.5 text-[10px] sm:inline">
-              1
-            </kbd>
           </Button>
           <Button
             size="lg"
@@ -291,15 +288,6 @@ export const StudyView: React.FC<StudyViewProps> = ({
             className="h-14"
           >
             {session.isCurrentCardLearned ? '몰라요' : '알아요'}
-            <kbd
-              className={`ml-2 hidden rounded border px-1.5 py-0.5 text-[10px] sm:inline ${
-                session.isCurrentCardLearned
-                  ? 'border-primary/15'
-                  : 'border-white/25'
-              }`}
-            >
-              2
-            </kbd>
           </Button>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
